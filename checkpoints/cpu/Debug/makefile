@@ -25,11 +25,14 @@ endif
 # All Target
 all: cpu
 
+dependents:
+	-cd /home/utnso/tp-2014-1c-silverstack/libs/commons/Debug && $(MAKE) all
+
 # Tool invocations
-cpu: $(OBJS) $(USER_OBJS)
+cpu: $(OBJS) $(USER_OBJS) /home/utnso/tp-2014-1c-silverstack/libs/commons/Debug/libcommons.so
 	@echo 'Building target: $@'
 	@echo 'Invoking: GCC C Linker'
-	gcc  -o "cpu" $(OBJS) $(USER_OBJS) $(LIBS)
+	gcc -L"/home/utnso/tp-2014-1c-silverstack/libs/commons/Debug" -o "cpu" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 
@@ -40,5 +43,6 @@ clean:
 
 .PHONY: all clean dependents
 .SECONDARY:
+/home/utnso/tp-2014-1c-silverstack/libs/commons/Debug/libcommons.so:
 
 -include ../makefile.targets
