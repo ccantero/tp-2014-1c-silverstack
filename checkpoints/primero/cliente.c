@@ -51,6 +51,11 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
+	// Pido mensaje a enviar
+	printf("Datos a enviar: ");
+	scanf("%s", buf);
+	send(sockfd, buf, sizeof(buf), 0);
+
 	// Recibo la respuesto y compruebo errores
 	if ((numBytes = recv(sockfd, buf, 255, 0)) == -1)
 	{
