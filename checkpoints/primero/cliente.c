@@ -56,6 +56,8 @@ int main(int argc, char *argv[])
 	scanf("%s", buf);
 	send(sockfd, buf, sizeof(buf), 0);
 
+
+	/*
 	// Recibo la respuesto y compruebo errores
 	if ((numBytes = recv(sockfd, buf, 255, 0)) == -1)
 	{
@@ -67,6 +69,8 @@ int main(int argc, char *argv[])
 	// Muestro en pantalla la respuesta al mensaje enviado
 	buf[numBytes] = '\0';
 	printf("Recibido: %s", buf);
+	*/
+
 
 	// Cierro el descriptor del socket
 	close(sockfd);
