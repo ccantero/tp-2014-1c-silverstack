@@ -23,6 +23,24 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
+#define HANDSHAKE 100
+#define CPU 101
+#define INSTRUCCIONREQUEST 102
+#define QUANTUMFINISH 103
+
+typedef struct {
+	int tipo;
+	int id_proceso;
+	int datosNumericos;
+	char mensaje[16];
+} t_mensaje;
+
+typedef struct {
+	int proc_id;
+	int pc;
+	int ic;
+} t_pcb;
+
 void ConectarA(int *sock, int *puerto, char *ip, struct sockaddr_in *their_addr, t_log *logger);
 t_puntero silverstack_definirVariable(t_nombre_variable var);
 t_puntero silverstack_obtenerPosicionVariable(t_nombre_variable var);

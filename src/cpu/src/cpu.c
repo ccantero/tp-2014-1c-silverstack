@@ -46,6 +46,9 @@ int main(int argc, char *argv[])
 	int sockUmv;
 	struct sockaddr_in kernel_addr;
 	struct sockaddr_in umv_addr;
+	int seguirEjecutando = 1; // Mediante la señal SIGUSR1 se puede dejar de ejecutar el cpu
+	t_mensaje mensaje;
+	t_pcb pcb;
 
 	// Obtengo datos de archivo de configuracion y se crea el logger
 	config = config_create(argv[1]);
@@ -66,8 +69,46 @@ int main(int argc, char *argv[])
 	ConectarA(&sockUmv, &port_umv, umvip, &umv_addr, logger);
 	log_info(logger, "Conectado a la UMV.");
 
+	// Handshake con el kernel
+	mensaje.id_proceso = CPU;
+	mensaje.tipo = HANDSHAKE;
+	strcpy(mensaje.mensaje, "Hola kernel.");
+	send(sockKernel, &mensaje, sizeof(t_mensaje), 0);
+	recv(sockKernel, &mensaje, sizeof(t_mensaje), 0);
+
+	// Handshake con la UMV
+	mensaje.id_proceso = CPU;
+	mensaje.tipo = HANDSHAKE;
+	strcpy(mensaje.mensaje, "Hola UMV.");
+	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+
+	// Bucle principal del proceso
+	while(seguirEjecutando)
+	{
+		// Recibo el pcb del proceso a ejecutar
+		recv(sockKernel, &pcb, sizeof(t_pcb), 0);
+		// Preparo mensaje para la UMV
+		mensaje.id_proceso = CPU;
+		mensaje.tipo = INSTRUCCIONREQUEST;
+		mensaje.datosNumericos = pcb.ic;
+		send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+		// Espero la respuesta de la UMV
+		recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+		// Analizo la instruccion
+		analizadorLinea(strdup(mensaje.mensaje), &primitivas, &primitivasKernel);
+		// Aviso al kernel que termino el quantum
+		mensaje.id_proceso = CPU;
+		mensaje.tipo = QUANTUMFINISH;
+		send(sockKernel, &mensaje, sizeof(t_mensaje), 0);
+	}
+
 	// Libero memoria del logger
 	log_destroy(logger);
+
+	// Cierro los sockets
+	close(sockKernel);
+	close(sockUmv);
 
 	return 0;
 }
