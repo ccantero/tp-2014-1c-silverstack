@@ -31,19 +31,39 @@ AnSISOP_kernel primitivasKernel = {
 		.AnSISOP_signal = silverstack_signal,
 		.AnSISOP_wait   = silverstack_wait,
 };
+
 // main
 int main(int argc, char *argv[])
 {
-	// Se obtienen datos de archivo de configuracion y se crea el logger
-	GetInfoConfFile(config, argv[1]);
+	// Definicion de variables
+	t_log *logger;
+	t_config *config;
+	int port_kernel;
+	int port_umv;
+	char kernelip[16];
+	char umvip[16];
+	int sockKernel;
+	int sockUmv;
+	struct sockaddr_in kernel_addr;
+	struct sockaddr_in umv_addr;
+
+	// Obtengo datos de archivo de configuracion y se crea el logger
+	config = config_create(argv[1]);
+	strcpy(umvip, config_get_string_value(config, "UMV_IP"));
+	strcpy(kernelip, config_get_string_value(config, "KERNEL_IP"));
+	port_kernel = config_get_int_value(config, "PORT_KERNEL");
+	port_umv = config_get_int_value(config, "PORT_UMV");
 	config_destroy(config);
-	logger = log_create(argv[2], "cpu" , true, LOG_LEVEL_INFO);
+	logger = log_create(argv[2], "cpu", true, LOG_LEVEL_INFO);
 	log_info(logger, "Se leyo el arch de config y se creo el logger satisfactoriamente.");
 
-	// Me conecto al kernel y a la umv para intercambiar mensajes
-	ConectarA(sockKernel);
+	// Me conecto al kernel
+	ConectarA(&sockKernel, &port_kernel, kernelip, &kernel_addr, logger);
 	log_info(logger, "Conectado al kernel.");
-	ConectarA(sockUmv);
+
+	// Obtengo datos de la umv
+	// TODO Creo que tengo que intercambiar mensajes con el kernel para pedir datos de la umv
+	ConectarA(&sockUmv, &port_umv, umvip, &umv_addr, logger);
 	log_info(logger, "Conectado a la UMV.");
 
 	// Libero memoria del logger
@@ -54,32 +74,21 @@ int main(int argc, char *argv[])
 
 
 // Definicion de funciones
-void GetInfoConfFile(t_config *config, char *path)
-{
-	config = config_create(path);
-	strcpy(umvip, config_get_string_value(config, "UMV_IP"));
-	strcpy(myip, config_get_string_value(config, "IP"));
-	strcpy(kernelip, config_get_string_value(config, "KERNEL_IP"));
-	port_kernel = config_get_int_value(config, "PORT_KERNEL");
-	port_umv = config_get_int_value(config, "PORT_UMV");
-	return;
-}
-
-void ConectarA(int sock)
+void ConectarA(int *sock, int *puerto, char *ip, struct sockaddr_in *their_addr, t_log *logger)
 {
 	// Creo el descriptor para el socket y compruebo errores
-	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+	if ((*sock = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 	{
 		log_info(logger, "Error cuando se crea el socket.");
 		exit(1);
 	}
 	// Asigno las variables de direccion a conectar
-	their_addr.sin_family = AF_INET;
-	their_addr.sin_port = htons(port_kernel);
-	their_addr.sin_addr.s_addr = inet_addr(kernelip);
-	memset(&(their_addr.sin_zero), '\0', 8);
+	their_addr->sin_family = AF_INET;
+	their_addr->sin_port = htons(*puerto);
+	their_addr->sin_addr.s_addr = inet_addr(ip);
+	memset(&(their_addr->sin_zero), '\0', 8);
 	// Conecto el socket y compruebo errores
-	if (connect(sock, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)) == -1)
+	if (connect(*sock, (struct sockaddr *)their_addr, sizeof(struct sockaddr)) == -1)
 	{
 		log_info(logger, "Error conectando el socket.");
 		exit(1);

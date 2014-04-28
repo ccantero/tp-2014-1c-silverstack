@@ -23,24 +23,7 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
-t_log *logger;
-t_config *config;
-
-int port_kernel;
-int port_umv;
-int sockPrin;
-char myip[16];
-char kernelip[16];
-char umvip[16];
-
-int sockKernel;
-int sockUmv;
-int numBytes;
-char buf[256];
-struct sockaddr_in their_addr;
-
-void GetInfoConfFile(t_config *config, char *path);
-void ConectarA(int sock);
+void ConectarA(int *sock, int *puerto, char *ip, struct sockaddr_in *their_addr, t_log *logger);
 t_puntero silverstack_definirVariable(t_nombre_variable var);
 t_puntero silverstack_obtenerPosicionVariable(t_nombre_variable var);
 t_valor_variable silverstack_dereferenciar(t_puntero dir_var);
