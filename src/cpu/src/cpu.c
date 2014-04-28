@@ -10,6 +10,27 @@
 
 #include "cpu.h"
 
+// Defino las primitivas que vamos a usar, cada una está definida mas abajo con el resto de las funciones
+AnSISOP_funciones primitivas = {
+		.AnSISOP_definirVariable		 = silverstack_definirVariable,
+		.AnSISOP_obtenerPosicionVariable = silverstack_obtenerPosicionVariable,
+		.AnSISOP_dereferenciar			 = silverstack_dereferenciar,
+		.AnSISOP_asignar				 = silverstack_asignar,
+		.AnSISOP_imprimir				 = silverstack_imprimir,
+		.AnSISOP_imprimirTexto			 = silverstack_imprimirTexto,
+		.AnSISOP_obtenerValorCompartida  = silverstack_obtenerValorCompartida,
+		.AnSISOP_entradaSalida           = silverstack_entradaSalida,
+		.AnSISOP_finalizar               = silverstack_finalizar,
+		.AnSISOP_asignarValorCompartida  = silverstack_asignarValorCompartida,
+		.AnSISOP_irAlLabel               = silverstack_irAlLabel,
+		.AnSISOP_llamarSinRetorno        = silverstack_llamarSinRetorno,
+		.AnSISOP_llamarConRetorno        = silverstack_llamarConRetorno,
+		.AnSISOP_retornar                = silverstack_retornar,
+};
+AnSISOP_kernel primitivasKernel = {
+		.AnSISOP_signal = silverstack_signal,
+		.AnSISOP_wait   = silverstack_wait,
+};
 // main
 int main(int argc, char *argv[])
 {
@@ -19,7 +40,11 @@ int main(int argc, char *argv[])
 	logger = log_create(argv[2], "cpu" , true, LOG_LEVEL_INFO);
 	log_info(logger, "Se leyo el arch de config y se creo el logger satisfactoriamente.");
 
-	ConectarAKernel();
+	// Me conecto al kernel y a la umv para intercambiar mensajes
+	ConectarA(sockKernel);
+	log_info(logger, "Conectado al kernel.");
+	ConectarA(sockUmv);
+	log_info(logger, "Conectado a la UMV.");
 
 	// Libero memoria del logger
 	log_destroy(logger);
@@ -40,10 +65,10 @@ void GetInfoConfFile(t_config *config, char *path)
 	return;
 }
 
-void ConectarAKernel(void)
+void ConectarA(int sock)
 {
 	// Creo el descriptor para el socket y compruebo errores
-	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 	{
 		log_info(logger, "Error cuando se crea el socket.");
 		exit(1);
@@ -54,10 +79,93 @@ void ConectarAKernel(void)
 	their_addr.sin_addr.s_addr = inet_addr(kernelip);
 	memset(&(their_addr.sin_zero), '\0', 8);
 	// Conecto el socket y compruebo errores
-	if (connect(sockfd, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)) == -1)
+	if (connect(sock, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)) == -1)
 	{
 		log_info(logger, "Error conectando el socket.");
 		exit(1);
 	}
-	log_info(logger, "Conectado al kernel.");
+}
+
+t_puntero silverstack_definirVariable(t_nombre_variable var)
+{
+	t_puntero ptr = 0;
+	return ptr;
+}
+
+t_puntero silverstack_obtenerPosicionVariable(t_nombre_variable var)
+{
+	t_puntero ptr = 0;
+	return ptr;
+}
+
+t_valor_variable silverstack_dereferenciar(t_puntero dir_var)
+{
+	t_valor_variable valor = 0;
+	return valor;
+}
+
+void silverstack_asignar(t_puntero dir_var, t_valor_variable valor)
+{
+
+}
+
+void silverstack_imprimir(t_valor_variable valor)
+{
+
+}
+
+void silverstack_imprimirTexto(char *texto)
+{
+
+}
+
+t_valor_variable silverstack_obtenerValorCompartida(t_nombre_compartida varCom)
+{
+	t_valor_variable valor = 0;
+	return valor;
+}
+
+void silverstack_entradaSalida(t_nombre_dispositivo dispositivo, int tiempo)
+{
+
+}
+
+void silverstack_finalizar()
+{
+
+}
+
+t_valor_variable silverstack_asignarValorCompartida(t_nombre_compartida varCom, t_valor_variable valor)
+{
+	return valor;
+}
+
+void silverstack_irAlLabel(t_nombre_etiqueta etiqueta)
+{
+
+}
+
+void silverstack_llamarSinRetorno(t_nombre_etiqueta etiqueta)
+{
+
+}
+
+void silverstack_llamarConRetorno(t_nombre_etiqueta etiqueta, t_puntero donde_retornar)
+{
+
+}
+
+void silverstack_retornar(t_valor_variable valor)
+{
+
+}
+
+void silverstack_signal(t_nombre_semaforo identificador_semaforo)
+{
+
+}
+
+void silverstack_wait(t_nombre_semaforo identificador_semaforo)
+{
+
 }
