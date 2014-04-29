@@ -24,6 +24,7 @@ int main(int argc, char *argv[])
 	int puerto;
 	char *direccionIp = (char *)malloc(15);
 	char buf[256];
+	char entrada[256];
 	struct sockaddr_in their_addr;
 
 	// Creo el descriptor para el socket y compruebo errores
@@ -51,26 +52,25 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
-	// Pido mensaje a enviar
-	printf("Datos a enviar: ");
-	scanf("%s", buf);
-	send(sockfd, buf, sizeof(buf), 0);
-
-
-	/*
-	// Recibo la respuesto y compruebo errores
-	if ((numBytes = recv(sockfd, buf, 255, 0)) == -1)
+	while(1)
 	{
-		log_info(logger, "Error recibiendo mensaje.");
-		exit(1);
+		// Pido mensaje a enviar
+		printf("Yo: ");
+		fgets(buf, 255, stdin);
+		send(sockfd, buf, 255, 0);
+		printf("Esperando respuesta...\n");
+
+		// Recibo la respuesto y compruebo errores
+		if ((numBytes = recv(sockfd, (void *)buf, 255, 0)) == -1)
+		{
+			log_info(logger, "Error recibiendo mensaje.");
+			exit(1);
+		}
+		// log_info(logger, "Se recibieron %d bytes satisfactoriamente.", numBytes);
+
+		// Muestro en pantalla la respuesta al mensaje enviado
+		printf("Recibido: %s\n", buf);
 	}
-	log_info(logger, "Se recibieron %d bytes satisfactoriamente.", numBytes);
-
-	// Muestro en pantalla la respuesta al mensaje enviado
-	buf[numBytes] = '\0';
-	printf("Recibido: %s", buf);
-	*/
-
 
 	// Cierro el descriptor del socket
 	close(sockfd);

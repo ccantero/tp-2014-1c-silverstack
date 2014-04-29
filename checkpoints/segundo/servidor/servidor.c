@@ -27,6 +27,7 @@ int main(int argc, char *argv[])
 	int listener;
 	int newfd;
 	char buf[256];
+	char entrada[256];
 	int nbytes;
 	int addrlen;
 	int yes = 1;
@@ -114,7 +115,7 @@ int main(int argc, char *argv[])
 				else
 				{
 					// Gestiono datos de cliente
-					if ((nbytes = recv(i, buf, sizeof(buf), 0)) <= 0)
+					if ((nbytes = recv(i, (void *)buf, 255, 0)) <= 0)
 					{
 						// Conexion cerrada o error
 						if (nbytes == 0)
@@ -134,8 +135,12 @@ int main(int argc, char *argv[])
 					else
 					{
 						// Hay datos de cliente
-						log_info(logger, "Se recibieron datos de cliente.");
-						printf("Datos recibidos: %s", buf);
+						// log_info(logger, "Se recibieron datos de cliente.");
+						printf("Datos recibidos: %s\n", buf);
+						printf("Yo: ");
+						fgets(buf, 255, stdin);
+						send(i, buf, 255, 0);
+						printf("Esperando respuesta...\n");
 					}
 				}
 			}

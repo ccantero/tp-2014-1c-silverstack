@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <projectDescription>
-	<name>cpu</name>
+	<name>silverstack</name>
 	<comment></comment>
 	<projects>
 		<project>commons</project>
 		<project>parser</project>
-		<project>silverstack</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

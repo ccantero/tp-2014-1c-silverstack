@@ -23,30 +23,28 @@ endif
 # Add inputs and outputs from these tool invocations to the build variables 
 
 # All Target
-all: cpu
+all: libsilverstack.so
 
 dependents:
 	-cd /home/utnso/tp-2014-1c-silverstack/libs/commons/Debug && $(MAKE) all
 	-cd /home/utnso/tp-2014-1c-silverstack/libs/parser/Debug && $(MAKE) all
-	-cd /home/utnso/tp-2014-1c-silverstack/libs/silverstack/Debug && $(MAKE) all
 
 # Tool invocations
-cpu: $(OBJS) $(USER_OBJS) /home/utnso/tp-2014-1c-silverstack/libs/commons/Debug/libcommons.so /home/utnso/tp-2014-1c-silverstack/libs/parser/Debug/libparser.so /home/utnso/tp-2014-1c-silverstack/libs/silverstack/Debug/libsilverstack.so
+libsilverstack.so: $(OBJS) $(USER_OBJS) /home/utnso/tp-2014-1c-silverstack/libs/commons/Debug/libcommons.so /home/utnso/tp-2014-1c-silverstack/libs/parser/Debug/libparser.so
 	@echo 'Building target: $@'
 	@echo 'Invoking: GCC C Linker'
-	gcc -L"/home/utnso/tp-2014-1c-silverstack/libs/silverstack/Debug" -L"/home/utnso/tp-2014-1c-silverstack/libs/parser/Debug" -L"/home/utnso/tp-2014-1c-silverstack/libs/commons/Debug" -o "cpu" $(OBJS) $(USER_OBJS) $(LIBS)
+	gcc -L"/home/utnso/tp-2014-1c-silverstack/libs/parser/Debug" -L"/home/utnso/tp-2014-1c-silverstack/libs/commons/Debug" -shared -o "libsilverstack.so" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 
 # Other Targets
 clean:
-	-$(RM) $(OBJS)$(C_DEPS)$(EXECUTABLES) cpu
+	-$(RM) $(OBJS)$(C_DEPS)$(LIBRARIES) libsilverstack.so
 	-@echo ' '
 
 .PHONY: all clean dependents
 .SECONDARY:
 /home/utnso/tp-2014-1c-silverstack/libs/commons/Debug/libcommons.so:
 /home/utnso/tp-2014-1c-silverstack/libs/parser/Debug/libparser.so:
-/home/utnso/tp-2014-1c-silverstack/libs/silverstack/Debug/libsilverstack.so:
 
 -include ../makefile.targets

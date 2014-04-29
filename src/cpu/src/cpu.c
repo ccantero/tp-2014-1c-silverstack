@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
 	struct sockaddr_in umv_addr;
 	int seguirEjecutando = 1; // Mediante la señal SIGUSR1 se puede dejar de ejecutar el cpu
 	t_mensaje mensaje;
-	t_pcb pcb;
+	struct _pcb pcb;
 
 	// Obtengo datos de archivo de configuracion y se crea el logger
 	config = config_create(argv[1]);
@@ -91,7 +91,7 @@ int main(int argc, char *argv[])
 		// Preparo mensaje para la UMV
 		mensaje.id_proceso = CPU;
 		mensaje.tipo = INSTRUCCIONREQUEST;
-		mensaje.datosNumericos = pcb.ic;
+		mensaje.datosNumericos = (int)pcb.instruction_index.index->start;
 		send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 		// Espero la respuesta de la UMV
 		recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);

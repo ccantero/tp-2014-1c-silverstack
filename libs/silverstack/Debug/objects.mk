@@ -4,5 +4,5 @@
 
 USER_OBJS :=
 
-LIBS := -lsilverstack -lparser -lcommons
+LIBS := -lparser -lcommons
 
