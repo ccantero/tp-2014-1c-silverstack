@@ -138,84 +138,150 @@ void ConectarA(int *sock, int *puerto, char *ip, struct sockaddr_in *their_addr,
 
 t_puntero silverstack_definirVariable(t_nombre_variable var)
 {
+	/*
+	Reserva en el Contexto de Ejecución Actual el espacio necesario para una variable llamada
+	var y la registra tanto en el Stack como en el Diccionario de Variables,
+	retornando la posición del valor de esta nueva variable del stack
+	El valor de la variable queda indefinido: no deberá inicializarlo con ningún valor default.
+	Esta función se invoca una vez por variable, a pesar de que este varias veces en una línea. Por
+	ejemplo, evaluar "variables a, b, c" llamará tres veces a esta función con los parámetros "a",
+	"b" y "c"
+	*/
 	t_puntero ptr = 0;
 	return ptr;
 }
 
 t_puntero silverstack_obtenerPosicionVariable(t_nombre_variable var)
 {
+	/*
+	Devuelve el desplazamiento respecto al inicio del segmento Stack en que se encuentra el valor
+	de la variable var del contexto actual. En caso de error, retorna -1.
+	*/
 	t_puntero ptr = 0;
 	return ptr;
 }
 
 t_valor_variable silverstack_dereferenciar(t_puntero dir_var)
 {
+	/*
+	Obtiene el valor resultante de leer a partir de dir_var, sin importar cual fuera el
+	contexto actual.
+	*/
 	t_valor_variable valor = 0;
 	return valor;
 }
 
 void silverstack_asignar(t_puntero dir_var, t_valor_variable valor)
 {
-
+	/*
+	Copia un valor en la variable ubicada en dir_var.
+	*/
 }
 
 void silverstack_imprimir(t_valor_variable valor)
 {
-
+	/*
+	Envía al Kernel el contenido de valor, para que este le reenvíe a la correspondiente
+	consola del Programa en ejecución. Devuelve la cantidad de dígitos impresos.
+	*/
 }
 
 void silverstack_imprimirTexto(char *texto)
 {
-
+	/*
+	Envía al Kernel una cadena de texto para que este la reenvíe a la correspondiente consola del
+	Programa en ejecución. No admite parámetros adicionales, secuencias de escape o variables.
+	Devuelve la cantidad de dígitos impresos.
+	*/
 }
 
 t_valor_variable silverstack_obtenerValorCompartida(t_nombre_compartida varCom)
 {
+	/*
+	Solicita al kernel el valor de una variable compartida.
+	*/
 	t_valor_variable valor = 0;
 	return valor;
 }
 
 void silverstack_entradaSalida(t_nombre_dispositivo dispositivo, int tiempo)
 {
-
+	/*
+	Informa al kernel que el Programa actual pretende utilizar el dispositivo durante tiempo
+	unidades de tiempo.
+	*/
 }
 
 void silverstack_finalizar()
 {
-
+	/*
+	Cambia el Contexto de Ejecución Actual para volver al Contexto anterior al que se está
+	ejecutando, recuperando el Cursor de Contexto Actual y el Program Counter previamente
+	apilados en el Stack. En caso de estar finalizando el Contexto principal (el ubicado al inicio del
+	Stack), deberá finalizar la ejecución del programa devolviendo el valor -1.
+	*/
 }
 
 t_valor_variable silverstack_asignarValorCompartida(t_nombre_compartida varCom, t_valor_variable valor)
 {
+	/*
+	Solicita al kernel asignar el valor a la variable compartida. Devuelve el valor asignado.
+	*/
 	return valor;
 }
 
 void silverstack_irAlLabel(t_nombre_etiqueta etiqueta)
 {
-
+	/*
+	Devuelve el número de la primer instrucción ejecutable de etiqueta y -1 en caso de error.
+	*/
 }
 
 void silverstack_llamarSinRetorno(t_nombre_etiqueta etiqueta)
 {
-
+	/*
+	Preserva el contexto de ejecución actual para poder retornar luego. Modifica las estructuras
+	correspondientes para mostrar un nuevo contexto vacío. Retorna el numero de instrucción a
+	ejecutar.
+	Los parámetros serán definidos luego de esta instrucción de la misma manera que una variable
+	local, con identificadores numéricos empezando por el 0.
+	*/
 }
 
 void silverstack_llamarConRetorno(t_nombre_etiqueta etiqueta, t_puntero donde_retornar)
 {
-
+	/*
+	Preserva el contexto de ejecución actual para poder retornar luego al mismo, junto con la
+	posicion de la variable entregada por donde_retornar . Modifica las estructuras
+	correspondientes para mostrar un nuevo contexto vacío. Retorna el número de instrucción a
+	ejecutar.
+	Los parámetros serán definidos luego de esta instrucción de la misma manera que una variable
+	local, con identificadores numéricos empezando por el 0.
+	No se pretende que se pueda retornar a una variable global. Sí a un parámetro o variable local
+	*/
 }
 
 void silverstack_retornar(t_valor_variable valor)
 {
-
+	/*
+	Modifica el Contexto de Ejecución Actual por el Contexto anterior al que se está ejecutando,
+	recuperando el Cursor de Contexto Actual, el Program Counter y la direccion donde retornar,
+	asignando el valor de retorno en esta, previamente apilados en el Stack.
+	*/
 }
 
 void silverstack_signal(t_nombre_semaforo identificador_semaforo)
 {
-
+	/*
+	Comunica al kernel que ejecute la función signal para el semáforo con el nombre
+	identificador_semaforo. El kernel decidirá si esto conlleva desbloquear a otros procesos.
+	*/
 }
 
 void silverstack_wait(t_nombre_semaforo identificador_semaforo)
 {
-
+	/*
+	Informa al kernel que ejecute la función wait para el semáforo con el nombre
+	identificador_semaforo. El kernel deberá decidir si bloquearlo o no.
+	*/
 }
