@@ -17,6 +17,11 @@ int main(void) {
 		logger = log_create("Log.txt", "UMV",false, LOG_LEVEL_INFO);
 
 		GetInfoConfFile();
+
+		memoria = malloc(space);
+
+		list_programas = list_create();
+
 		pthread_create(&th1,NULL,(void*)consola,(void*)a);
 		pause();
 		return 1;
