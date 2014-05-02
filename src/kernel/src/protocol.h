@@ -40,6 +40,11 @@ typedef struct _t_semaphore {
 	int	value;
 } t_semaphore;
 
+typedef struct _t_global {
+	char* identifier;
+	int	value;
+} t_global;
+
 typedef struct _instruction_index {
 	t_size size;
 	t_intructions* index;
@@ -62,7 +67,7 @@ typedef struct _t_nodo_segment {
 }t_nodo_segment;
 
 typedef struct _pcb {
-	char* unique_id; /* Identificador Único */
+	unsigned int unique_id; /* Identificador Único */
 	t_segment code_segment; /* Código Ansisop del programa */
 	t_segment stack_segment; /* Segmento de stack */
 	int stack_pointer; /* Puntero al inicio del contexto de ejecución actual */
@@ -73,7 +78,7 @@ typedef struct _pcb {
 	int peso;
 }t_pcb;
 
-#define KEYS_AMOUNT 10
+#define KEYS_AMOUNT 14
 #define PATH_CONFIG "conf"
 
 #define MAXDATASIZE 1024
@@ -83,29 +88,45 @@ typedef struct _pcb {
 #define MSG_CON_PRG_FAIL 0x03
 #define MSG_CON_PRG_TXT 0x04
 #define MSG_CON_PRG_TXT_OK 0x05
+#define MSG_CON_UMV 0x10
+#define MSG_CON_UMV_OK 0x11
+#define MSG_CON_UMV_FAIL 0x12
 #define CODE_SEGMENT 0x20
 #define STACK_SEGMENT 0x21
 #define backlog 10
 
 t_log *logger;
 t_queue *queue_io;
-t_list *list_pcb;
+t_list *list_pcb_new;
+t_list *list_pcb_ready;
 t_list *list_segment;
 t_list *list_semaphores;
+t_list *list_globales;
 
-int port_cpu,port_program,sockPrin,multiprogramacion,quantum,retardo;
-char myip[16];
+int port_cpu,port_program,port_umv,sockPrin,multiprogramacion,quantum,retardo;
+int sock_umv, process_Id;
+char myip[16],umv_ip[16];
 
 void GetInfoConfFile(void);
+int conectar_umv(void);
+t_global* global_create(char *global_name, int value);
+int global_update_value(char* global_name, int value);
+int global_get_value(char* global_name);
 t_io* io_create(char *io_name, int io_retardo);
 void io_destroy(t_io*);
 t_semaphore* semaphore_create(char* sem_name, int value);
 void semaphore_destroy(t_semaphore *self);
+void semaphore_wait(char* sem_name);
+void semaphore_signal(char* sem_name);
 void servidor_plp(void);
-void create_pcb(char* buffer, char* name_program);
+int escuchar_Nuevo_Programa(int sock_program, char* buffer);
+int escuchar_Programa(int sock_program, char* buffer);
+void create_pcb(char* buffer, int tamanio_buffer);
+void destroy_pcb(t_pcb* self);
+void sort_plp(void);
+void planificador_sjn(void);
 t_nodo_segment* segment_create(int start, int offset);
 void segment_destroy(t_nodo_segment *self);
 int get_Segment_Start(int offset);
-int is_Segment_Available(int start, int offset);
 
 #endif /* PROTOCOL_H_ */

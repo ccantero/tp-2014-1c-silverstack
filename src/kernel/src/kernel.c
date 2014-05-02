@@ -21,9 +21,17 @@ int main(void)
 	queue_io = queue_create();
 	list_segment = list_create();
 	list_semaphores = list_create();
-	list_pcb = list_create();
+	list_pcb_new = list_create();
+	list_pcb_ready = list_create();
+	list_globales = list_create();
+
+	process_Id = 10000;
 
 	GetInfoConfFile();
+	sock_umv = conectar_umv();
+	if(sock_umv == -1)
+		return -1;
+
 	pthread_create(&th1,NULL,(void*)servidor_plp,(void*)a);
 	pause();
 	log_destroy(logger);
