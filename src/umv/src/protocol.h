@@ -27,12 +27,12 @@ typedef struct {
 	int dirLogica;
 	int dirFisica;
 	int tamanio;
-} segmento_info_t;
+} t_info_segmento;
 
 typedef struct {
 	char* programa;
-	segmento_info_t* segmentos;
-};
+	t_info_segmento* segmentos;
+} t_info_programa;
 
 t_log* logger;
 t_list* list_programas;
