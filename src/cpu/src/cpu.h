@@ -22,12 +22,6 @@
 #include <sys/socket.h>
 #include <src/silverstack.h>
 
-typedef struct {
-	int tipo;
-	int id_proceso;
-	int datosNumericos;
-	char mensaje[16];
-} t_mensaje;
 
 void ConectarA(int *sock, int *puerto, char *ip, struct sockaddr_in *their_addr, t_log *logger);
 t_puntero silverstack_definirVariable(t_nombre_variable var);

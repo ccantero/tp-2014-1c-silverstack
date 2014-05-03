@@ -75,6 +75,15 @@ int main(int argc, char *argv[])
 	strcpy(mensaje.mensaje, "Hola kernel.");
 	send(sockKernel, &mensaje, sizeof(t_mensaje), 0);
 	recv(sockKernel, &mensaje, sizeof(t_mensaje), 0);
+	if (mensaje.tipo == HANDSHAKEOK)
+	{
+		log_info(logger, "Handshake satisfactorio.");
+	}
+	else
+	{
+		log_info(logger, "Handshake erroneo.");
+		exit(1);
+	}
 
 	// Handshake con la UMV
 	mensaje.id_proceso = CPU;

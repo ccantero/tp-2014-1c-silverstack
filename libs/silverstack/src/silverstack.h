@@ -12,7 +12,6 @@
 #include <stdlib.h>
 #include <parser/metadata_program.h>
 
-#define KEYS_AMOUNT 10
 #define MAXDATASIZE 1024
 #define MSG_CON_PRG 0x01
 #define MSG_CON_PRG_OK 0x02
@@ -22,9 +21,20 @@
 #define CODE_SEGMENT 0x20
 #define STACK_SEGMENT 0x21
 #define HANDSHAKE 100
-#define CPU 101
-#define INSTRUCCIONREQUEST 102
-#define QUANTUMFINISH 103
+#define HANDSHAKEOK 101
+#define CPU 200
+#define UMV 201
+#define KERNEL 202
+#define PROGRAMA 203
+#define INSTRUCCIONREQUEST 300
+#define QUANTUMFINISH 301
+
+typedef struct {
+	int tipo;
+	int id_proceso;
+	int datosNumericos;
+	char mensaje[16];
+} t_mensaje;
 
 typedef struct _hdr {
 	char desc_id[16];
