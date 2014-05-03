@@ -25,11 +25,16 @@ endif
 # All Target
 all: kernel
 
+dependents:
+	-cd /home/utnso/Escritorio/TP_1C_2014/tp-2014-1c-silverstack/libs/parser/Debug && $(MAKE) clean all
+	-cd /home/utnso/Escritorio/TP_1C_2014/tp-2014-1c-silverstack/libs/silverstack/Debug && $(MAKE) clean all
+	-cd /home/utnso/Escritorio/TP_1C_2014/tp-2014-1c-silverstack/libs/commons/Debug && $(MAKE) clean all
+
 # Tool invocations
-kernel: $(OBJS) $(USER_OBJS)
+kernel: $(OBJS) $(USER_OBJS) /home/utnso/Escritorio/TP_1C_2014/tp-2014-1c-silverstack/libs/parser/Debug/libparser.so /home/utnso/Escritorio/TP_1C_2014/tp-2014-1c-silverstack/libs/silverstack/Debug/libsilverstack.so /home/utnso/Escritorio/TP_1C_2014/tp-2014-1c-silverstack/libs/commons/Debug/libcommons.so
 	@echo 'Building target: $@'
 	@echo 'Invoking: GCC C Linker'
-	gcc -lpthread -pthread  -o "kernel" $(OBJS) $(USER_OBJS) $(LIBS)
+	gcc -lpthread -pthread -L"/home/utnso/Escritorio/TP_1C_2014/tp-2014-1c-silverstack/libs/commons/Debug" -L"/home/utnso/Escritorio/TP_1C_2014/tp-2014-1c-silverstack/libs/silverstack/Debug" -L"/home/utnso/Escritorio/TP_1C_2014/tp-2014-1c-silverstack/libs/parser/Debug" -o "kernel" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 
@@ -40,5 +45,8 @@ clean:
 
 .PHONY: all clean dependents
 .SECONDARY:
+/home/utnso/Escritorio/TP_1C_2014/tp-2014-1c-silverstack/libs/parser/Debug/libparser.so:
+/home/utnso/Escritorio/TP_1C_2014/tp-2014-1c-silverstack/libs/silverstack/Debug/libsilverstack.so:
+/home/utnso/Escritorio/TP_1C_2014/tp-2014-1c-silverstack/libs/commons/Debug/libcommons.so:
 
 -include ../makefile.targets

@@ -22,6 +22,7 @@
 #include <commons/config.h> // config_get_int_value
 #include <commons/collections/queue.h> // queue_create
 #include <parser/metadata_program.h>
+//#include <src/silverstack.h>
 
 typedef struct _hdr
 {
@@ -78,9 +79,15 @@ typedef struct _pcb {
 	int peso;
 }t_pcb;
 
+typedef struct {
+	int tipo;
+	int id_proceso;
+	int datosNumericos;
+	char mensaje[16];
+} t_mensaje;
+
 #define KEYS_AMOUNT 14
 #define PATH_CONFIG "conf"
-
 #define MAXDATASIZE 1024
 #define SIZE_HDR sizeof(thdr)
 #define MSG_CON_PRG 0x01
@@ -94,6 +101,11 @@ typedef struct _pcb {
 #define CODE_SEGMENT 0x20
 #define STACK_SEGMENT 0x21
 #define backlog 10
+#define HANDSHAKE 100 // SylverStack
+#define HANDSHAKE_OK 101 // SylverStack
+#define CPU 200 // SylverStack
+#define PROGRAMA 203 // SylverStack
+#define SENDFILE 104 // SylverStack
 
 t_log *logger;
 t_queue *queue_io;
@@ -104,7 +116,7 @@ t_list *list_semaphores;
 t_list *list_globales;
 
 int port_cpu,port_program,port_umv,sockPrin,multiprogramacion,quantum,retardo;
-int sock_umv, process_Id;
+int sock_umv, process_Id, cantidad_cpu;
 char myip[16],umv_ip[16];
 
 void GetInfoConfFile(void);
@@ -128,5 +140,9 @@ void planificador_sjn(void);
 t_nodo_segment* segment_create(int start, int offset);
 void segment_destroy(t_nodo_segment *self);
 int get_Segment_Start(int offset);
+void servidor_pcp(void);
+int escuchar_Nuevo_cpu(int sock_cpu,char* buffer);
+int escuchar_cpu(int sock_cpu, char* buffer);
+
 
 #endif /* PROTOCOL_H_ */

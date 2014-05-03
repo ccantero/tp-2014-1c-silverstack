@@ -352,7 +352,7 @@ void semaphore_signal(char* sem_name)
 }
 
 /*
- * Function: servidor
+ * Function: servidor_plp
  * Purpose: Check all the sockets umv and program
  * Created on: 18/04/2014
  * Author: SilverStack
@@ -365,9 +365,11 @@ void servidor_plp(void)
 	struct sockaddr_in my_addr;
 	char buf[MAXDATASIZE];
 
+	log_info(logger, "Lanzo hilo servidor_plp");
+
 	if( (sock_program=socket(AF_INET,SOCK_STREAM,0))==-1)
 	{
-		log_error(logger, "Error en funcion socket");
+		log_error(logger, "Error en funcion socket en servidor_plp");
 		return;
 	}
 
@@ -378,13 +380,13 @@ void servidor_plp(void)
 
 	if (bind(sock_program,(struct sockaddr *)&my_addr,sizeof(struct sockaddr))==-1)
 	{
-		log_error(logger, "Error en funcion bind");
+		log_error(logger, "Error en funcion bind en servidor_plp");
 		return;
 	}
 
 	if (listen(sock_program,backlog)==-1)
 	{
-		log_error(logger, "Error en funcion listen");
+		log_error(logger, "Error en funcion listen en servidor_plp");
 		return;
 	}
 
@@ -401,7 +403,7 @@ void servidor_plp(void)
 	{
 		if (select(fdmax + 1, &descriptoresLectura, NULL, NULL, NULL) == -1)
 		{
-			log_error(logger, "Error en funcion select");;
+			log_error(logger, "Error en funcion select en servidor_plp");;
 			exit(1);
 		}
 
@@ -453,7 +455,8 @@ int escuchar_Nuevo_Programa(int sock_program, char* buffer)
 	socklen_t sin_size;
 	struct sockaddr_in my_addr;
 	struct sockaddr_in their_addr;
-	thdr hdr;
+	t_mensaje mensaje;
+	int size_mensaje = sizeof(t_mensaje);
 
 	int new_socket;
 	int numbytes;
@@ -465,6 +468,8 @@ int escuchar_Nuevo_Programa(int sock_program, char* buffer)
 
 	sin_size=sizeof(struct sockaddr_in);
 
+	log_info(logger, "Escuchar_Nuevo_Programa");
+
 	if((new_socket=accept(sock_program,(struct sockaddr *)&their_addr,	&sin_size))==-1)
 	{
 		log_error(logger, "Error en funcion accept en escuchar_Nuevo_Programa");
@@ -473,23 +478,23 @@ int escuchar_Nuevo_Programa(int sock_program, char* buffer)
 
 	memset(buffer,'\0',MAXDATASIZE);
 
-	if((numbytes=read(new_socket,buffer,SIZE_HDR))<=0)
+	if((numbytes=read(new_socket,buffer,size_mensaje))<=0)
 	{
 		log_error(logger, "Error en el read en escuchar_Nuevo_Programa");
 		close(new_socket);
 		return -1;
 	}
 
-	if(hdr.pay_desc==MSG_CON_PRG)
+	memcpy(&mensaje,buffer,size_mensaje);
+	if(mensaje.tipo==HANDSHAKE && mensaje.id_proceso ==PROGRAMA)
 	{
 		/* Es un nuevo programa que quiere conectarse */
-		strcpy(hdr.desc_id,myip);
-		hdr.pay_desc = MSG_CON_PRG_OK;
-		hdr.pay_len = 0;
+		log_info(logger, "El programa dice: %s", mensaje.mensaje);
+		mensaje.tipo = HANDSHAKE_OK;
 		memset(buffer,'\0',MAXDATASIZE);
-		memcpy(buffer,&hdr,SIZE_HDR);
+		memcpy(buffer,&mensaje,SIZE_HDR);
 
-		if((numbytes=write(new_socket,buffer,SIZE_HDR))<=0)
+		if((numbytes=write(new_socket,buffer,size_mensaje))<=0)
 		{
 			log_error(logger, "Error en el write en escuchar_Nuevo_Programa");
 			close(new_socket);
@@ -501,19 +506,6 @@ int escuchar_Nuevo_Programa(int sock_program, char* buffer)
 	}
 	else
 	{
-		/* Handshake Fallo */
-		strcpy(hdr.desc_id,myip);
-		hdr.pay_desc = MSG_CON_PRG_FAIL;
-		hdr.pay_len = 0;
-		memset(buffer,'\0',MAXDATASIZE);
-		memcpy(buffer,&hdr,SIZE_HDR);
-
-		if((numbytes=write(new_socket,buffer,SIZE_HDR))<=0)
-		{
-			log_error(logger, "Error en el write en escuchar_Nuevo_Programa. Error en el handshake");
-			return -1;
-		}
-
 		log_error(logger, "No se pudo crear nueva conexion. Error en el handshake");
 		return -1;
 	}
@@ -529,67 +521,40 @@ int escuchar_Nuevo_Programa(int sock_program, char* buffer)
 int escuchar_Programa(int sock_program, char* buffer)
 {
 	thdr hdr;
+	t_mensaje mensaje;
 	int numbytes;
+	int size_mensaje = sizeof(t_mensaje);
 
 	log_info(logger, "Recepcion de datos desde Programa");
 	memset(buffer,'\0',MAXDATASIZE);
-	if((numbytes=read(sock_program,buffer,SIZE_HDR))<=0)
+	if((numbytes=read(sock_program,buffer,size_mensaje))<=0)
 	{
 		log_error(logger, "Error en el read en escuchar_Programa");
 		return -1;
 	}
 
-	memcpy(&hdr,buffer,SIZE_HDR);
+	memcpy(&mensaje,buffer,size_mensaje);
 
-	if(hdr.pay_desc==MSG_CON_PRG_TXT)
+	if(mensaje.tipo==SENDFILE && mensaje.id_proceso ==PROGRAMA)
 	{
 		/* Para tratamiento del envio de archivos o comandos*/
-		strcpy(hdr.desc_id,myip);
-		hdr.pay_desc = MSG_CON_PRG_TXT_OK;
-		hdr.pay_len = 0;
 		memset(buffer,'\0',MAXDATASIZE);
-		memcpy(buffer,&hdr,SIZE_HDR);
 
-		if((write(sock_program,buffer,SIZE_HDR))<=0)
+		if(mensaje.datosNumericos > MAXDATASIZE)
 		{
-			log_error(logger, "Error en el write en escuchar_Programa");
-			return -1;
+			log_error(logger, "Archivo muy grande %d", mensaje.datosNumericos);
 		}
 
-		if((numbytes=read(sock_program,buffer,SIZE_HDR))<=0)
+		if((numbytes=read(sock_program,buffer,mensaje.datosNumericos))<=0)
 		{
 			log_error(logger, "Error en el read en escuchar_Programa");
 			return -1;
 		}
 
-		memcpy(&hdr,buffer,SIZE_HDR);
-
-		if(hdr.pay_len>0)
-		{
-			if(hdr.pay_len >= MAXDATASIZE)
-			{
-				log_error(logger, "Se necesita recibir un archivo de gran tamanio. escuchar_Programa");
-				return -1;
-			}
-			else
-			{
-				memset(buffer,'\0',MAXDATASIZE);
-				if((numbytes=read(sock_program,buffer,hdr.pay_len))<=0)
-				{
-					log_error(logger, "Error en el read en escuchar_Programa");
-					return -1;
-				}
-
-				log_info(logger, "Se recibieron %d bytes desde programa", hdr.pay_len);
-				create_pcb(buffer,numbytes);
-				return 0;
-			}
-		}
-		else
-		{
-			log_error(logger, "Archivo de tamanio 0. escuchar_Programa");
-			return -1;
-		}
+		log_info(logger, "Se recibieron %d bytes desde programa", hdr.pay_len);
+		log_info(logger, "File \n%s", buffer);
+		return 0;
+		//create_pcb(buffer,numbytes);
 	}
 	else
 	{
@@ -597,7 +562,6 @@ int escuchar_Programa(int sock_program, char* buffer)
 		return -1;
 	}
 }
-
 
 /*
  * Function: create_pcb
@@ -612,7 +576,6 @@ void create_pcb(char* buffer, int tamanio_buffer)
 	t_pcb* new_pcb = (t_pcb*) malloc(sizeof(t_pcb));
 
 	//send_umv_code_segment(sock_UMV, buffer);
-
 	metadata = metadatada_desde_literal(buffer);
 	new_pcb->unique_id = ++process_Id;
 	new_pcb->code_segment.offset = tamanio_buffer;
@@ -836,4 +799,185 @@ void planificador_sjn(void)
 		list_add(list_pcb_new, element);
 		log_info(logger, "PCB -> %s moved from New Queue to Ready Queue", element->unique_id);
 	}
+}
+
+/*
+ * Function: servidor_pcp
+ * Purpose: Check all the sockets for cpu
+ * Created on: 02/05/2014
+ * Author: SilverStack
+*/
+
+void servidor_pcp()
+{
+	fd_set descriptoresLectura;
+	int sock_cpu, fdmax, i, new_socket;
+	struct sockaddr_in my_addr;
+	char buf[MAXDATASIZE];
+	log_info(logger, "Lance hilo servidor_pcp");
+
+	if( (sock_cpu=socket(AF_INET,SOCK_STREAM,0))==-1)
+	{
+		log_error(logger, "Error en funcion socket en servidor_pcp");
+		return;
+	}
+
+	my_addr.sin_port=htons(port_cpu);
+	my_addr.sin_family=AF_INET;
+	my_addr.sin_addr.s_addr=inet_addr(myip);
+	memset(&(my_addr.sin_zero),0,8);
+
+	if (bind(sock_cpu,(struct sockaddr *)&my_addr,sizeof(struct sockaddr))==-1)
+	{
+		log_error(logger, "Error en funcion bind en servidor_pcp");
+		return;
+	}
+
+	if (listen(sock_cpu,backlog)==-1)
+	{
+		log_error(logger, "Error en funcion listen en servidor_pcp");
+		return;
+	}
+
+	FD_ZERO (&descriptoresLectura);
+	FD_SET (sock_cpu, &descriptoresLectura);
+
+	fdmax = sock_cpu;
+
+	for(;;)
+	{
+		if (select(fdmax + 1, &descriptoresLectura, NULL, NULL, NULL) == -1)
+		{
+			log_error(logger, "Error en funcion select");;
+			exit(1);
+		}
+
+		for (i = 0; i <= fdmax; i++)
+		{
+			if (FD_ISSET(i, &descriptoresLectura))
+			{
+				if (i == sock_cpu)
+				{
+					new_socket = escuchar_Nuevo_cpu(sock_cpu,buf);
+					if(new_socket == -1)
+					{
+						FD_CLR(i, &descriptoresLectura);
+					}
+					else
+					{
+						FD_SET(new_socket, &descriptoresLectura);
+						if(fdmax < new_socket)
+							fdmax = new_socket;
+					}
+					continue;
+				}
+
+				if(escuchar_cpu(i, buf) == -1)
+				{
+					close(i);
+					FD_CLR(i, &descriptoresLectura);
+				}
+			}
+		} /* for (i = 0; i <= fdmax; i++) */
+	}/* for(;;) */
+}
+
+/*
+ * Function: escuchar_Nuevo_cpu
+ * Purpose: Accept new cpu
+ * Created on: 03/05/2014
+ * Author: SilverStack
+*/
+
+int escuchar_Nuevo_cpu(int sock_cpu,char* buffer)
+{
+	socklen_t sin_size;
+	struct sockaddr_in my_addr;
+	struct sockaddr_in their_addr;
+	t_mensaje mensaje;
+	int size_hdr = sizeof(t_mensaje);
+
+	int new_socket;
+	int numbytes;
+
+	my_addr.sin_port=htons(port_program); /* No creo que sea necesario para el sizeof */
+	my_addr.sin_family=AF_INET; /* No creo que sea necesario para el sizeof */
+	my_addr.sin_addr.s_addr=inet_addr(myip); /* No creo que sea necesario para el sizeof */
+	memset(&(my_addr.sin_zero),0,8); /* No creo que sea necesario para el sizeof */
+
+	sin_size=sizeof(struct sockaddr_in);
+
+	if((new_socket=accept(sock_cpu,(struct sockaddr *)&their_addr,	&sin_size))==-1)
+	{
+		log_error(logger, "Error en funcion accept en escuchar_Nuevo_CPU");
+		return -1;
+	}
+
+	memset(buffer,'\0',MAXDATASIZE);
+
+
+	if((numbytes=read(new_socket,buffer,size_hdr))<=0)
+	{
+		log_error(logger, "Error en el read en escuchar_Nuevo_CPU");
+		close(new_socket);
+		return -1;
+	}
+
+	memcpy(&mensaje,buffer,size_hdr);
+
+	//if(mensaje.tipo==HANDSHAKE && mensaje.id_proceso ==CPU)
+	if(mensaje.tipo==HANDSHAKE && mensaje.id_proceso ==CPU)
+	{
+		/* Es un nuevo cpu que quiere conectarse */
+
+		memset(buffer,'\0',MAXDATASIZE);
+		mensaje.tipo=HANDSHAKE_OK;
+		memcpy(buffer,&mensaje,size_hdr);
+		log_info(logger,"Mensaje recibido = %s", mensaje.mensaje);
+
+		if((numbytes=write(new_socket,buffer,size_hdr))<=0)
+		{
+			log_error(logger, "Error en el write en escuchar_Nuevo_Programa");
+			close(new_socket);
+			return -1;
+		}
+
+		log_info(logger, "Nueva conexion lograda con cpu");
+		cantidad_cpu++;
+		return new_socket;
+	}
+	else
+	{
+		/* Handshake Fallo
+		strcpy(hdr.desc_id,myip);
+		hdr.pay_desc = MSG_CON_PRG_FAIL;
+		hdr.pay_len = 0;
+		memset(buffer,'\0',MAXDATASIZE);
+		memcpy(buffer,&hdr,SIZE_HDR);
+
+			if((numbytes=write(new_socket,buffer,SIZE_HDR))<=0)
+			{
+				log_error(logger, "Error en el write en escuchar_Nuevo_Programa. Error en el handshake");
+				return -1;
+			}
+
+			log_error(logger, "No se pudo crear nueva conexion. Error en el handshake");
+			return -1;
+
+		*/
+		return -1;
+	}
+
+}
+
+/*
+ * Function: escuchar_cpu
+ * Purpose: Works with cpu
+ * Created on: 03/05/2014
+ * Author: SilverStack
+*/
+
+int escuchar_cpu(int sock_cpu, char* buffer)
+{
+	return -1;
 }

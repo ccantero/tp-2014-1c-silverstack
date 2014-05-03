@@ -3,6 +3,9 @@
 	<name>kernel</name>
 	<comment></comment>
 	<projects>
+		<project>silverstack</project>
+		<project>parser</project>
+		<project>commons</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>
