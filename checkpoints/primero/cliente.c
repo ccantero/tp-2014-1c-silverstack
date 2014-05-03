@@ -54,6 +54,8 @@ int main(int argc, char *argv[])
 
 	while(1)
 	{
+
+
 		// Pido mensaje a enviar
 		printf("Yo: ");
 		fgets(buf, 255, stdin);
