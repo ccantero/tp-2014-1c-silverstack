@@ -35,6 +35,7 @@ typedef struct _hdr
 typedef struct _io {
 	char* name;
 	int retardo;
+	t_queue *io_queue;
 }t_io;
 
 typedef struct _t_semaphore {
@@ -87,15 +88,15 @@ typedef struct _pcb {
 }t_pcb;
 */
 
-#define PATH_CONFIG "conf"
+
+typedef struct _t_process {
+	unsigned int pid;
+	int	quantum_available;
+	int current_cpu_socket;
+} t_process;
+
 //#define MAXDATASIZE 1024
-#define SIZE_HDR sizeof(thdr)
 #define SIZE_MSG sizeof(t_mensaje)
-//#define MSG_CON_PRG 0x01
-//#define MSG_CON_PRG_OK 0x02
-//#define MSG_CON_PRG_FAIL 0x03
-//#define MSG_CON_PRG_TXT 0x04
-//#define MSG_CON_PRG_TXT_OK 0x05
 #define MSG_CON_UMV 0x10
 #define MSG_CON_UMV_OK 0x11
 #define MSG_CON_UMV_FAIL 0x12
@@ -109,21 +110,25 @@ typedef struct _pcb {
 #define SENDFILE 104 // SylverStack
 #define CPU_AVAILABLE 0x30
 #define CPU_NOT_AVAILABLE 0x31
+#define CPU_WORKING 0x32
+#define CPU_NOT_ASSIGNED -1
 
 t_log *logger;
-t_queue *queue_io;
+t_list *list_io;
 t_list *list_pcb_new;
 t_list *list_pcb_ready;
+t_list *list_pcb_execute;
 t_list *list_segment;
 t_list *list_semaphores;
 t_list *list_globales;
 t_list *list_cpu;
+t_list *list_process;
 
 int port_cpu,port_program,port_umv,sockPrin,multiprogramacion,quantum,retardo;
 int sock_umv, process_Id, cantidad_cpu;
 char myip[16],umv_ip[16];
 
-void GetInfoConfFile(void);
+void GetInfoConfFile(char* PATH_CONFIG);
 int conectar_umv(void);
 t_global* global_create(char *global_name);
 int global_update_value(char* global_name, int value);
@@ -149,5 +154,9 @@ int escuchar_Nuevo_cpu(int sock_cpu,char* buffer);
 int escuchar_cpu(int sock_cpu, char* buffer);
 t_nodo_cpu* cpu_create(int socket);
 void cpu_remove(int socket);
+void cpu_update(int socket);
+t_process* process_create(unsigned int pid);
+void process_update(int socket);
+void pcb_move(unsigned int pid,t_list* from, t_list* to);
 
 #endif /* PROTOCOL_H_ */

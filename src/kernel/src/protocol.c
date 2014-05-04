@@ -16,7 +16,7 @@
  * Author: SilverStack
 */
 
-void GetInfoConfFile(void)
+void GetInfoConfFile(char* PATH_CONFIG)
 {
 	t_config* config;
 	char** HIO;
@@ -68,7 +68,7 @@ void GetInfoConfFile(void)
 	while(*ID_HIO != NULL && *HIO != NULL)
 	{
 		retardo_io = atoi(*HIO);
-		queue_push(queue_io, io_create(*ID_HIO, retardo_io));
+		list_add(list_io, io_create(*ID_HIO, retardo_io));
 		HIO++;
 		ID_HIO++;
 	}
@@ -215,6 +215,7 @@ t_io* io_create(char *io_name, int io_retardo)
 	new_io->name = (char*) malloc(sizeof(char) * (strlen(io_name) + 1));
 	strcpy(new_io->name,io_name);
 	new_io->retardo = io_retardo;
+	new_io->io_queue = queue_create();
 	return new_io;
 }
 
@@ -760,13 +761,12 @@ int conectar_umv(void)
 void planificador_sjn(void)
 {
 	sort_plp();
-	t_list* sublist = list_take(list_pcb_new, 1);
-	t_pcb* element = list_get(sublist, 0);
-
-	if(list_size(list_pcb_ready) <= multiprogramacion)
+	while(list_size(list_pcb_ready) <= multiprogramacion)
 	{
+		t_pcb *element = list_remove(list_pcb_execute, 0);
 		list_add(list_pcb_new, element);
-		log_info(logger, "PCB -> %s moved from New Queue to Ready Queue", element->unique_id);
+		list_add(list_process,process_create(element->unique_id));
+		log_info(logger, "PCB -> %d moved from New Queue to Ready Queue", element->unique_id);
 	}
 }
 
@@ -854,6 +854,7 @@ void servidor_pcp()
 				}
 			}
 		} /* for (i = 0; i <= fdmax; i++) */
+		planificador_sjn();
 	}/* for(;;) */
 }
 
@@ -937,7 +938,33 @@ int escuchar_Nuevo_cpu(int sock_cpu,char* buffer)
 
 int escuchar_cpu(int sock_cpu, char* buffer)
 {
-	return -1;
+	t_mensaje mensaje;
+	int numbytes;
+	int size_mensaje = sizeof(t_mensaje);
+
+	log_info(logger, "Recepcion de datos desde CPU");
+	memset(buffer,'\0',MAXDATASIZE);
+	if((numbytes=read(sock_cpu,buffer,size_mensaje))<=0)
+	{
+		log_error(logger, "Error en el read en escuchar_Programa");
+		return -1;
+	}
+
+	memcpy(&mensaje,buffer,size_mensaje);
+
+	if(mensaje.tipo==QUANTUMFINISH && mensaje.id_proceso ==CPU)
+	{
+		cpu_update(sock_cpu);
+		process_update(sock_cpu);
+		return 0;
+	}
+	else
+	{
+		log_error(logger, "Error en el descriptor. escuchar_cpu");
+		return -1;
+	}
+
+	//return -1;
 }
 
 /*
@@ -989,4 +1016,140 @@ void cpu_remove(int socket)
 
 	t_nodo_cpu *cpu = list_remove(list_cpu, indice_buscado);
 	free(cpu);
+}
+
+/*
+ * Function: cpu_update
+ * Purpose: update cpu's status
+ * Created on: 04/05/2014
+ * Author: SilverStack
+*/
+
+void cpu_update(int socket)
+{
+	int flag_found = 0;
+	int socket_cpu = socket;
+
+	void _change_status(t_nodo_cpu *s)
+	{
+		if(s->socket == socket_cpu)
+		{
+			s->status = CPU_AVAILABLE;
+			flag_found = 1;
+		}
+	}
+
+	list_iterate(list_cpu, (void*) _change_status);
+
+	if(flag_found == 0)
+	{
+		log_error(logger, "CPU Socket %d no encontrado", socket);
+		return;
+	}
+
+	flag_found = 0;
+
+	void _change_status_available(t_nodo_cpu *s)
+	{
+		if(s->status == CPU_NOT_AVAILABLE && flag_found == 0)
+		{
+			s->status = CPU_AVAILABLE;
+			flag_found = 1;
+		}
+	}
+
+	list_iterate(list_cpu, (void*) _change_status_available);
+}
+
+/*
+ * Function: process_create
+ * Purpose: create process node
+ * Created on: 04/05/2014
+ * Author: SilverStack
+*/
+
+t_process* process_create(unsigned int pid)
+{
+	t_process* new_process = (t_process*) malloc(sizeof(t_process));
+	new_process->current_cpu_socket = CPU_NOT_ASSIGNED;
+	new_process->pid = pid;
+	new_process->quantum_available = quantum;
+	return new_process;
+}
+
+/*
+ * Function: process_update
+ * Purpose: update process node
+ * Created on: 04/05/2014
+ * Author: SilverStack
+*/
+
+void process_update(int socket)
+{
+	int flag_found = 0;
+	int socket_cpu = socket;
+	int flag_update_pcb = 0;
+	int current_pid = 0;
+
+	void _change_status(t_process *s)
+	{
+		if(s->current_cpu_socket == socket_cpu)
+		{
+			if(s->quantum_available != 1)
+			{
+				s->quantum_available = s->quantum_available - 1;
+			}
+			else
+			{
+				flag_update_pcb = 1;
+				current_pid = s->pid;
+				s->quantum_available = 4;
+				s->current_cpu_socket = CPU_NOT_ASSIGNED;
+			}
+			flag_found = 1;
+		}
+	}
+
+	list_iterate(list_process, (void*) _change_status);
+
+	if(flag_found == 0)
+		log_error(logger, "CPU Socket %d no encontrado", socket);
+
+	if(flag_update_pcb == 1)
+	{
+		pcb_move(current_pid,list_pcb_execute, list_pcb_ready);
+	}
+}
+
+/*
+ * Function: pcb_update
+ * Purpose: update pcb status
+ * Created on: 04/05/2014
+ * Author: SilverStack
+*/
+
+void pcb_move(unsigned int pid,t_list* from, t_list* to)
+{
+	int flag_found = 0;
+	int process_id = pid;
+	int index = 0;
+	int indice_buscado = 0;
+
+	void _get_node(t_pcb *s)
+	{
+		if(s->unique_id == process_id)
+		{
+			indice_buscado = index;
+			flag_found = 1;
+		}
+		index++;
+	}
+
+	list_iterate(from, (void*) _get_node);
+
+	if(flag_found == 0)
+		log_error(logger, "PID %d no encontrado en queue execute", pid);
+
+	t_pcb *pcb = list_remove(from, indice_buscado);
+	list_add(to,pcb);
 }
