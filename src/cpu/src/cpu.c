@@ -38,17 +38,10 @@ int main(int argc, char *argv[])
 	// Definicion de variables
 	t_log *logger;
 	t_config *config;
-	int port_kernel;
-	int port_umv;
-	char kernelip[16];
-	char umvip[16];
-	int sockKernel;
-	int sockUmv;
-	struct sockaddr_in kernel_addr;
-	struct sockaddr_in umv_addr;
 	int seguirEjecutando = 1; // Mediante la señal SIGUSR1 se puede dejar de ejecutar el cpu
 	t_mensaje mensaje;
-	struct _pcb pcb;
+	t_pcb pcb;
+	diccionario = list_create();
 
 	// Obtengo datos de archivo de configuracion y se crea el logger
 	config = config_create(argv[1]);
@@ -77,11 +70,11 @@ int main(int argc, char *argv[])
 	recv(sockKernel, &mensaje, sizeof(t_mensaje), 0);
 	if (mensaje.tipo == HANDSHAKEOK)
 	{
-		log_info(logger, "Handshake satisfactorio.");
+		log_info(logger, "Handshake con kernel satisfactorio.");
 	}
 	else
 	{
-		log_info(logger, "Handshake erroneo.");
+		log_info(logger, "Handshake con kernel erroneo.");
 		exit(1);
 	}
 
@@ -91,6 +84,15 @@ int main(int argc, char *argv[])
 	strcpy(mensaje.mensaje, "Hola UMV.");
 	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	if (mensaje.tipo == HANDSHAKEOK)
+	{
+		log_info(logger, "Handshake con UMV satisfactorio.");
+	}
+	else
+	{
+		log_info(logger, "Handshake con UMV erroneo.");
+		exit(1);
+	}
 
 	// Bucle principal del proceso
 	while(seguirEjecutando)
@@ -147,16 +149,29 @@ void ConectarA(int *sock, int *puerto, char *ip, struct sockaddr_in *their_addr,
 
 t_puntero silverstack_definirVariable(t_nombre_variable var)
 {
-	/*
-	Reserva en el Contexto de Ejecución Actual el espacio necesario para una variable llamada
-	var y la registra tanto en el Stack como en el Diccionario de Variables,
-	retornando la posición del valor de esta nueva variable del stack
-	El valor de la variable queda indefinido: no deberá inicializarlo con ningún valor default.
-	Esta función se invoca una vez por variable, a pesar de que este varias veces en una línea. Por
-	ejemplo, evaluar "variables a, b, c" llamará tres veces a esta función con los parámetros "a",
-	"b" y "c"
-	*/
-	t_puntero ptr = 0;
+	// TODO averiguar bien a qué se refieren con "contexto actual"
+	// 1) Reservar espacio en memoria para la variable
+	// 2) Registrar variable en el Stack
+	// 3) Registrar variable en el dicionario de variables
+	// 4) Retornar la posicion de la variable
+
+	t_mensaje msg;
+	t_puntero ptr;
+	msg.id_proceso = CPU;
+	msg.tipo = MEMORIAREQUEST;
+	msg.datosNumericos = 4;
+	send(sockUmv, &msg, sizeof(t_mensaje), 0);
+	recv(sockUmv, &msg, sizeof(t_mensaje), 0);
+	msg.id_proceso = CPU;
+	msg.tipo = VARIABLEREQUEST;
+	msg.mensaje[0] = var;
+	send(sockUmv, &msg, sizeof(t_mensaje), 0);
+	recv(sockUmv, &msg, sizeof(t_mensaje), 0);
+	ptr = msg.datosNumericos;
+	t_variable variable;
+	variable.nombre = var;
+	variable.direccion = msg.datosNumericos;
+	list_add(diccionario, &variable);
 	return ptr;
 }
 

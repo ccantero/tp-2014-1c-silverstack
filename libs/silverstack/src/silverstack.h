@@ -28,6 +28,8 @@
 #define PROGRAMA 203
 #define INSTRUCCIONREQUEST 300
 #define QUANTUMFINISH 301
+#define MEMORIAREQUEST 302
+#define VARIABLEREQUEST 303
 
 typedef struct {
 	int tipo;

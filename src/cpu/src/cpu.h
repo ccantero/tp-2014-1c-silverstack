@@ -14,6 +14,7 @@
 #include <pthread.h>
 #include <commons/log.h>
 #include <commons/config.h>
+#include <commons/collections/list.h>
 #include <parser/parser.h>
 #include <errno.h>
 #include <netdb.h>
@@ -21,7 +22,23 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <src/silverstack.h>
+#include <semaphore.h>
 
+typedef struct {
+	char nombre;
+	int direccion;
+	int contenido;
+} t_variable;
+
+t_list *diccionario;
+int port_kernel;
+int port_umv;
+char kernelip[16];
+char umvip[16];
+int sockKernel;
+int sockUmv;
+struct sockaddr_in kernel_addr;
+struct sockaddr_in umv_addr;
 
 void ConectarA(int *sock, int *puerto, char *ip, struct sockaddr_in *their_addr, t_log *logger);
 t_puntero silverstack_definirVariable(t_nombre_variable var);
