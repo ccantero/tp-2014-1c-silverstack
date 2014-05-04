@@ -13,11 +13,11 @@
 #include <parser/metadata_program.h>
 
 #define MAXDATASIZE 1024
-#define MSG_CON_PRG 0x01
-#define MSG_CON_PRG_OK 0x02
-#define MSG_CON_PRG_FAIL 0x03
-#define MSG_CON_PRG_TXT 0x04
-#define MSG_CON_PRG_TXT_OK 0x05
+//#define MSG_CON_PRG 0x01
+//#define MSG_CON_PRG_OK 0x02
+//#define MSG_CON_PRG_FAIL 0x03
+//#define MSG_CON_PRG_TXT 0x04
+//#define MSG_CON_PRG_TXT_OK 0x05
 #define CODE_SEGMENT 0x20
 #define STACK_SEGMENT 0x21
 #define HANDSHAKE 100
@@ -75,8 +75,18 @@ typedef struct _t_nodo_segment {
 	size_t offset;
 } t_nodo_segment;
 
+typedef struct _t_global {
+	char* identifier;
+	int	value;
+} t_global;
+
+typedef struct _t_nodo_cpu {
+	int	socket;
+	unsigned char status;
+}t_nodo_cpu;
+
 typedef struct _pcb {
-	char* unique_id; /* Identificador Único */
+	unsigned int unique_id; /* Identificador Único */
 	t_segment code_segment; /* Código Ansisop del programa */
 	t_segment stack_segment; /* Segmento de stack */
 	int stack_pointer; /* Puntero al inicio del contexto de ejecución actual */
@@ -86,5 +96,6 @@ typedef struct _pcb {
 	int context_actual;
 	int peso;
 } t_pcb;
+
 
 #endif /* SILVERSTACK_H_ */

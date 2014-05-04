@@ -24,9 +24,8 @@ void GetInfoConfFile(void)
 	char** ID_Sem;
 	char** Value_Sem;
 	char** Globales;
-	char** Global_Values;
 	char** AUX;
-	int i = 0, j = 0,retardo_io, valor_semaforo, valor_compartida;
+	int i = 0, j = 0,retardo_io, valor_semaforo;
 
 	config = config_create(PATH_CONFIG);
 	strcpy(myip,config_get_string_value(config, "IP"));
@@ -42,7 +41,6 @@ void GetInfoConfFile(void)
 	quantum=config_get_int_value(config, "QUANTUM");
 	retardo=config_get_int_value(config, "RETARDO");
 	Globales = config_get_array_value(config, "GLOBALES");
-	Global_Values = config_get_array_value(config, "VALORES");
 
 	AUX = ID_HIO;
 
@@ -109,38 +107,10 @@ void GetInfoConfFile(void)
 		Value_Sem++;
 	}
 
-	AUX = Globales;
-
-	i = 0;
-	j = 0;
-
-	while (*AUX != NULL) /* Cuenta cantidad de Variables Globales */
+	while(*Globales != NULL)
 	{
-		AUX++;
-		i++;
-	}
-
-	AUX = Global_Values;
-
-	while (*AUX != NULL) /* Cuenta cantidad de valores en Variables Globales */
-	{
-		AUX++;
-		j++;
-	}
-
-	if(i != j)
-	{
-		log_error(logger, "No coinciden la cantidad de Variables Compartidas con la cantidad de valores");
-		log_error(logger, "Extraccion incorrecta del archivo de configuracion");
-		exit(1);
-	}
-
-	while(*Globales != NULL && *Global_Values != NULL)
-	{
-		valor_compartida = atoi(*Global_Values);
-		list_add(list_globales, global_create(*Globales, valor_compartida));
+		list_add(list_globales, global_create(*Globales));
 		Globales++;
-		Global_Values++;
 	}
 
 	log_info(logger, "Extraccion correcta del archivo de configuracion");
@@ -154,12 +124,11 @@ void GetInfoConfFile(void)
  * Author: SilverStack
 */
 
-t_global* global_create(char *global_name, int value)
+t_global* global_create(char *global_name)
 {
 	t_global* new_global = (t_global*) malloc(sizeof(t_global));
 	new_global->identifier = (char*) malloc(sizeof(char) * (strlen(global_name) + 1));
 	strcpy(new_global->identifier,global_name);
-	new_global->value = value;
 	return new_global;
 }
 
@@ -553,8 +522,8 @@ int escuchar_Programa(int sock_program, char* buffer)
 
 		log_info(logger, "Se recibieron %d bytes desde programa", hdr.pay_len);
 		log_info(logger, "File \n%s", buffer);
-		return 0;
 		//create_pcb(buffer,numbytes);
+		return 0;
 	}
 	else
 	{
@@ -848,7 +817,7 @@ void servidor_pcp()
 	{
 		if (select(fdmax + 1, &descriptoresLectura, NULL, NULL, NULL) == -1)
 		{
-			log_error(logger, "Error en funcion select");;
+			log_error(logger, "Error en funcion select en hilo PCP");;
 			exit(1);
 		}
 
@@ -862,12 +831,16 @@ void servidor_pcp()
 					if(new_socket == -1)
 					{
 						FD_CLR(i, &descriptoresLectura);
+						log_error(logger,"No se pudo agregar una cpu");
 					}
 					else
 					{
 						FD_SET(new_socket, &descriptoresLectura);
+						cantidad_cpu++;
+						list_add(list_cpu, cpu_create(new_socket));
 						if(fdmax < new_socket)
 							fdmax = new_socket;
+						log_info(logger,"Se agrego un cpu a la lista de CPU");
 					}
 					continue;
 				}
@@ -876,6 +849,8 @@ void servidor_pcp()
 				{
 					close(i);
 					FD_CLR(i, &descriptoresLectura);
+					cpu_remove(i);
+					log_info(logger,"Se removio un cpu de la lista de CPU");
 				}
 			}
 		} /* for (i = 0; i <= fdmax; i++) */
@@ -937,34 +912,17 @@ int escuchar_Nuevo_cpu(int sock_cpu,char* buffer)
 
 		if((numbytes=write(new_socket,buffer,size_hdr))<=0)
 		{
-			log_error(logger, "Error en el write en escuchar_Nuevo_Programa");
+			log_error(logger, "Error en el write en escuchar_Nuevo_CPU");
 			close(new_socket);
 			return -1;
 		}
 
 		log_info(logger, "Nueva conexion lograda con cpu");
-		cantidad_cpu++;
 		return new_socket;
 	}
 	else
 	{
-		/* Handshake Fallo
-		strcpy(hdr.desc_id,myip);
-		hdr.pay_desc = MSG_CON_PRG_FAIL;
-		hdr.pay_len = 0;
-		memset(buffer,'\0',MAXDATASIZE);
-		memcpy(buffer,&hdr,SIZE_HDR);
-
-			if((numbytes=write(new_socket,buffer,SIZE_HDR))<=0)
-			{
-				log_error(logger, "Error en el write en escuchar_Nuevo_Programa. Error en el handshake");
-				return -1;
-			}
-
-			log_error(logger, "No se pudo crear nueva conexion. Error en el handshake");
-			return -1;
-
-		*/
+		log_error(logger, "No se pudo crear nueva conexion. Error en el handshake");
 		return -1;
 	}
 
@@ -980,4 +938,55 @@ int escuchar_Nuevo_cpu(int sock_cpu,char* buffer)
 int escuchar_cpu(int sock_cpu, char* buffer)
 {
 	return -1;
+}
+
+/*
+ * Function: cpu_create
+ * Purpose: Adds cpu to CPU List
+ * Created on: 03/05/2014
+ * Author: SilverStack
+*/
+
+t_nodo_cpu* cpu_create(int socket)
+{
+	t_nodo_cpu* new_cpu = (t_nodo_cpu*) malloc(sizeof(t_nodo_cpu));
+	new_cpu->socket = socket;
+	if(cantidad_cpu <= multiprogramacion)
+		new_cpu->status = CPU_AVAILABLE;
+	else
+		new_cpu->status = CPU_NOT_AVAILABLE;
+	return new_cpu;
+}
+
+/*
+ * Function: cpu_remove
+ * Purpose: removes a cpu that is not connected any more.
+ * Created on: 03/05/2014
+ * Author: SilverStack
+*/
+
+void cpu_remove(int socket)
+{
+	int flag_found = 0;
+	int index = 0;
+	int indice_buscado = 0;
+	int socket_cpu = socket;
+
+	void _get_index(t_nodo_cpu *s)
+	{
+		if(s->socket == socket_cpu)
+		{
+			indice_buscado = index;
+			flag_found = 1;
+		}
+		index++;
+	}
+
+	list_iterate(list_cpu, (void*) _get_index);
+
+	if(flag_found == 0)
+			log_error(logger, "CPU Socket %d no encontrado", socket);
+
+	t_nodo_cpu *cpu = list_remove(list_cpu, indice_buscado);
+	free(cpu);
 }

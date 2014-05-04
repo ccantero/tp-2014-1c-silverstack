@@ -22,8 +22,9 @@
 #include <commons/config.h> // config_get_int_value
 #include <commons/collections/queue.h> // queue_create
 #include <parser/metadata_program.h>
-//#include <src/silverstack.h>
+#include <src/silverstack.h>
 
+/* Definidio en silverstack.h
 typedef struct _hdr
 {
 	char desc_id[16];
@@ -67,34 +68,34 @@ typedef struct _t_nodo_segment {
 	size_t offset;
 }t_nodo_segment;
 
+typedef struct _t_nodo_cpu {
+	int	socket;
+	unsigned char status;
+}t_nodo_cpu;
+
+
 typedef struct _pcb {
-	unsigned int unique_id; /* Identificador Único */
-	t_segment code_segment; /* Código Ansisop del programa */
-	t_segment stack_segment; /* Segmento de stack */
-	int stack_pointer; /* Puntero al inicio del contexto de ejecución actual */
-	t_instruction_index instruction_index; /* Índice de código */
-	t_etiquetas_index etiquetas_index; /* Índice de etiquetas */
-	int program_counter; /* Número de la próxima instrucción */
+	unsigned int unique_id; // Identificador Único
+	t_segment code_segment; // Código Ansisop del programa
+	t_segment stack_segment; // Segmento de stack
+	int stack_pointer; // Puntero al inicio del contexto de ejecución actual
+	t_instruction_index instruction_index; // Índice de código
+	t_etiquetas_index etiquetas_index; // Índice de etiquetas
+	int program_counter; // Número de la próxima instrucción
 	int context_actual;
 	int peso;
 }t_pcb;
+*/
 
-typedef struct {
-	int tipo;
-	int id_proceso;
-	int datosNumericos;
-	char mensaje[16];
-} t_mensaje;
-
-#define KEYS_AMOUNT 14
 #define PATH_CONFIG "conf"
-#define MAXDATASIZE 1024
+//#define MAXDATASIZE 1024
 #define SIZE_HDR sizeof(thdr)
-#define MSG_CON_PRG 0x01
-#define MSG_CON_PRG_OK 0x02
-#define MSG_CON_PRG_FAIL 0x03
-#define MSG_CON_PRG_TXT 0x04
-#define MSG_CON_PRG_TXT_OK 0x05
+#define SIZE_MSG sizeof(t_mensaje)
+//#define MSG_CON_PRG 0x01
+//#define MSG_CON_PRG_OK 0x02
+//#define MSG_CON_PRG_FAIL 0x03
+//#define MSG_CON_PRG_TXT 0x04
+//#define MSG_CON_PRG_TXT_OK 0x05
 #define MSG_CON_UMV 0x10
 #define MSG_CON_UMV_OK 0x11
 #define MSG_CON_UMV_FAIL 0x12
@@ -104,8 +105,10 @@ typedef struct {
 #define HANDSHAKE 100 // SylverStack
 #define HANDSHAKE_OK 101 // SylverStack
 #define CPU 200 // SylverStack
-#define PROGRAMA 203 // SylverStack
+#define PROGRAMA 203 // Syl1verStack
 #define SENDFILE 104 // SylverStack
+#define CPU_AVAILABLE 0x30
+#define CPU_NOT_AVAILABLE 0x31
 
 t_log *logger;
 t_queue *queue_io;
@@ -114,6 +117,7 @@ t_list *list_pcb_ready;
 t_list *list_segment;
 t_list *list_semaphores;
 t_list *list_globales;
+t_list *list_cpu;
 
 int port_cpu,port_program,port_umv,sockPrin,multiprogramacion,quantum,retardo;
 int sock_umv, process_Id, cantidad_cpu;
@@ -121,7 +125,7 @@ char myip[16],umv_ip[16];
 
 void GetInfoConfFile(void);
 int conectar_umv(void);
-t_global* global_create(char *global_name, int value);
+t_global* global_create(char *global_name);
 int global_update_value(char* global_name, int value);
 int global_get_value(char* global_name);
 t_io* io_create(char *io_name, int io_retardo);
@@ -143,6 +147,7 @@ int get_Segment_Start(int offset);
 void servidor_pcp(void);
 int escuchar_Nuevo_cpu(int sock_cpu,char* buffer);
 int escuchar_cpu(int sock_cpu, char* buffer);
-
+t_nodo_cpu* cpu_create(int socket);
+void cpu_remove(int socket);
 
 #endif /* PROTOCOL_H_ */

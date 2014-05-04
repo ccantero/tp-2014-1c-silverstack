@@ -26,6 +26,7 @@ int main(void)
 	list_pcb_new = list_create();
 	list_pcb_ready = list_create();
 	list_globales = list_create();
+	list_cpu = list_create();
 
 	process_Id = 10000;
 	cantidad_cpu = 0;
