@@ -9,13 +9,6 @@
 
 #include "protocol.h"
 
-/*
- * Function: consola
- * Purpose: Launch consola
- * Created on: 13/04/2014
- * Author: SilverStack
-*/
-
 void consola (void* param)
 {
 
@@ -83,23 +76,126 @@ void consola (void* param)
 	return;
 }
 
-/*
- * Function: GetInfoConfFile
- * Purpose: Parse Configuration File
- * Created on: 15/04/2014
- * Author: SilverStack
-*/
-
 void GetInfoConfFile(void)
 {
 	t_config* config;
 
 	config = config_create(PATH_CONFIG);
-	strcpy(myip,config_get_string_value(config, "IP"));
-	strcpy(hostip,config_get_string_value(config, "KERNEL_IP"));
+	if (config_has_property(config, "IP")) {
+			myip = (char*) malloc(strlen(config_get_string_value(config, "IP")) + 1);
+			strcpy(myip, config_get_string_value(config, "IP"));
+	}
 	strcpy(algoritmo,config_get_string_value(config, "ALGORITMO"));
-	port_kernel=config_get_int_value(config, "PORT_KERNEL");
-	port_cpu=config_get_int_value(config, "PORT_CPU");
+	port=config_get_string_value(config, "PORT");
 	space=config_get_int_value(config, "DISK_SPACE");
 	return;
+}
+
+int aceptarConexionNueva(int newfd, fd_set *lista) {
+	t_mensaje m;
+	int nbytes;
+
+	if ((nbytes = recv(newfd, &m, sizeof(m), MSG_WAITALL)) <= 0) {
+		if (nbytes == 0) {//conexion cerrada
+			printf("Select: socket %d desconectado.\n", newfd);
+		}
+		else {
+			log_error(logger, "receive");
+		}
+		close(newfd);
+		FD_CLR(newfd, lista);
+	}
+	else
+	{
+		switch (m.id_proceso) {
+		case KERNEL:
+			nbytes = enviarHandshake(newfd);
+			if (nbytes == -1)
+				log_error(logger, "Envio handshake a Kernel.");
+			socketKernel = newfd;
+			FD_SET(newfd, lista);
+			break;
+		case CPU:
+			nbytes = enviarHandshake(newfd);
+			if (nbytes == -1)
+				log_error(logger, "Envio handshake a CPU.");
+
+			FD_SET(newfd, lista);
+			break;
+		default:
+			log_error(logger, "No se identifica proceso en handshake.");
+			break;
+		}
+	}
+	return newfd;
+}
+
+int enviarHandshake(int sockfd) {
+	t_mensaje m;
+	m.id_proceso = UMV;
+	m.datosNumericos = 0;
+	m.tipo = HANDSHAKEOK;
+	strcpy(m.mensaje, "hola");
+
+	return send(sockfd, &m, sizeof(t_mensaje), 0);
+}
+
+int sockets_listen(int sockfd, int backlog) {
+	return listen(sockfd, backlog);
+}
+
+int sockets_bind(int sockfd, char *addr, char *port) {
+	struct sockaddr_in my_addr;
+
+	my_addr.sin_family = AF_INET;
+	my_addr.sin_port = htons(atoi(port));
+	my_addr.sin_addr.s_addr = inet_addr(addr);
+	memset(&(my_addr.sin_zero), '\0', 8);
+
+	return bind(sockfd, (struct sockaddr *) &my_addr, sizeof(struct sockaddr));
+}
+
+int sockets_getSocket(void) {
+	int yes = 1;
+	int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+
+	if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) {
+		close(sockfd);
+		return -1;
+	}
+
+	return sockfd;
+}
+
+int sockets_createServer(char *addr, char *port, int backlog) {
+	int sockfd = sockets_getSocket();
+
+	if (sockets_bind(sockfd, addr, port) == -1) {
+		close(sockfd);
+		return -1;
+	}
+
+	if (sockets_listen(sockfd, backlog) == -1) {
+		close(sockfd);
+		return -1;
+	}
+
+	return sockfd;
+}
+
+int sockets_accept(int sockfd) {
+	struct sockaddr_in their_addr;
+	int sin_size = sizeof(struct sockaddr_in);
+
+	return accept(sockfd, (struct sockaddr *) &their_addr,
+			(socklen_t *) &sin_size);
+}
+
+int sockets_send(int sockfd, t_mensaje *mensaje, char *data) {
+	strcpy(mensaje->mensaje, "Hola kernel.");
+	return send(sockfd, &mensaje, sizeof(t_mensaje), 0);
+}
+
+int atenderPedido(int sockfd) {
+	return 0;
 }

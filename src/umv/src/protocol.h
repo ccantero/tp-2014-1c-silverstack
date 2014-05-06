@@ -12,15 +12,19 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <commons/log.h>
 #include <commons/config.h>
 #include <commons/collections/queue.h>
 #include <commons/collections/list.h>
+#include <src/silverstack.h>
 
-#define KEYS_AMOUNT 7
-#define PATH_CONFIG "conf"
+#define MAX_CONEXIONES 7
+#define PATH_CONFIG "../conf"
 
 typedef struct {
 	int id;
@@ -36,12 +40,19 @@ typedef struct {
 
 t_log* logger;
 t_list* list_programas;
+t_dictionary* dic_cpus;
 
-int port_kernel,port_cpu,sockPrin,space;
-char myip[16],hostip[16],algoritmo[3];
-char* memoria;
+int sockPrin,space, socketKernel;
+char hostip[16],algoritmo[3];
+char* memoria, *myip, *port;
 
 void consola (void* param);
 void GetInfoConfFile(void);
+int aceptarConexionNueva(int newfd, fd_set *lista);
+int enviarHandshake(int sockfd);
+int sockets_createServer(char *addr, char *port, int backlog);
+int sockets_send(int sockfd, t_mensaje *m, char *mensaje);
+int sockets_accept(int sockfd);
+int atenderPedido(int sockfd);
 
 #endif /* PROTOCOL_H_ */
