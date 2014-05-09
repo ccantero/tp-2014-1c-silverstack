@@ -21,9 +21,12 @@ int main(int argc, char *argv[])
 
 	if(argc != 2)
 	{
-		printf("ERROR, la sintaxis de kernel es: ./kernel archivo_configuracion");
+		printf("ERROR, la sintaxis de kernel es: ./kernel archivo_configuracion \n");
 		return -1;
 	}
+
+	sem_init(&free_io_queue, 0, 1);
+	sem_init(&free_pcb_ready_queue, 0, 1);
 
 	logger = log_create("Log.txt", "Program",false, LOG_LEVEL_INFO);
 	list_io = list_create();
@@ -32,6 +35,7 @@ int main(int argc, char *argv[])
 	list_pcb_new = list_create();
 	list_pcb_ready = list_create();
 	list_pcb_execute = list_create();
+	list_pcb_blocked = list_create();
 	list_globales = list_create();
 	list_cpu = list_create();
 	list_process = list_create();
@@ -40,12 +44,12 @@ int main(int argc, char *argv[])
 	cantidad_cpu = 0;
 
 	GetInfoConfFile(argv[1]);
-	//sock_umv = conectar_umv();
-	//if(sock_umv == -1)
-	//	return -1;
+	sock_umv = conectar_umv();
+	if(sock_umv == -1)
+		return -1;
 
 	pthread_create(&th_plp,NULL,(void*)servidor_plp,(void*)a);
-	//pthread_create(&th_pcp,NULL,(void*)servidor_pcp,(void*)b);
+	pthread_create(&th_pcp,NULL,(void*)servidor_pcp,(void*)b);
 	pause();
 	log_destroy(logger);
 	return 1;
