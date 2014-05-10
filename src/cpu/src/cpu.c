@@ -40,7 +40,6 @@ int main(int argc, char *argv[])
 	t_config *config;
 	int seguirEjecutando = 1; // Mediante la señal SIGUSR1 se puede dejar de ejecutar el cpu
 	t_mensaje mensaje;
-	t_pcb pcb;
 	diccionario = list_create();
 
 	// Obtengo datos de archivo de configuracion y se crea el logger
@@ -58,7 +57,6 @@ int main(int argc, char *argv[])
 	log_info(logger, "Conectado al kernel.");
 
 	// Obtengo datos de la umv
-	// TODO Creo que tengo que intercambiar mensajes con el kernel para pedir datos de la umv
 	ConectarA(&sockUmv, &port_umv, umvip, &umv_addr, logger);
 	log_info(logger, "Conectado a la UMV.");
 
@@ -67,6 +65,7 @@ int main(int argc, char *argv[])
 	mensaje.tipo = HANDSHAKE;
 	strcpy(mensaje.mensaje, "Hola kernel.");
 	send(sockKernel, &mensaje, sizeof(t_mensaje), 0);
+	log_info(logger, "Esperando rta de handshake del kernel.");
 	recv(sockKernel, &mensaje, sizeof(t_mensaje), 0);
 	if (mensaje.tipo == HANDSHAKEOK)
 	{
@@ -83,6 +82,7 @@ int main(int argc, char *argv[])
 	mensaje.tipo = HANDSHAKE;
 	strcpy(mensaje.mensaje, "Hola UMV.");
 	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	log_info(logger, "Esperando rta de handshake de la umv.");
 	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 	if (mensaje.tipo == HANDSHAKEOK)
 	{
@@ -94,6 +94,7 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
+	char buf[82]; // Variable auxiliar para almacenar la linea de codigo
 	// Bucle principal del proceso
 	while(seguirEjecutando)
 	{
@@ -104,14 +105,20 @@ int main(int argc, char *argv[])
 		mensaje.tipo = INSTRUCCIONREQUEST;
 		mensaje.datosNumericos = (int)pcb.instruction_index.index->start;
 		send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+		mensaje.datosNumericos = (int)pcb.instruction_index.index->offset;
+		send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 		// Espero la respuesta de la UMV
 		recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+		recv(sockUmv, buf, mensaje.datosNumericos, 0); // Recibo la instruccion en el buf
 		// Analizo la instruccion
-		analizadorLinea(strdup(mensaje.mensaje), &primitivas, &primitivasKernel);
-		// Aviso al kernel que termino el quantum
+		analizadorLinea(strdup(buf), &primitivas, &primitivasKernel);
+		// Aviso al kernel que termino el quantum del proceso y devuelvo pcb actualizado
 		mensaje.id_proceso = CPU;
 		mensaje.tipo = QUANTUMFINISH;
 		send(sockKernel, &mensaje, sizeof(t_mensaje), 0);
+		pcb.program_counter++;
+		pcb.instruction_index.index = pcb.instruction_index.index + 8;
+		send(sockKernel, &pcb, sizeof(t_pcb), 0);
 	}
 
 	// Libero memoria del logger
@@ -149,12 +156,12 @@ void ConectarA(int *sock, int *puerto, char *ip, struct sockaddr_in *their_addr,
 
 t_puntero silverstack_definirVariable(t_nombre_variable var)
 {
-	// TODO averiguar bien a qué se refieren con "contexto actual"
 	// 1) Reservar espacio en memoria para la variable
 	// 2) Registrar variable en el Stack
 	// 3) Registrar variable en el dicionario de variables
-	// 4) Retornar la posicion de la variable
-
+	// 4) Guardar contexto actual en el pcb
+	// 5) Retornar la posicion de la variable
+	// TODO Guardar el contexto en el pcb del programa
 	t_mensaje msg;
 	t_puntero ptr;
 	msg.id_proceso = CPU;
@@ -177,11 +184,26 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 
 t_puntero silverstack_obtenerPosicionVariable(t_nombre_variable var)
 {
-	/*
-	Devuelve el desplazamiento respecto al inicio del segmento Stack en que se encuentra el valor
-	de la variable var del contexto actual. En caso de error, retorna -1.
-	*/
+	// 1) Pedir a la UMV la posicion de la variable var
+	// 2) Calcular el desplazamiento respecto del stack
+	t_mensaje msg;
 	t_puntero ptr = 0;
+	int posAux;
+	msg.id_proceso = CPU;
+	msg.tipo = POSICIONREQUEST;
+	msg.mensaje[0] = var;
+	send(sockUmv, &msg, sizeof(t_mensaje), 0);
+	recv(sockUmv, &msg, sizeof(t_mensaje), 0);
+	if (msg.tipo == REQUESTOK)
+	{
+		posAux = msg.datosNumericos;
+	}
+	else
+	{
+		ptr = -1;
+		return ptr;
+	}
+	ptr = posAux - pcb.context_actual;
 	return ptr;
 }
 
@@ -197,43 +219,80 @@ t_valor_variable silverstack_dereferenciar(t_puntero dir_var)
 
 void silverstack_asignar(t_puntero dir_var, t_valor_variable valor)
 {
-	/*
-	Copia un valor en la variable ubicada en dir_var.
-	*/
+	// 1) Mando a la UMV el valor de la variable junto con su direccion
+	// 2) Actualizo diccionario de variables
+	t_mensaje msg;
+	msg.id_proceso = CPU;
+	msg.tipo = ASIGNACION;
+	msg.datosNumericos = dir_var;
+	send(sockUmv, &msg, sizeof(t_mensaje), 0);
+	msg.datosNumericos = valor;
+	send(sockUmv, &msg, sizeof(t_mensaje), 0);
+	recv(sockUmv, &msg, sizeof(t_mensaje), 0);
+	int i;
+	t_variable *varAux;
+	// Busco la variable en el diccionario para actualizarla
+	for (i = 0; i < list_size(diccionario); i++)
+	{
+		varAux = (t_variable *)list_get(diccionario, i);
+		if (varAux->direccion == (int)dir_var)
+		{
+			break;
+		}
+	}
+	varAux->contenido = valor;
 }
 
 void silverstack_imprimir(t_valor_variable valor)
 {
-	/*
-	Envía al Kernel el contenido de valor, para que este le reenvíe a la correspondiente
-	consola del Programa en ejecución. Devuelve la cantidad de dígitos impresos.
-	*/
+	// 1) Envio al kernel el valor para que lo imprima la correspondiente consola
+	t_mensaje msg;
+	msg.id_proceso = CPU;
+	msg.tipo = IMPRIMIR;
+	msg.datosNumericos = valor;
+	send(sockKernel, &msg, sizeof(t_mensaje), 0);
+	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
 }
 
 void silverstack_imprimirTexto(char *texto)
 {
-	/*
-	Envía al Kernel una cadena de texto para que este la reenvíe a la correspondiente consola del
-	Programa en ejecución. No admite parámetros adicionales, secuencias de escape o variables.
-	Devuelve la cantidad de dígitos impresos.
-	*/
+	// 1) Envio al kernel la cadena de texto para que la reenvíe a la correspondiente consola
+	t_mensaje msg;
+	msg.id_proceso = CPU;
+	msg.tipo = IMPRIMIRTEXTO;
+	msg.datosNumericos = strlen(texto);
+	send(sockKernel, &msg, sizeof(t_mensaje), 0);
+	char buf[strlen(texto)];
+	strcpy(buf, texto);
+	send(sockKernel, buf, sizeof(buf), 0);
+	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
 }
 
 t_valor_variable silverstack_obtenerValorCompartida(t_nombre_compartida varCom)
 {
-	/*
-	Solicita al kernel el valor de una variable compartida.
-	*/
+	// 1) Solicito al kernel el valor de la variable varCom
+	// 2) Devuelvo el valor recibido
 	t_valor_variable valor = 0;
+	t_mensaje msg;
+	msg.id_proceso = CPU;
+	msg.tipo = VARCOMREQUEST;
+	msg.mensaje[0] = *varCom;
+	send(sockKernel, &msg, sizeof(t_mensaje), 0);
+	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
+	valor = msg.datosNumericos;
 	return valor;
 }
 
 void silverstack_entradaSalida(t_nombre_dispositivo dispositivo, int tiempo)
 {
-	/*
-	Informa al kernel que el Programa actual pretende utilizar el dispositivo durante tiempo
-	unidades de tiempo.
-	*/
+	// 1) Envio al kernel el tiempo de entrada/salida de dispositivo
+	t_mensaje msg;
+	msg.id_proceso = CPU;
+	msg.tipo = ENTRADASALIDA;
+	msg.datosNumericos = tiempo;
+	strcpy(msg.mensaje, dispositivo);
+	send(sockKernel, &msg, sizeof(t_mensaje), 0);
+	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
 }
 
 void silverstack_finalizar()
@@ -248,9 +307,15 @@ void silverstack_finalizar()
 
 t_valor_variable silverstack_asignarValorCompartida(t_nombre_compartida varCom, t_valor_variable valor)
 {
-	/*
-	Solicita al kernel asignar el valor a la variable compartida. Devuelve el valor asignado.
-	*/
+	// 1) Envio al kernel el valor de la variable compartida a asignar
+	// 2) Devuelvo el valor asignado
+	t_mensaje msg;
+	msg.id_proceso = CPU;
+	msg.tipo = ASIGNACION;
+	msg.datosNumericos = valor;
+	msg.mensaje[0] = *varCom;
+	send(sockKernel, &msg, sizeof(t_mensaje), 0);
+	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
 	return valor;
 }
 
@@ -296,16 +361,22 @@ void silverstack_retornar(t_valor_variable valor)
 
 void silverstack_signal(t_nombre_semaforo identificador_semaforo)
 {
-	/*
-	Comunica al kernel que ejecute la función signal para el semáforo con el nombre
-	identificador_semaforo. El kernel decidirá si esto conlleva desbloquear a otros procesos.
-	*/
+	// 1) Envio al kernel el semaforo para que ejecute signal en él
+	t_mensaje msg;
+	msg.id_proceso = CPU;
+	msg.tipo = SIGNALSEM;
+	strcpy(msg.mensaje, identificador_semaforo);
+	send(sockKernel, &msg, sizeof(t_mensaje), 0);
+	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
 }
 
 void silverstack_wait(t_nombre_semaforo identificador_semaforo)
 {
-	/*
-	Informa al kernel que ejecute la función wait para el semáforo con el nombre
-	identificador_semaforo. El kernel deberá decidir si bloquearlo o no.
-	*/
+	// 1) Envio al kernel el semaforo para que se ejecute wait en él
+	t_mensaje msg;
+	msg.id_proceso = CPU;
+	msg.tipo = WAITSEM;
+	strcpy(msg.mensaje, identificador_semaforo);
+	send(sockKernel, &msg, sizeof(t_mensaje), 0);
+	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
 }

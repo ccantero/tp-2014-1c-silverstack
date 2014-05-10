@@ -31,6 +31,7 @@ typedef struct {
 } t_variable;
 
 t_list *diccionario;
+t_pcb pcb;
 int port_kernel;
 int port_umv;
 char kernelip[16];
