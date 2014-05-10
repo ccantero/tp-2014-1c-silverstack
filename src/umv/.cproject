@@ -30,6 +30,9 @@
 								<option id="gnu.c.compiler.option.include.paths.1664679178" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/commons/commons}&quot;"/>
 								</option>
+								<option id="gnu.c.compiler.option.warnings.extrawarn.771272349" superClass="gnu.c.compiler.option.warnings.extrawarn" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.toerrors.1715706799" superClass="gnu.c.compiler.option.warnings.toerrors" value="true" valueType="boolean"/>
+								<option id="gnu.c.compiler.option.warnings.allwarn.180933727" superClass="gnu.c.compiler.option.warnings.allwarn" value="false" valueType="boolean"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.110063585" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
 							<tool command="gcc -lpthread -pthread" id="cdt.managedbuild.tool.gnu.c.linker.exe.debug.605257247" name="GCC C Linker" superClass="cdt.managedbuild.tool.gnu.c.linker.exe.debug">

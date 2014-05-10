@@ -14,8 +14,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <pthread.h>
-#include <commons/log.h>
 #include <commons/config.h>
+#include <commons/log.h>
 #include <commons/collections/queue.h>
 #include <commons/collections/list.h>
 

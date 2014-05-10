@@ -26,13 +26,13 @@ endif
 all: umv
 
 dependents:
-	-cd /home/utnso/workspace/tp-2014-1c-silverstack/libs/Debug && $(MAKE) all
+	-cd /home/utnso/tp-2014-1c-silverstack/libs/commons/Debug && $(MAKE) all
 
 # Tool invocations
-umv: $(OBJS) $(USER_OBJS) /home/utnso/workspace/tp-2014-1c-silverstack/libs/Debug/libcommons.so
+umv: $(OBJS) $(USER_OBJS) /home/utnso/tp-2014-1c-silverstack/libs/commons/Debug/libcommons.so
 	@echo 'Building target: $@'
 	@echo 'Invoking: GCC C Linker'
-	gcc -lpthread -pthread -L"/home/utnso/workspace/tp-2014-1c-silverstack/libs/Debug" -o "umv" $(OBJS) $(USER_OBJS) $(LIBS)
+	gcc -lpthread -pthread -L"/home/utnso/tp-2014-1c-silverstack/libs/commons/Debug" -o "umv" $(OBJS) $(USER_OBJS) $(LIBS)
 	@echo 'Finished building target: $@'
 	@echo ' '
 
@@ -43,6 +43,6 @@ clean:
 
 .PHONY: all clean dependents
 .SECONDARY:
-/home/utnso/workspace/tp-2014-1c-silverstack/libs/Debug/libcommons.so:
+/home/utnso/tp-2014-1c-silverstack/libs/commons/Debug/libcommons.so:
 
 -include ../makefile.targets
