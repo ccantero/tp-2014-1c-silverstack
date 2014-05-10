@@ -4,6 +4,8 @@
 	<comment></comment>
 	<projects>
 		<project>commons</project>
+		<project>parser</project>
+		<project>silverstack</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

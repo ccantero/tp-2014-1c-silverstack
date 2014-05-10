@@ -10,7 +10,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <semaphore.h>  /* Semaphore */
 #include <parser/metadata_program.h>
+#include <commons/collections/queue.h>
 
 #define MAXDATASIZE 1024
 //#define MSG_CON_PRG 0x01
@@ -58,6 +60,9 @@ typedef struct _hdr {
 typedef struct _io {
 	char* name;
 	int retardo;
+	t_queue *io_queue;
+	sem_t io_sem;
+	pthread_t* th_io;
 } t_io;
 
 typedef struct _t_semaphore {

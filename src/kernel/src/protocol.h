@@ -18,13 +18,22 @@
 #include <sys/socket.h> // socket, connect
 #include <arpa/inet.h> // struct sockaddr_in>
 #include <time.h> // time()
+#include <semaphore.h>  /* Semaphore */
 #include <commons/log.h> // log_create, log_info, log_error
 #include <commons/config.h> // config_get_int_value
 #include <commons/collections/queue.h> // queue_create
 #include <parser/metadata_program.h>
 #include <src/silverstack.h>
 
-/* Definidio en silverstack.h
+/*Definidio en silverstack.h
+
+typedef struct {
+	int tipo;
+	int id_proceso;
+	int datosNumericos;
+	char mensaje[16];
+} t_mensaje;
+
 typedef struct _hdr
 {
 	char desc_id[16];
@@ -35,17 +44,15 @@ typedef struct _hdr
 typedef struct _io {
 	char* name;
 	int retardo;
+	t_queue *io_queue;
+	sem_t io_sem;
+	pthread_t* th_io;
 }t_io;
 
 typedef struct _t_semaphore {
 	char* identifier;
 	int	value;
 } t_semaphore;
-
-typedef struct _t_global {
-	char* identifier;
-	int	value;
-} t_global;
 
 typedef struct _instruction_index {
 	t_size size;
@@ -68,11 +75,15 @@ typedef struct _t_nodo_segment {
 	size_t offset;
 }t_nodo_segment;
 
+typedef struct _t_global {
+	char* identifier;
+	int	value;
+} t_global;
+
 typedef struct _t_nodo_cpu {
 	int	socket;
 	unsigned char status;
 }t_nodo_cpu;
-
 
 typedef struct _pcb {
 	unsigned int unique_id; // Identificador Único
@@ -85,17 +96,25 @@ typedef struct _pcb {
 	int context_actual;
 	int peso;
 }t_pcb;
-*/
 
-#define PATH_CONFIG "conf"
-//#define MAXDATASIZE 1024
-#define SIZE_HDR sizeof(thdr)
+
+
+ Finaliza Sylverstack.h
+*/
+typedef struct _t_process {
+	unsigned int pid;
+	int	quantum_available;
+	int current_cpu_socket;
+	unsigned char status;
+} t_process;
+
+typedef struct _t_io_queue_nodo {
+	unsigned int pcb;
+	int retardo;
+} t_io_queue_nodo;
+
+#define MAXDATASIZE 1024 // SylverStack
 #define SIZE_MSG sizeof(t_mensaje)
-//#define MSG_CON_PRG 0x01
-//#define MSG_CON_PRG_OK 0x02
-//#define MSG_CON_PRG_FAIL 0x03
-//#define MSG_CON_PRG_TXT 0x04
-//#define MSG_CON_PRG_TXT_OK 0x05
 #define MSG_CON_UMV 0x10
 #define MSG_CON_UMV_OK 0x11
 #define MSG_CON_UMV_FAIL 0x12
@@ -107,23 +126,36 @@ typedef struct _pcb {
 #define CPU 200 // SylverStack
 #define PROGRAMA 203 // Syl1verStack
 #define SENDFILE 104 // SylverStack
-#define CPU_AVAILABLE 0x30
-#define CPU_NOT_AVAILABLE 0x31
+#define KERNEL 202 // SylverStack
+#define QUANTUMFINISH 301 // SylverStack
+#define CPU_AVAILABLE 0x30 // CPU Node Status // Ready
+#define CPU_IDLE 0x31 // CPU Node Status // Not working because multiprogramacion
+#define CPU_WORKING 0x32 // CPU Node Status
+#define PROCESS_READY 0x40 // Process Node Status
+#define PROCESS_EXECUTE 0x41 // Process Node Status
+#define PROCESS_BLOCKED 0x42 // Process Node Status
+
+#define STACK_AMOUNT 400
 
 t_log *logger;
-t_queue *queue_io;
+t_list *list_io;
 t_list *list_pcb_new;
 t_list *list_pcb_ready;
+t_list *list_pcb_execute;
+t_list *list_pcb_blocked;
 t_list *list_segment;
 t_list *list_semaphores;
 t_list *list_globales;
 t_list *list_cpu;
+t_list *list_process;
 
-int port_cpu,port_program,port_umv,sockPrin,multiprogramacion,quantum,retardo;
+int port_cpu,port_program,port_umv,sockPrin,multiprogramacion,quantum,retardo,stack_tamanio;
 int sock_umv, process_Id, cantidad_cpu;
 char myip[16],umv_ip[16];
+sem_t free_io_queue;
+sem_t free_pcb_ready_queue;
 
-void GetInfoConfFile(void);
+void GetInfoConfFile(char* PATH_CONFIG);
 int conectar_umv(void);
 t_global* global_create(char *global_name);
 int global_update_value(char* global_name, int value);
@@ -149,5 +181,13 @@ int escuchar_Nuevo_cpu(int sock_cpu,char* buffer);
 int escuchar_cpu(int sock_cpu, char* buffer);
 t_nodo_cpu* cpu_create(int socket);
 void cpu_remove(int socket);
+void cpu_update(int socket);
+t_process* process_create(unsigned int pid);
+void process_update(int socket);
+void pcb_move(unsigned int pid,t_list* from, t_list* to);
+void io_wait(unsigned int pid, char* io_name, int amount);
+t_io_queue_nodo* io_queue_create(unsigned int process_id, int retardo);
+void retardo_io(void *ptr);
+void found_cpus_available(void);
 
 #endif /* PROTOCOL_H_ */
