@@ -54,12 +54,50 @@
 #define ETIQUETASREQUEST 409
 #define ETIQUETASREQUESTOK 410
 
+
+// Estructura de mensaje global para usar entre kernel, programas y cpu's
 typedef struct {
 	int tipo;
 	int id_proceso;
 	int datosNumericos;
 	char mensaje[16];
 } t_mensaje;
+
+
+// ############################## INICIO Estructuras de mensajes con la UMV ##############################
+typedef struct {
+	int base;
+	int offset;
+	int tamanio;
+} t_msg_solicitud_bytes;
+
+typedef struct {
+	int base;
+	int offset;
+	int tamanio;
+	char *buffer;
+} t_msg_envio_bytes;
+
+typedef struct {
+	int id_programa;
+	int tipo;
+} t_msg_handshake;
+
+typedef struct {
+	int id_programa;
+} t_msg_cambio_proceso_activo;
+
+typedef struct {
+	int id_programa;
+	int tamanio;
+} t_msg_crear_segmento;
+
+typedef struct {
+	int id_programa;
+} t_msg_destruir_segmentos;
+// ############################### FIN Estructuras de mensajes con la UMV ###############################
+
+
 
 typedef struct _hdr {
 	char desc_id[16];
