@@ -117,7 +117,7 @@ int main(int argc, char *argv[])
 		mensaje.tipo = QUANTUMFINISH;
 		send(sockKernel, &mensaje, sizeof(t_mensaje), 0);
 		pcb.program_counter++;
-		pcb.instruction_index.index = pcb.instruction_index.index + 8;
+		pcb.instruction_index.index = pcb.instruction_index.index + sizeof(t_intructions);
 		send(sockKernel, &pcb, sizeof(t_pcb), 0);
 	}
 
@@ -162,6 +162,7 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 	// 4) Guardar contexto actual en el pcb
 	// 5) Retornar la posicion de la variable
 	// TODO Guardar el contexto en el pcb del programa
+	// TODO Corregir mensajes con la UMV
 	t_mensaje msg;
 	t_puntero ptr;
 	msg.id_proceso = CPU;
@@ -276,7 +277,7 @@ t_valor_variable silverstack_obtenerValorCompartida(t_nombre_compartida varCom)
 	t_mensaje msg;
 	msg.id_proceso = CPU;
 	msg.tipo = VARCOMREQUEST;
-	msg.mensaje[0] = *varCom;
+	strcpy(msg.mensaje, varCom);
 	send(sockKernel, &msg, sizeof(t_mensaje), 0);
 	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
 	valor = msg.datosNumericos;
@@ -313,7 +314,7 @@ t_valor_variable silverstack_asignarValorCompartida(t_nombre_compartida varCom, 
 	msg.id_proceso = CPU;
 	msg.tipo = ASIGNACION;
 	msg.datosNumericos = valor;
-	msg.mensaje[0] = *varCom;
+	strcpy(msg.mensaje, varCom);
 	send(sockKernel, &msg, sizeof(t_mensaje), 0);
 	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
 	return valor;
