@@ -18,6 +18,7 @@
 #include <sys/socket.h> // socket, connect
 #include <arpa/inet.h> // struct sockaddr_in>
 #include <time.h> // time()
+#include <signal.h> // SIGINT
 #include <semaphore.h>  /* Semaphore */
 #include <commons/log.h> // log_create, log_info, log_error
 #include <commons/config.h> // config_get_int_value
@@ -52,6 +53,7 @@ typedef struct _io {
 typedef struct _t_semaphore {
 	char* identifier;
 	int	value;
+	t_queue* queue;
 } t_semaphore;
 
 typedef struct _instruction_index {
@@ -101,9 +103,10 @@ typedef struct _pcb {
 
  Finaliza Sylverstack.h
 */
+
 typedef struct _t_process {
 	unsigned int pid;
-	int	quantum_available;
+	int program_socket;
 	int current_cpu_socket;
 	unsigned char status;
 } t_process;
@@ -112,6 +115,10 @@ typedef struct _t_io_queue_nodo {
 	unsigned int pcb;
 	int retardo;
 } t_io_queue_nodo;
+
+typedef struct t_nodo_queue_semaphore {
+	int process_id;
+}t_nodo_queue_semaphore;
 
 #define MAXDATASIZE 1024 // SylverStack
 #define SIZE_MSG sizeof(t_mensaje)
@@ -131,9 +138,10 @@ typedef struct _t_io_queue_nodo {
 #define CPU_AVAILABLE 0x30 // CPU Node Status // Ready
 #define CPU_IDLE 0x31 // CPU Node Status // Not working because multiprogramacion
 #define CPU_WORKING 0x32 // CPU Node Status
-#define PROCESS_READY 0x40 // Process Node Status
-#define PROCESS_EXECUTE 0x41 // Process Node Status
-#define PROCESS_BLOCKED 0x42 // Process Node Status
+#define PROCESS_NEW 0x40 // Process Node Status
+#define PROCESS_READY 0x41 // Process Node Status
+#define PROCESS_EXECUTE 0x42 // Process Node Status
+#define PROCESS_BLOCKED 0x43 // Process Node Status
 
 #define STACK_AMOUNT 400
 
@@ -153,7 +161,11 @@ int port_cpu,port_program,port_umv,sockPrin,multiprogramacion,quantum,retardo,st
 int sock_umv, process_Id, cantidad_cpu;
 char myip[16],umv_ip[16];
 sem_t free_io_queue;
-sem_t free_pcb_ready_queue;
+sem_t sem_ready_queue;
+sem_t sem_plp;
+sem_t sem_pcp;
+sem_t mutex_cpu_list;
+sem_t sem_cpu_list;
 
 void GetInfoConfFile(char* PATH_CONFIG);
 int conectar_umv(void);
@@ -161,33 +173,47 @@ t_global* global_create(char *global_name);
 int global_update_value(char* global_name, int value);
 int global_get_value(char* global_name);
 t_io* io_create(char *io_name, int io_retardo);
-void io_destroy(t_io*);
 t_semaphore* semaphore_create(char* sem_name, int value);
-void semaphore_destroy(t_semaphore *self);
-void semaphore_wait(char* sem_name);
-void semaphore_signal(char* sem_name);
-void servidor_plp(void);
-int escuchar_Nuevo_Programa(int sock_program, char* buffer);
+int semaphore_wait(char* sem_name, int process_id);
+int semaphore_signal(char* sem_name);
+int escuchar_Nuevo_Programa(int sock_program);
 int escuchar_Programa(int sock_program, char* buffer);
-void create_pcb(char* buffer, int tamanio_buffer);
-void destroy_pcb(t_pcb* self);
+void create_pcb(char* buffer, int tamanio_buffer, int sock_program);
+
 void sort_plp(void);
 void planificador_sjn(void);
 t_nodo_segment* segment_create(int start, int offset);
 void segment_destroy(t_nodo_segment *self);
-int get_Segment_Start(int offset);
-void servidor_pcp(void);
+int is_Connected_CPU(int socket);
 int escuchar_Nuevo_cpu(int sock_cpu,char* buffer);
 int escuchar_cpu(int sock_cpu, char* buffer);
 t_nodo_cpu* cpu_create(int socket);
 void cpu_remove(int socket);
 void cpu_update(int socket);
-t_process* process_create(unsigned int pid);
-void process_update(int socket);
+t_process* process_create(unsigned int pid, int socket);
 void pcb_move(unsigned int pid,t_list* from, t_list* to);
 void io_wait(unsigned int pid, char* io_name, int amount);
 t_io_queue_nodo* io_queue_create(unsigned int process_id, int retardo);
 void retardo_io(void *ptr);
 void found_cpus_available(void);
+void depurar(int signum);
+int send_umv_code_segment(char* buffer, int pid);
+int servidor_Programa(void);
+int servidor_CPU(void);
+int buscar_Mayor(int a, int b, int c);
+void escuchar_umv(void);
+int is_Connected_Program(int sock_program);
+void process_remove_by_socket(int socket);
+void planificador_rr(void);
+void ejecutar_proceso(int unique_id, int cpu_socket);
+int receive_umv_stack(void);
+
+int get_Segment_Start(int offset);			// A revisar si va o no va
+void io_destroy(t_io*); 					// A revisar si va o no va
+void semaphore_destroy(t_semaphore *self);	// A revisar si va o no va
+void destroy_pcb(t_pcb* self);				// A revisar si va o no va
+
+void servidor_pcp(void); 					// Para eliminar
+void servidor_plp(void); 					// Para eliminar
 
 #endif /* PROTOCOL_H_ */

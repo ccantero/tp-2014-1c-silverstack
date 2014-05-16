@@ -134,8 +134,18 @@ void GetInfoConfFile(char* PATH_CONFIG)
 
 t_global* global_create(char *global_name)
 {
-	t_global* new_global = (t_global*) malloc(sizeof(t_global));
-	new_global->identifier = (char*) malloc(sizeof(char) * (strlen(global_name) + 1));
+	t_global* new_global;
+	if( (new_global = (t_global*) malloc(sizeof(t_global))) == NULL )
+	{
+	    log_error(logger,"Error al reservar memoria para nuevo nodo en global_create");
+	    return new_global;
+	}
+
+	if((new_global->identifier = (char*) malloc(sizeof(char) * (strlen(global_name) + 1))) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria para el identificador de nodo en global_create");
+		return new_global;
+	}
 	strcpy(new_global->identifier,global_name);
 	return new_global;
 }
@@ -151,9 +161,14 @@ int global_update_value(char* global_name, int value)
 {
 	int flag_mod = 0;
 	int nuevo_valor = value;
-	char* global_id = (char*) malloc (sizeof(char) * (strlen(global_name) + 1));
-	strcpy(global_id,global_name);
+	char* global_id;
 
+	if( (global_id = (char*) malloc(sizeof(char) * (strlen(global_name) + 1))) == NULL )
+	{
+		log_error(logger,"Error al reservar memoria para nuevo nodo en global_create");
+	}
+
+	strcpy(global_id,global_name);
 
 	void _get_global(t_global *s)
 	{
@@ -187,7 +202,13 @@ int global_get_value(char* global_name)
 {
 	int flag_mod = 0;
 	int valor_retorno;
-	char* global_id = (char*) malloc (sizeof(char) * (strlen(global_name) + 1));
+	char* global_id;
+
+	if( (global_id = (char*) malloc(sizeof(char) * (strlen(global_name) + 1))) == NULL )
+	{
+		log_error(logger,"Error al reservar memoria para nuevo nodo en global_create");
+	}
+
 	strcpy(global_id,global_name);
 
 	void _get_global(t_global *s)
@@ -219,12 +240,24 @@ int global_get_value(char* global_name)
 
 t_io* io_create(char *io_name, int io_retardo)
 {
-	t_io* new_io = (t_io*) malloc(sizeof(t_io));
-	new_io->name = (char*) malloc(sizeof(char) * (strlen(io_name) + 1));
+	t_io* new_io;
+
+	if( (new_io = (t_io*) malloc(sizeof(t_io))) == NULL )
+	{
+		log_error(logger,"Error al reservar memoria para nuevo nodo en io_create");
+		return new_io;
+	}
+
+	if((new_io->name = (char*) malloc(sizeof(char) * (strlen(io_name) + 1))) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria para el identificador de nodo en io_create");
+		return new_io;
+	}
+
 	strcpy(new_io->name,io_name);
 	new_io->retardo = io_retardo;
 	new_io->io_queue = queue_create();
-	sem_init(&(new_io->io_sem), 0, 0);
+	sem_init(&(new_io->io_sem), 0, 0); //Empieza en cero porque tiene que bloquearse hasta que un nodo quede bloqueado
 	return new_io;
 }
 
@@ -240,7 +273,28 @@ void io_destroy(t_io *self)
 	free(self->name);
 	queue_destroy(self->io_queue);
 	free(self);
+}
 
+/*
+ * Function: create_nodo_queue_semaphore
+ * Purpose: Creates nodo to store process id of blocked process by the semaphore
+ * Created on: 13/05/2014
+ * Author: SilverStack
+*/
+
+t_nodo_queue_semaphore* create_nodo_queue_semaphore(int process_id)
+{
+	t_nodo_queue_semaphore* new_nodo_queue_semaphore;
+
+	if( (new_nodo_queue_semaphore = (t_nodo_queue_semaphore*) malloc(sizeof(t_nodo_queue_semaphore))) == NULL )
+	{
+		log_error(logger,"Error al reservar memoria para nuevo nodo en create_nodo_queue_semaphore");
+		return new_nodo_queue_semaphore;
+	}
+
+	new_nodo_queue_semaphore->process_id = process_id;
+
+	return new_nodo_queue_semaphore;
 }
 
 /*
@@ -252,10 +306,23 @@ void io_destroy(t_io *self)
 
 t_semaphore* semaphore_create(char* sem_name, int value)
 {
-	t_semaphore* new_sem = (t_semaphore*) malloc(sizeof(t_semaphore));
-	new_sem->identifier = (char*) malloc (sizeof(char) * ( strlen(sem_name) + 1 ) );
+	t_semaphore* new_sem;
+
+	if( (new_sem = (t_semaphore*) malloc(sizeof(t_semaphore))) == NULL )
+	{
+		log_error(logger,"Error al reservar memoria para nuevo nodo en semaphore_create");
+		return new_sem;
+	}
+
+	if((new_sem->identifier = (char*) malloc(sizeof(char) * (strlen(sem_name) + 1))) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria para el identificador de nodo en semaphore_create");
+		return new_sem;
+	}
+
  	strcpy(new_sem->identifier,sem_name);
 	new_sem->value = value;
+	new_sem->queue = queue_create();
 	return new_sem;
 }
 
@@ -268,6 +335,7 @@ t_semaphore* semaphore_create(char* sem_name, int value)
 
 void semaphore_destroy(t_semaphore *self)
 {
+	//queue_clean_and_destroy_elements(self->queue, (void*) persona_destroy);
 	free(self->identifier);
 	free(self);
 }
@@ -279,10 +347,19 @@ void semaphore_destroy(t_semaphore *self)
  * Author: SilverStack
 */
 
-void semaphore_wait(char* sem_name)
+int semaphore_wait(char* sem_name, int process_id)
 {
-	int flag_mod = 0;
-	char* semaphore_id = (char*) malloc (sizeof(char) * (strlen(sem_name) + 1));
+	int flag_found = 0;
+	int flag_blocked = 0;
+	char* semaphore_id;
+	int pid = process_id;
+
+	if((semaphore_id = (char*) malloc (sizeof(char) * (strlen(sem_name) + 1))) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria para el identificador de nodo en semaphore_wait");
+		return -1;
+	}
+
 	strcpy(semaphore_id,sem_name);
 
 	void _get_semaphore(t_semaphore *s)
@@ -290,16 +367,29 @@ void semaphore_wait(char* sem_name)
 		if(strcmp(semaphore_id,s->identifier) == 0)
 		{
 			s->value = s->value - 1;
-			flag_mod = 1;
+			if(s->value < 0)
+			{
+				queue_push(s->queue, create_nodo_queue_semaphore(pid));
+				flag_blocked = 1;
+			}
+			flag_found = 1;
 		}
 	}
 
 	list_iterate(list_semaphores, (void*) _get_semaphore);
 
-	if(flag_mod == 0)
+	if(flag_found == 0)
+	{
 		log_error(logger, "Semaforo %s no encontrado", sem_name);
+		return -1;
+	}
 
 	free(semaphore_id);
+
+	if(flag_blocked == 1)
+		return 1;
+
+	return 0;
 }
 
 /*
@@ -309,10 +399,18 @@ void semaphore_wait(char* sem_name)
  * Author: SilverStack
 */
 
-void semaphore_signal(char* sem_name)
+int semaphore_signal(char* sem_name)
 {
-	int flag_mod = 0;
-	char* semaphore_id = (char*) malloc (sizeof(char) * (strlen(sem_name) + 1));
+	int flag_found = 0;
+	char* semaphore_id;
+	t_nodo_queue_semaphore* nodo;
+
+	if((semaphore_id = (char*) malloc (sizeof(char) * (strlen(sem_name) + 1))) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria para el identificador de nodo en semaphore_wait");
+		return -1;
+	}
+
 	strcpy(semaphore_id,sem_name);
 
 	void _get_semaphore(t_semaphore *s)
@@ -320,38 +418,45 @@ void semaphore_signal(char* sem_name)
 		if(strcmp(semaphore_id,s->identifier) == 0)
 		{
 			s->value = s->value + 1;
-			flag_mod = 1;
+			if(s->value >= 0 && queue_size(s->queue) > 0)
+			{
+				nodo = queue_pop(s->queue);
+				pcb_move(nodo->process_id,list_pcb_blocked,list_pcb_ready);
+			}
+
+			flag_found = 1;
 		}
 	}
 
 	list_iterate(list_semaphores, (void*) _get_semaphore);
 
-	if(flag_mod == 0)
-			log_error(logger, "Semaforo %s no encontrado", sem_name);
+	if(flag_found == 0)
+	{
+		log_error(logger, "Semaforo %s no encontrado", sem_name);
+		return -1;
+	}
 
 	free(semaphore_id);
+
+	return 0;
 }
 
 /*
- * Function: servidor_plp
- * Purpose: Check all the sockets umv and program
- * Created on: 18/04/2014
+ * Function: servidor_Programa
+ * Purpose: Start Listen Socket Program
+ * Created on: 11/05/2014
  * Author: SilverStack
 */
 
-void servidor_plp(void)
+int servidor_Programa(void)
 {
-	fd_set descriptoresLectura;
-	int sock_program, fdmax, i, new_socket;
+	int sock_program;
 	struct sockaddr_in my_addr;
-	char buf[MAXDATASIZE];
-
-	log_info(logger, "Lanzo hilo servidor_plp");
 
 	if( (sock_program=socket(AF_INET,SOCK_STREAM,0))==-1)
 	{
-		log_error(logger, "Error en funcion socket en servidor_plp");
-		return;
+		log_error(logger, "Error en funcion socket en servidor_Programa");
+		return -1;
 	}
 
 	my_addr.sin_port=htons(port_program);
@@ -361,70 +466,55 @@ void servidor_plp(void)
 
 	if (bind(sock_program,(struct sockaddr *)&my_addr,sizeof(struct sockaddr))==-1)
 	{
-		log_error(logger, "Error en funcion bind en servidor_plp");
-		return;
+		log_error(logger, "Error en funcion bind en servidor_Programa");
+		return -1;
 	}
 
 	if (listen(sock_program,backlog)==-1)
 	{
-		log_error(logger, "Error en funcion listen en servidor_plp");
-		return;
+		log_error(logger, "Error en funcion listen en servidor_Programa");
+		return -1;
 	}
 
-	FD_ZERO (&descriptoresLectura);
-	FD_SET (sock_program, &descriptoresLectura);
-	FD_SET (sock_umv, &descriptoresLectura);
+	return sock_program;
+}
 
-	if(sock_umv < sock_program)
-		fdmax = sock_program;
-	else
-		fdmax = sock_umv;
+/*
+ * Function: servidor_CPU
+ * Purpose: Start Listen Socket Program
+ * Created on: 11/05/2014
+ * Author: SilverStack
+*/
 
-	for(;;)
+int servidor_CPU(void)
+{
+	int sock_cpu;
+	struct sockaddr_in my_addr;
+
+	if( (sock_cpu=socket(AF_INET,SOCK_STREAM,0))==-1)
 	{
-		if (select(fdmax + 1, &descriptoresLectura, NULL, NULL, NULL) == -1)
-		{
-			log_error(logger, "Error en funcion select en servidor_plp");;
-			exit(1);
-		}
+		log_error(logger, "Error en funcion socket en servidor_CPU");
+		return -1;
+	}
 
-		for (i = 0; i <= fdmax; i++)
-		{
-			if (FD_ISSET(i, &descriptoresLectura))
-			{
-				if(i == sock_umv)
-				{
-					//escuchar_umv();
-					log_info(logger, "Desarrollar Funcion escuchar_umv()");
-					continue;
-				}
+	my_addr.sin_port=htons(port_cpu);
+	my_addr.sin_family=AF_INET;
+	my_addr.sin_addr.s_addr=inet_addr(myip);
+	memset(&(my_addr.sin_zero),0,8);
 
-				if (i == sock_program)
-				{
-					new_socket = escuchar_Nuevo_Programa(sock_program,buf);
-					if(new_socket == -1)
-					{
-						FD_CLR(i, &descriptoresLectura);
-					}
-					else
-					{
-						FD_SET(new_socket, &descriptoresLectura);
-						if(fdmax < new_socket)
-							fdmax = new_socket;
-					}
-					continue;
-				}
+	if (bind(sock_cpu,(struct sockaddr *)&my_addr,sizeof(struct sockaddr))==-1)
+	{
+		log_error(logger, "Error en funcion bind en servidor_CPU");
+		return -1 ;
+	}
 
-				if(escuchar_Programa(i, buf) == -1)
-				{
-					close(i);
-					FD_CLR(i, &descriptoresLectura);
-				}
-				//planificador_sjn();
-				//planificador_rr();
-			}
-		} /* for (i = 0; i <= fdmax; i++) */
-	}/* for(;;) */
+	if (listen(sock_cpu,backlog)==-1)
+	{
+		log_error(logger, "Error en funcion listen en servidor_CPU");
+		return -1;
+	}
+
+	return sock_cpu;
 }
 
 /*
@@ -434,16 +524,23 @@ void servidor_plp(void)
  * Author: SilverStack
 */
 
-int escuchar_Nuevo_Programa(int sock_program, char* buffer)
+int escuchar_Nuevo_Programa(int sock_program)
 {
 	socklen_t sin_size;
 	struct sockaddr_in my_addr;
 	struct sockaddr_in their_addr;
 	t_mensaje mensaje;
 	int size_mensaje = sizeof(t_mensaje);
+	char * buffer;
 
 	int new_socket;
 	int numbytes;
+
+	if((buffer = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria para el identificador de nodo en semaphore_wait");
+		return -1;
+	}
 
 	my_addr.sin_port=htons(port_program); /* No creo que sea necesario para el sizeof */
 	my_addr.sin_family=AF_INET; /* No creo que sea necesario para el sizeof */
@@ -470,29 +567,59 @@ int escuchar_Nuevo_Programa(int sock_program, char* buffer)
 	}
 
 	memcpy(&mensaje,buffer,size_mensaje);
-	if(mensaje.tipo==HANDSHAKE && mensaje.id_proceso ==PROGRAMA)
-	{
-		/* Es un nuevo programa que quiere conectarse */
-		log_info(logger, "El programa dice: %s", mensaje.mensaje);
-		mensaje.tipo = HANDSHAKE_OK;
-		memset(buffer,'\0',MAXDATASIZE);
-		memcpy(buffer,&mensaje,size_mensaje);
-
-		if((numbytes=write(new_socket,buffer,size_mensaje))<=0)
-		{
-			log_error(logger, "Error en el write en escuchar_Nuevo_Programa");
-			close(new_socket);
-			return -1;
-		}
-
-		log_info(logger, "Nueva conexion lograda con programa");
-		return new_socket;
-	}
-	else
+	if(mensaje.tipo != HANDSHAKE && mensaje.id_proceso != PROGRAMA)
 	{
 		log_error(logger, "No se pudo crear nueva conexion. Error en el handshake");
 		return -1;
 	}
+
+	mensaje.tipo = HANDSHAKE_OK;
+	memset(buffer,'\0',MAXDATASIZE);
+	memcpy(buffer,&mensaje,size_mensaje);
+
+	if((numbytes=write(new_socket,buffer,size_mensaje))<=0)
+	{
+		log_error(logger, "Error en el write en escuchar_Nuevo_Programa");
+		close(new_socket);
+		return -1;
+	}
+
+	log_info(logger, "Nueva conexion lograda con programa");
+	//return new_socket;
+	memset(buffer,'\0',MAXDATASIZE);
+
+	if((numbytes=read(new_socket,buffer,SIZE_MSG))<=0)
+	{
+		log_error(logger, "Error en el read en escuchar_Nuevo_Programa");
+		return -1;
+	}
+
+	memcpy(&mensaje,buffer,size_mensaje);
+
+	if(mensaje.tipo != SENDFILE && mensaje.id_proceso != PROGRAMA)
+	{
+		log_error(logger, "Error en el descriptor. escuchar_Nuevo_Programa");
+		return -1;
+	}
+
+	/* Para tratamiento del envio de archivos o comandos*/
+	memset(buffer,'\0',MAXDATASIZE);
+	if(mensaje.datosNumericos > MAXDATASIZE)
+	{
+		log_error(logger, "Archivo muy grande %d", mensaje.datosNumericos);
+	}
+
+	if((numbytes=read(new_socket,buffer,mensaje.datosNumericos))<=0)
+	{
+		log_error(logger, "Error en el read en escuchar_Nuevo_Programa");
+		return -1;
+	}
+
+	log_info(logger, "Se recibieron %d bytes desde programa", mensaje.datosNumericos);
+	log_info(logger, "File \n%s", buffer);
+	//create_pcb(buffer,numbytes, new_socket);
+
+	return new_socket;
 }
 
 /*
@@ -504,7 +631,7 @@ int escuchar_Nuevo_Programa(int sock_program, char* buffer)
 
 int escuchar_Programa(int sock_program, char* buffer)
 {
-	thdr hdr;
+	//thdr hdr;
 	t_mensaje mensaje;
 	int numbytes;
 	int size_mensaje = sizeof(t_mensaje);
@@ -535,9 +662,10 @@ int escuchar_Programa(int sock_program, char* buffer)
 			return -1;
 		}
 
-		log_info(logger, "Se recibieron %d bytes desde programa", hdr.pay_len);
+		//log_info(logger, "Se recibieron %d bytes desde programa", hdr.pay_len);
 		log_info(logger, "File \n%s", buffer);
-		//create_pcb(buffer,numbytes);
+		create_pcb(buffer,numbytes, sock_program);
+
 		return 0;
 	}
 	else
@@ -554,24 +682,31 @@ int escuchar_Programa(int sock_program, char* buffer)
  * Author: SilverStack
 */
 
-void create_pcb(char* buffer, int tamanio_buffer)
+void create_pcb(char* buffer, int tamanio_buffer, int sock_program)
 {
+	// TODO: Cambiar estructura PCB
 	t_medatada_program* metadata;
 	t_pcb* new_pcb = (t_pcb*) malloc(sizeof(t_pcb));
 
-	//send_umv_code_segment(sock_UMV, buffer);
+	if((new_pcb = (t_pcb*) malloc (sizeof(t_pcb))) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria para el pcb de nodo en create_pcb");
+		return;
+	}
+
 	metadata = metadatada_desde_literal(buffer);
-	new_pcb->unique_id = ++process_Id;
+
+	new_pcb->unique_id = process_Id;
 	new_pcb->code_segment.offset = tamanio_buffer;
-	new_pcb->code_segment.start = get_Segment_Start(tamanio_buffer);
+	new_pcb->code_segment.start = send_umv_code_segment(buffer, ++process_Id); // Envio el Code Segment
 	new_pcb->code_segment.code_identifier = CODE_SEGMENT;
 
 	list_add(list_segment, segment_create(new_pcb->code_segment.start,
 										  new_pcb->code_segment.offset));
 
 	new_pcb->stack_segment.code_identifier = STACK_SEGMENT;
-	new_pcb->stack_segment.start = get_Segment_Start(100); /* 100 bytes de stack */
-	new_pcb->stack_segment.offset = 100;
+	new_pcb->stack_segment.start = receive_umv_stack(); // Recibo el Stack Segment
+	new_pcb->stack_segment.offset = 100; // ¿Cuando recibo el tamanio?
 
 	list_add(list_segment, segment_create(new_pcb->stack_segment.start,
 										  new_pcb->stack_segment.offset));
@@ -594,8 +729,358 @@ void create_pcb(char* buffer, int tamanio_buffer)
 							metadata->instrucciones_size;
 
 	list_add(list_pcb_new, new_pcb);
-
+	list_add(list_process,process_create(new_pcb->unique_id, sock_program));
+	sem_post(&sem_plp);
 	metadata_destruir(metadata);
+}
+
+int send_umv_code_segment(char* buffer, int pid)
+{
+	t_mensaje mensaje;
+	int numbytes;
+	char* buffer_msg;
+
+	if((buffer_msg = (char*) malloc (sizeof(char) * ( strlen(buffer) + 1 ) )) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria para el pcb de nodo en send_umv_code_segment");
+		return -1;
+	}
+
+	mensaje.id_proceso = KERNEL;
+	mensaje.tipo = NEW_PROGRAM_REQUEST;
+	mensaje.datosNumericos = pid;
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+	memcpy(buffer_msg,&mensaje,SIZE_MSG);
+
+	log_info(logger,"Envio el PID");
+	if((numbytes=write(sock_umv,buffer_msg,SIZE_MSG))<=0)
+	{
+		log_error(logger, "Error en el write del codigo");
+		close(sock_umv);
+		free(buffer_msg);
+		return -1;
+	}
+
+	mensaje.id_proceso = KERNEL;
+	mensaje.tipo = TAMANIO_REQUEST;
+	mensaje.datosNumericos = strlen(buffer);
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+	memcpy(buffer_msg,&mensaje,SIZE_MSG);
+
+	log_info(logger,"Pregunto si hay espacio disponible");
+	if((numbytes=write(sock_umv,buffer_msg,SIZE_MSG))<=0)
+	{
+		log_error(logger, "Error en el write del codigo");
+		close(sock_umv);
+		free(buffer_msg);
+		return -1;
+	}
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+
+	log_info(logger,"Respuesta acerca del espacio disponible");
+	if((numbytes=read(sock_umv,buffer_msg,SIZE_MSG))<=0)
+	{
+		log_error(logger, "Error en el write del codigo");
+		close(sock_umv);
+		free(buffer_msg);
+		return -1;
+	}
+
+	memcpy(&mensaje,buffer_msg,SIZE_MSG);
+
+	if(mensaje.tipo == LOW_MEMORY)
+	{
+		log_error(logger,"Memoria Insuficiente");
+		free(buffer_msg);
+		return -1; /* Todo MAL*/
+	}
+
+	if(mensaje.tipo != TAMANIOOK)
+	{
+		log_error(logger,"Error en descriptor");
+		free(buffer_msg);
+		return -1; /* Todo MAL*/
+	}
+
+	log_info(logger,"Envio Codigo ANSISOP");
+	if((numbytes=write(sock_umv,buffer,strlen(buffer))<=0))
+	{
+		log_error(logger, "Error en el write del codigo");
+		close(sock_umv);
+		free(buffer_msg);
+		return -1;
+	}
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+
+	log_info(logger,"Espero respuesta");
+	if((numbytes=read(sock_umv,buffer_msg,SIZE_MSG))<=0)
+	{
+		log_error(logger, "Error en el write del codigo");
+		close(sock_umv);
+		free(buffer_msg);
+		return -1;
+	}
+	memcpy(&mensaje,buffer_msg,SIZE_MSG);
+
+	if(mensaje.tipo == NEW_PROGRAMOK)
+	{
+		free(buffer_msg);
+		return mensaje.datosNumericos; /* ALL GOOD*/
+	}
+
+	free(buffer_msg);
+	return -1;
+}
+
+/*
+ * Function: receive_umv_stack
+ * Purpose: Get from UMV Socket the Stack Pointer
+ * Created on: 10/05/2014
+ * Author: SilverStack
+*/
+
+int receive_umv_stack(void)
+{
+	t_mensaje mensaje;
+	char* buffer_msg;
+	int numbytes;
+
+	if((buffer_msg = (char*) malloc (sizeof(char) * MAXDATASIZE )) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria para el pcb de nodo en send_umv_code_segment");
+		return -1;
+	}
+
+	mensaje.id_proceso = KERNEL;
+	mensaje.tipo = STACKREQUEST;
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+	memcpy(buffer_msg,&mensaje,SIZE_MSG);
+
+	log_error(logger, "Envio solicitud para el STACK");
+
+	if((numbytes=write(sock_umv,buffer_msg,SIZE_MSG))<=0)
+	{
+		log_error(logger, "Error en el write del codigo");
+		close(sock_umv);
+		free(buffer_msg);
+		return -1;
+	}
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+
+	log_error(logger, "Recibo respuesta");
+	if((numbytes=read(sock_umv,buffer_msg,SIZE_MSG))<=0)
+	{
+		log_error(logger, "Error en el write del codigo");
+		close(sock_umv);
+		free(buffer_msg);
+		return -1;
+	}
+
+	memcpy(&mensaje,buffer_msg,SIZE_MSG);
+
+	if(mensaje.tipo == LOW_MEMORY)
+	{
+		log_error(logger,"Memoria Insuficiente");
+		free(buffer_msg);
+		return -1; /* ALL WRONG*/
+	}
+
+	if(mensaje.tipo == STACKOK)
+	{
+		free(buffer_msg);
+		return mensaje.datosNumericos; /* ALL GOOD */
+	}
+
+	free(buffer_msg);
+	return -1;
+}
+
+int send_umv_instructions(int instrucciones_size, t_intructions* instrucciones_serializado)
+{
+	t_mensaje mensaje;
+	char* buffer_msg;
+	int numbytes;
+
+	if((buffer_msg = (char*) malloc (sizeof(char) * MAXDATASIZE )) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria para el pcb de nodo en send_umv_code_segment");
+		return -1;
+	}
+
+	mensaje.id_proceso = KERNEL;
+	mensaje.tipo = INSTRUCTIONREQUEST;
+	mensaje.datosNumericos = instrucciones_size;
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+	memcpy(buffer_msg,&mensaje,SIZE_MSG);
+
+	log_error(logger, "Envio tamanio de instrucciones");
+
+	if((numbytes=write(sock_umv,buffer_msg,SIZE_MSG))<=0)
+	{
+		log_error(logger, "Error en el write del codigo");
+		close(sock_umv);
+		free(buffer_msg);
+		return -1;
+	}
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+
+	log_info(logger, "Recibo respuesta");
+	if((numbytes=read(sock_umv,buffer_msg,SIZE_MSG))<=0)
+	{
+		log_error(logger, "Error en el write del codigo");
+		close(sock_umv);
+		free(buffer_msg);
+		return -1;
+	}
+
+	memcpy(&mensaje,buffer_msg,SIZE_MSG);
+
+	if(mensaje.tipo == LOW_MEMORY)
+	{
+		log_error(logger,"Memoria Insuficiente");
+		free(buffer_msg);
+		return -1; /* ALL WRONG*/
+	}
+
+	if(mensaje.tipo != INSTRUCTIONREQUESTOK)
+	{
+		log_error(logger,"Todo MAL");
+		free(buffer_msg);
+		return -1; /* ALL WRONG*/
+	}
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+	memcpy(buffer_msg,instrucciones_serializado,instrucciones_size);
+
+	log_error(logger, "Envio indice de instrucciones");
+
+	if((numbytes=write(sock_umv,buffer_msg,instrucciones_size))<=0)
+	{
+		log_error(logger, "Error en el write del codigo");
+		close(sock_umv);
+		return -1;
+	}
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+
+	log_info(logger, "Recibo respuesta");
+	if((numbytes=read(sock_umv,buffer_msg,SIZE_MSG))<=0)
+	{
+		log_error(logger, "Error en el write del codigo");
+		close(sock_umv);
+		return -1;
+	}
+
+	memcpy(&mensaje,buffer_msg,SIZE_MSG);
+
+	if(mensaje.tipo == INSTRUCTIONREQUESTOK)
+	{
+		free(buffer_msg);
+		return mensaje.datosNumericos; /* ALL OK*/
+	}
+
+	free(buffer_msg);
+	return -1;
+}
+
+int send_umv_etiquetas(int etiquetas_size, char* etiquetas)
+{
+	t_mensaje mensaje;
+	char* buffer_msg;
+	int numbytes;
+
+	if((buffer_msg = (char*) malloc (sizeof(char) * MAXDATASIZE )) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria para el pcb de nodo en send_umv_code_segment");
+		return -1;
+	}
+
+	mensaje.id_proceso = KERNEL;
+	mensaje.tipo = ETIQUETASREQUEST;
+	mensaje.datosNumericos = etiquetas_size;
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+	memcpy(buffer_msg,&mensaje,SIZE_MSG);
+
+	log_info(logger, "Envio tamanio de instrucciones");
+
+	if((numbytes=write(sock_umv,buffer_msg,SIZE_MSG))<=0)
+	{
+		log_error(logger, "Error en el write del codigo");
+		close(sock_umv);
+		free(buffer_msg);
+		return -1;
+	}
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+
+	log_info(logger, "Recibo respuesta");
+	if((numbytes=read(sock_umv,buffer_msg,SIZE_MSG))<=0)
+	{
+		log_error(logger, "Error en el write del codigo");
+		close(sock_umv);
+		free(buffer_msg);
+		return -1;
+	}
+
+	memcpy(&mensaje,buffer_msg,SIZE_MSG);
+
+	if(mensaje.tipo == LOW_MEMORY)
+	{
+		log_error(logger,"Memoria Insuficiente");
+		free(buffer_msg);
+		return -1; /* ALL WRONG*/
+	}
+
+	if(mensaje.tipo != ETIQUETASREQUESTOK)
+	{
+		log_error(logger,"Descriptor Incorrecto");
+		free(buffer_msg);
+		return -1; /* ALL WRONG*/
+	}
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+	memcpy(buffer_msg,etiquetas,etiquetas_size);
+
+	log_info(logger, "Envio indice de etiquetas");
+
+	if((numbytes=write(sock_umv,buffer_msg,etiquetas_size))<=0)
+	{
+		log_error(logger, "Error en el write del codigo");
+		close(sock_umv);
+		free(buffer_msg);
+		return -1;
+	}
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+
+	log_info(logger, "Recibo respuesta");
+	if((numbytes=read(sock_umv,buffer_msg,SIZE_MSG))<=0)
+	{
+		log_error(logger, "Error en el write del codigo");
+		close(sock_umv);
+		free(buffer_msg);
+		return -1;
+	}
+
+	memcpy(&mensaje,buffer_msg,SIZE_MSG);
+
+	if(mensaje.tipo == ETIQUETASREQUESTOK)
+	{
+		free(buffer_msg);
+		return mensaje.datosNumericos; /* ALL OK*/
+	}
+
+	free(buffer_msg);
+	return -1;
 }
 
 /*
@@ -656,51 +1141,6 @@ void segment_destroy(t_nodo_segment *self)
 }
 
 /*
- * Function: get_Segment_Start
- * Purpose: Get a correct value for a new segment
- * Created on: 25/04/2014
- * Author: SilverStack
-*/
-
-int get_Segment_Start(int offset)
-{
-	int segment_start = 0;
-	int segment_offset = offset;
-	int segment_end = segment_start + offset;
-	int segment_Available = 0;
-
-	void _get_segment(t_nodo_segment *p)
-	{
-		int nodo_segment_end = p->start + p->offset;
-
-		if(segment_Available == 0) /* No encontre un segmento libre */
-		{
-			if(segment_start < p->start && segment_end < p->start )
-			{
-				segment_Available = 1; /* Encontre un segmento */
-			}
-			else
-			{
-				segment_start = nodo_segment_end + 1;
-				segment_end = segment_start + segment_offset;
-			}
-		}
-	}
-
-
-	if(list_size(list_segment) == 0)
-	{
-		return segment_start;
-	}
-	else
-	{
-		list_iterate(list_segment, (void*) _get_segment);
-	}
-
-	return segment_start;
-}
-
-/*
  * Function: conectar_umv
  * Purpose: Perform the sock connection with UMV
  * Created on: 02/05/2014
@@ -737,10 +1177,6 @@ int conectar_umv(void)
 	mensaje.id_proceso = KERNEL;
 	mensaje.datosNumericos = 0;
 	strcpy(mensaje.mensaje,"Hola UMV!");
-	//strcpy(hdr.desc_id,myip);
-	//hdr.pay_desc=MSG_CON_UMV;
-	//hdr.pay_len=0;
-
 
 	memcpy(buffer,&mensaje,SIZE_MSG);
 
@@ -784,112 +1220,62 @@ int conectar_umv(void)
 void planificador_sjn(void)
 {
 	int cantidad_procesos_sistema;
-	sort_plp();
-
-	cantidad_procesos_sistema = list_size(list_pcb_ready) +
+	t_pcb *element;
+	// TODO: Agregar Semaforo de CPU Disponible
+	for(;;)
+	{
+		sem_wait(&sem_plp);
+		sem_wait(&sem_cpu_list); // Tiene que haber un CPU conectado minimo
+		sort_plp();
+		cantidad_procesos_sistema = list_size(list_pcb_ready) +
 								list_size(list_pcb_blocked) +
 								list_size(list_pcb_execute);
-	if(list_size(list_pcb_new) > 0)
-	{
-		while(cantidad_procesos_sistema <= multiprogramacion)
+
+		if(list_size(list_pcb_new) > 0)
 		{
-			t_pcb *element = list_remove(list_pcb_execute, 0);
-			list_add(list_pcb_new, element);
-			list_add(list_process,process_create(element->unique_id));
-			log_info(logger, "PCB -> %d moved from New Queue to Ready Queue", element->unique_id);
+			if(cantidad_procesos_sistema <= multiprogramacion)
+			{
+				element = list_remove(list_pcb_new, 0);
+				list_add(list_pcb_ready, element);
+
+				log_info(logger, "PCB -> %d moved from New Queue to Ready Queue", element->unique_id);
+				sem_post(&sem_plp);
+			}
 		}
-	}
+		sem_post(&sem_cpu_list); // Tiene que haber un CPU conectado minimo
+	} // for(;;)
 }
 
+
 /*
- * Function: servidor_pcp
- * Purpose: Check all the sockets for cpu
- * Created on: 02/05/2014
+ * Function: is_Connected_CPU
+ * Purpose: Finds if the CPU is already connected
+ * Created on: 09/05/2014
  * Author: SilverStack
 */
 
-void servidor_pcp()
+int is_Connected_CPU(int socket)
 {
-	fd_set descriptoresLectura;
-	int sock_cpu, fdmax, i, new_socket;
-	struct sockaddr_in my_addr;
-	char buf[MAXDATASIZE];
-	log_info(logger, "Lance hilo servidor_pcp");
+	int flag_found = 0;
+	int actual_socket = socket;
 
-	if( (sock_cpu=socket(AF_INET,SOCK_STREAM,0))==-1)
+	void _get_cpu(t_nodo_cpu *cpu)
 	{
-		log_error(logger, "Error en funcion socket en servidor_pcp");
-		return;
-	}
-
-	my_addr.sin_port=htons(port_cpu);
-	my_addr.sin_family=AF_INET;
-	my_addr.sin_addr.s_addr=inet_addr(myip);
-	memset(&(my_addr.sin_zero),0,8);
-
-	if (bind(sock_cpu,(struct sockaddr *)&my_addr,sizeof(struct sockaddr))==-1)
-	{
-		log_error(logger, "Error en funcion bind en servidor_pcp");
-		return;
-	}
-
-	if (listen(sock_cpu,backlog)==-1)
-	{
-		log_error(logger, "Error en funcion listen en servidor_pcp");
-		return;
-	}
-
-	FD_ZERO (&descriptoresLectura);
-	FD_SET (sock_cpu, &descriptoresLectura);
-
-	fdmax = sock_cpu;
-
-	for(;;)
-	{
-		if (select(fdmax + 1, &descriptoresLectura, NULL, NULL, NULL) == -1)
+		if(cpu->socket == actual_socket && flag_found == 0)
 		{
-			log_error(logger, "Error en funcion select en hilo PCP");;
-			exit(1);
+			flag_found = 1;
 		}
+	}
 
-		for (i = 0; i <= fdmax; i++)
-		{
-			if (FD_ISSET(i, &descriptoresLectura))
-			{
-				if (i == sock_cpu)
-				{
-					log_info(logger,"Select detecto actividad en socket CPU");
-					new_socket = escuchar_Nuevo_cpu(sock_cpu,buf);
-					if(new_socket == -1)
-					{
-						FD_CLR(i, &descriptoresLectura);
-						log_error(logger,"No se pudo agregar una cpu");
-						continue;
-					}
+	if(list_size(list_cpu) == 0)
+		return 0;
 
-					FD_SET(new_socket, &descriptoresLectura);
-					cantidad_cpu++;
-					list_add(list_cpu, cpu_create(new_socket));
-					if(fdmax < new_socket)
-						fdmax = new_socket;
-					log_info(logger,"Se agrego un cpu a la lista de CPU");
-					continue;
-				}
+	list_iterate(list_cpu, (void*) _get_cpu);
 
-				if(escuchar_cpu(i, buf) == -1)
-				{
-					log_info(logger,"Select detecto actividad en CPU Existente");
-					close(i);
-					FD_CLR(i, &descriptoresLectura);
-					cpu_remove(i);
-					log_info(logger,"Se removio un cpu de la lista de CPU");
-				}
-			}
+	if(flag_found == 0)
+		return 0;
 
-		} /* for (i = 0; i <= fdmax; i++) */
-		//planificador_sjn();
-		//planificador_rr();
-	}/* for(;;) */
+	return 1;
 }
 
 /*
@@ -905,12 +1291,12 @@ int escuchar_Nuevo_cpu(int sock_cpu,char* buffer)
 	struct sockaddr_in my_addr;
 	struct sockaddr_in their_addr;
 	t_mensaje mensaje;
-	int size_hdr = sizeof(t_mensaje);
+	int size_msg = sizeof(t_mensaje);
 
 	int new_socket;
 	int numbytes;
 
-	my_addr.sin_port=htons(port_program); /* No creo que sea necesario para el sizeof */
+	my_addr.sin_port=htons(port_cpu); /* No creo que sea necesario para el sizeof */
 	my_addr.sin_family=AF_INET; /* No creo que sea necesario para el sizeof */
 	my_addr.sin_addr.s_addr=inet_addr(myip); /* No creo que sea necesario para el sizeof */
 	memset(&(my_addr.sin_zero),0,8); /* No creo que sea necesario para el sizeof */
@@ -927,15 +1313,14 @@ int escuchar_Nuevo_cpu(int sock_cpu,char* buffer)
 
 	memset(buffer,'\0',MAXDATASIZE);
 
-
-	if((numbytes=read(new_socket,buffer,size_hdr))<=0)
+	if((numbytes=read(new_socket,buffer,size_msg))<=0)
 	{
 		log_error(logger, "Error en el read en escuchar_Nuevo_CPU");
 		close(new_socket);
 		return -1;
 	}
 
-	memcpy(&mensaje,buffer,size_hdr);
+	memcpy(&mensaje,buffer,size_msg);
 
 	//if(mensaje.tipo==HANDSHAKE && mensaje.id_proceso ==CPU)
 	if(mensaje.tipo==HANDSHAKE && mensaje.id_proceso ==CPU)
@@ -944,10 +1329,10 @@ int escuchar_Nuevo_cpu(int sock_cpu,char* buffer)
 
 		memset(buffer,'\0',MAXDATASIZE);
 		mensaje.tipo=HANDSHAKE_OK;
-		memcpy(buffer,&mensaje,size_hdr);
+		memcpy(buffer,&mensaje,size_msg);
 		log_info(logger,"Mensaje recibido = %s", mensaje.mensaje);
 
-		if((numbytes=write(new_socket,buffer,size_hdr))<=0)
+		if((numbytes=write(new_socket,buffer,size_msg))<=0)
 		{
 			log_error(logger, "Error en el write en escuchar_Nuevo_CPU");
 			close(new_socket);
@@ -987,8 +1372,21 @@ int escuchar_cpu(int sock_cpu, char* buffer)
 	}
 
 	memcpy(&mensaje,buffer,size_mensaje);
+	log_info(logger,"Mensaje recibido en escuchar_cpu = %s", mensaje.mensaje);
 
-	if(mensaje.tipo==QUANTUMFINISH && mensaje.id_proceso ==CPU)
+	switch(mensaje.tipo)
+	{
+		//case QUANTUMFINISH: finalizo_Quantum(sock_cpu); break;
+		/*case IMPRIMIR: imprimir(); break;
+		case IMPRIMIRTEXTO: imprimirTexto(); break;
+		case ASIGNACION: asignar_valor_VariableCompartida(); break;
+		case VARCOMREQUEST: obtener_valor_VariableCompartida(); break;
+		case ENTRADASALIDA: io(); break;
+		case SIGNALSEM: { semaphore_signal(); isBlocked(); break };
+		case WAITSEM: { semaphore_wait(); isBlocked(); break };*/
+	};
+
+	/*if(mensaje.tipo==QUANTUMFINISH && mensaje.id_proceso ==CPU)
 	{
 		cpu_update(sock_cpu);
 		process_update(sock_cpu);
@@ -999,7 +1397,7 @@ int escuchar_cpu(int sock_cpu, char* buffer)
 		log_error(logger, "Error en el descriptor. escuchar_cpu");
 		return -1;
 	}
-
+	*/
 	return -1;
 }
 
@@ -1048,7 +1446,7 @@ void cpu_remove(int socket)
 	list_iterate(list_cpu, (void*) _get_index);
 
 	if(flag_found == 0)
-			log_error(logger, "CPU Socket %d no encontrado", socket);
+		log_error(logger, "CPU Socket %d no encontrado", socket);
 
 	t_nodo_cpu *cpu = list_remove(list_cpu, indice_buscado);
 	free(cpu);
@@ -1092,45 +1490,58 @@ void cpu_update(int socket)
  * Author: SilverStack
 */
 
-t_process* process_create(unsigned int pid)
+t_process* process_create(unsigned int pid, int sock_program)
 {
-	t_process* new_process = (t_process*) malloc(sizeof(t_process));
-	new_process->status = PROCESS_READY;
+	t_process* new_process;
+
+	if ((new_process = (t_process*) malloc(sizeof(t_process)))== NULL)
+	{
+	    log_error(logger, "No se pudo pedir memoria para el nuevo proceso");
+	    return NULL;
+	}
+
+	new_process->status = PROCESS_NEW;
 	new_process->pid = pid;
-	new_process->quantum_available = quantum;
+	new_process->program_socket = sock_program;
 	return new_process;
 }
 
 /*
  * Function: process_update
- * Purpose: update process node
- * Created on: 04/05/2014
+ * Purpose: update process node, and moves the PCB to correct queue
+ * Created on: 14/05/2014
  * Author: SilverStack
 */
 
-void process_update(int socket)
+void process_update(int pid, unsigned char previous_status, unsigned char next_status)
 {
+	t_list* from;
+	t_list* to;
+	unsigned char status;
+	int process_id = pid;
 	int flag_found = 0;
-	int socket_cpu = socket;
-	int flag_update_pcb = 0;
-	int current_pid = 0;
-	int current_cuantum = quantum;
+
+	switch(previous_status)
+	{
+		case PROCESS_NEW: from = list_pcb_new; break;
+		case PROCESS_READY: from = list_pcb_ready; break;
+		case PROCESS_EXECUTE: from = list_pcb_execute; break;
+		case PROCESS_BLOCKED: from = list_pcb_blocked; break;
+	}
+
+	switch(next_status)
+	{
+		case PROCESS_NEW: to = list_pcb_new; status = PROCESS_NEW; break;
+		case PROCESS_READY: to = list_pcb_ready; status = PROCESS_READY; break;
+		case PROCESS_EXECUTE: to = list_pcb_execute; status = PROCESS_EXECUTE; break;
+		case PROCESS_BLOCKED: to = list_pcb_blocked; status = PROCESS_BLOCKED; break;
+	}
 
 	void _change_status(t_process *s)
 	{
-		if(s->current_cpu_socket == socket_cpu)
+		if(s->pid == process_id)
 		{
-			if(s->quantum_available != 1)
-			{
-				s->quantum_available = s->quantum_available - 1;
-			}
-			else
-			{
-				flag_update_pcb = 1;
-				current_pid = s->pid;
-				s->quantum_available = current_cuantum;
-				s->status = PROCESS_READY;
-			}
+			s->status = status;
 			flag_found = 1;
 		}
 	}
@@ -1140,9 +1551,9 @@ void process_update(int socket)
 	if(flag_found == 0)
 		log_error(logger, "CPU Socket %d no encontrado", socket);
 
-	if(flag_update_pcb == 1)
+	if(flag_found == 1)
 	{
-		pcb_move(current_pid,list_pcb_execute, list_pcb_ready);
+		pcb_move(process_id,from, to);
 	}
 }
 
@@ -1284,61 +1695,6 @@ void retardo_io(void *ptr)
 }
 
 /*
- * Function: pedir_datos_umv
- * Purpose: Request Data to UMV
- * Created on: 06/05/2014
- * Author: SilverStack
-*/
-
-int pedir_datos_umv(void)
-{
-	unsigned char buffer[MAXDATASIZE];
-	int numbytes;
-	struct sockaddr_in their_addr;
-	t_mensaje mensaje;
-
-	mensaje.tipo = STACK_AMOUNT;
-	mensaje.id_proceso = KERNEL;
-	mensaje.datosNumericos = 0;
-	strcpy(mensaje.mensaje,"Hola UMV!");
-
-	memcpy(buffer,&mensaje,SIZE_MSG);
-
-	if((numbytes=write(sock_umv,buffer,SIZE_MSG))<=0)
-	{
-		log_error(logger, "Error en el write en el socket UMV");
-		return -1;
-	}
-
-	memset(buffer,'\0',MAXDATASIZE);
-
-	if((numbytes=read(sock_umv,buffer,SIZE_MSG))<=0)
-	{
-		log_error(logger, "Error en el read en el socket UMV");
-		close(sock_umv);
-		return -1;
-	}
-
-	memcpy(&mensaje,buffer,SIZE_MSG);
-
-	if(mensaje.tipo==STACK_AMOUNT)
-	{
-		stack_tamanio = mensaje.datosNumericos;
-	}
-	else
-	{
-		log_error(logger, "No recibi el mensaje tipo esperado");
-	}
-
-	//mensaje.tipo = QUANTUM_AMOUNT;
-	mensaje.id_proceso = KERNEL;
-	mensaje.datosNumericos = 0;
-	strcpy(mensaje.mensaje,"Hola UMV!");
-
-	return -1;
-}
-
-/*
  * Function: planificador_rr
  * Purpose: Choose PCB from Ready Queue and Moves to Execute Queue
  * Created on: 06/05/2014
@@ -1347,19 +1703,9 @@ int pedir_datos_umv(void)
 
 void planificador_rr(void)
 {
-	t_process* process;
 	t_nodo_cpu* cpu;
-	int flag_process_found = 0;
 	int flag_cpu_found = 0;
-
-	void _get_process_element(t_process *p)
-	{
-		if(p->status == PROCESS_READY && flag_process_found == 0)
-		{
-			process = p;
-			flag_process_found = 1;
-		}
-	}
+	t_pcb* pcb;
 
 	void _get_cpu_element(t_nodo_cpu *c)
 	{
@@ -1370,20 +1716,33 @@ void planificador_rr(void)
 		}
 	}
 
-	found_cpus_available();
-
-	list_iterate(list_process, (void*) _get_process_element);
-	list_iterate(list_cpu, (void*) _get_cpu_element);
-
-	if(flag_process_found == 1 && flag_cpu_found == 1)
+	for(;;)
 	{
-		log_info(logger, "Enviar PCB a CPU en socket %d", cpu->socket);
-		// pcb_move(process->pid, list_pcb_ready, list_pcb_execute)
-		// process->status = PROCESS_EXECUTE
-		// process->current_cpu_socket = cpu->socket
-		// process->quantum_available = quantum;
-		// cpu->status = CPU_WORKING
-	}
+		sem_wait(&sem_pcp);
+		sem_wait(&sem_cpu_list);
+
+		found_cpus_available();
+
+		flag_cpu_found = 0;
+
+		sem_wait(&mutex_cpu_list);
+		list_iterate(list_cpu, (void*) _get_cpu_element);
+		sem_post(&mutex_cpu_list);
+
+		if(flag_cpu_found == 1)
+		{
+			log_info(logger, "Enviar PCB a CPU en socket %d", cpu->socket);
+			sem_wait(&sem_ready_queue);
+			pcb = list_remove(list_pcb_ready, 0);
+			sem_post(&sem_ready_queue);
+			list_add(list_pcb_execute, pcb);
+			ejecutar_proceso(pcb->unique_id, cpu->socket);
+			// process->status = PROCESS_EXECUTE
+			// process->current_cpu_socket = cpu->socket
+			// process->quantum_available = quantum;
+			// cpu->status = CPU_WORKING
+		}
+	} //for(;;)
 
 	return;
 }
@@ -1426,5 +1785,115 @@ void found_cpus_available(void)
 			list_iterate(list_cpu, (void*) _set_cpu_status);
 		}
 	}
+
 	return;
 }
+
+/*
+ * Function: depurar
+ * Purpose: Close all cpu sockets
+ * Created on: 06/05/2014
+ * Author: SilverStack
+*/
+
+void depurar(int signum)
+{
+	log_info(logger,"Depuracion");
+
+	void _get_cpu_element(t_nodo_cpu *c)
+	{
+		close(c->socket);
+	}
+
+	void _get_process_element(t_process *p)
+	{
+		close(p->program_socket);
+	}
+
+	if(list_size(list_cpu) > 0)
+		list_iterate(list_cpu, (void*) _get_cpu_element);
+
+	if(list_size(list_process) > 0)
+		list_iterate(list_process, (void*) _get_process_element);
+
+	return;
+}
+
+/*
+ * Function: buscar_Mayor
+ * Purpose: Returns the Max value between 3 elements
+ * Created on: 11/05/2014
+ * Author: SilverStack
+*/
+
+int buscar_Mayor(int a, int b, int c)
+{
+	int mayor = 0;
+
+	if(a > b)
+		mayor = a;
+	else
+		mayor = b;
+
+	if(mayor > c)
+		return mayor;
+	else
+		return c;
+}
+
+/*
+ * Function: escuchar_umv
+ * Purpose: Returns the Max value between 3 elements
+ * Created on: 11/05/2014
+ * Author: SilverStack
+*/
+
+void escuchar_umv(void)
+{
+	// TODO: Desarrollar Funcion
+	log_error(logger, "Funcion escuchar_umv() aun no desarrollada");
+	return;
+}
+
+/*
+ * Function: is_Connected_Program
+ * Purpose: Finds if the Program is already connected
+ * Created on: 11/05/2014
+ * Author: SilverStack
+*/
+
+int is_Connected_Program(int sock_program)
+{
+	// TODO: Desarrollar Funcion
+	log_error(logger, "Funcion is_Connected_Program() aun no desarrollada");
+	return -1;
+}
+
+/*
+ * Function: process_remove_by_socket
+ * Purpose: Remove a Process from list_process
+ * Created on: 11/05/2014
+ * Author: SilverStack
+*/
+
+void process_remove_by_socket(int socket)
+{
+	// TODO: Desarrollar Funcion
+	log_error(logger, "Funcion process_remove() aun no desarrollada");
+	return;
+}
+
+/*
+ * Function: process_remove_by_socket
+ * Purpose: Remove a Process from list_process
+ * Created on: 11/05/2014
+ * Author: SilverStack
+*/
+
+void ejecutar_proceso(int unique_id, int cpu_socket)
+{
+	// TODO: Desarrollar Funcion
+	log_error(logger, "Funcion process_remove() aun no desarrollada");
+	return;
+}
+

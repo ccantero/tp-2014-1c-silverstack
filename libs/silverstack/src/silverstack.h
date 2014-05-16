@@ -117,6 +117,7 @@ typedef struct _io {
 typedef struct _t_semaphore {
 	char* identifier;
 	int	value;
+	t_queue* queue;
 } t_semaphore;
 
 typedef struct _instruction_index {
