@@ -40,6 +40,10 @@ int sockKernel;
 int sockUmv;
 struct sockaddr_in kernel_addr;
 struct sockaddr_in umv_addr;
+t_mensaje mensaje;
+t_msg_cambio_proceso_activo msg_cambio_proceso_activo;
+t_msg_envio_bytes msg_envio_bytes;
+t_msg_solicitud_bytes msg_solicitud_bytes;
 
 void ConectarA(int *sock, int *puerto, char *ip, struct sockaddr_in *their_addr, t_log *logger);
 t_puntero silverstack_definirVariable(t_nombre_variable var);

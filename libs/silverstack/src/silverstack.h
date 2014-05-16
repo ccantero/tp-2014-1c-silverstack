@@ -75,7 +75,7 @@ typedef struct {
 	int base;
 	int offset;
 	int tamanio;
-	char *buffer;
+	char buffer[100];
 } t_msg_envio_bytes;
 
 typedef struct {

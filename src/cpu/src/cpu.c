@@ -39,7 +39,6 @@ int main(int argc, char *argv[])
 	t_log *logger;
 	t_config *config;
 	int seguirEjecutando = 1; // Mediante la señal SIGUSR1 se puede dejar de ejecutar el cpu
-	t_mensaje mensaje;
 	diccionario = list_create();
 
 	// Obtengo datos de archivo de configuracion y se crea el logger
@@ -94,31 +93,36 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
+	int i; // Contador para ciclo for de instrucciones dentro del bucle principal
+	int quantum;
 	char buf[82]; // Variable auxiliar para almacenar la linea de codigo
 	// Bucle principal del proceso
 	while(seguirEjecutando)
 	{
 		// Recibo el pcb del proceso a ejecutar
 		recv(sockKernel, &pcb, sizeof(t_pcb), 0);
-		// Preparo mensaje para la UMV
-		mensaje.id_proceso = CPU;
-		mensaje.tipo = INSTRUCCIONREQUEST;
-		mensaje.datosNumericos = (int)pcb.instruction_index.index->start;
-		send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-		mensaje.datosNumericos = (int)pcb.instruction_index.index->offset;
-		send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-		// Espero la respuesta de la UMV
-		recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-		recv(sockUmv, buf, mensaje.datosNumericos, 0); // Recibo la instruccion en el buf
-		// Analizo la instruccion
-		analizadorLinea(strdup(buf), &primitivas, &primitivasKernel);
-		// Aviso al kernel que termino el quantum del proceso y devuelvo pcb actualizado
-		mensaje.id_proceso = CPU;
-		mensaje.tipo = QUANTUMFINISH;
-		send(sockKernel, &mensaje, sizeof(t_mensaje), 0);
-		pcb.program_counter++;
-		pcb.instruction_index.index = pcb.instruction_index.index + sizeof(t_intructions);
-		send(sockKernel, &pcb, sizeof(t_pcb), 0);
+		// Recibo el quantum para saber cuantas instrucciones ejecutar
+		recv(sockKernel, &mensaje, sizeof(t_mensaje), 0);
+		quantum = mensaje.datosNumericos;
+		for (i = 0; i < quantum; i++)
+		{
+			// Preparo mensaje para la UMV
+			msg_solicitud_bytes.base = (int)pcb.instruction_index.index->start;
+			msg_solicitud_bytes.offset = (int)pcb.instruction_index.index->offset;
+			msg_solicitud_bytes.tamanio = 0;
+			send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
+			// Espero la respuesta de la UMV
+			recv(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
+			// Analizo la instruccion
+			analizadorLinea(strdup(msg_envio_bytes.buffer), &primitivas, &primitivasKernel);
+			// Aviso al kernel que termino el quantum del proceso y devuelvo pcb actualizado
+			mensaje.id_proceso = CPU;
+			mensaje.tipo = QUANTUMFINISH;
+			send(sockKernel, &mensaje, sizeof(t_mensaje), 0);
+			pcb.program_counter++;
+			pcb.instruction_index.index = pcb.instruction_index.index + sizeof(t_intructions);
+			send(sockKernel, &pcb, sizeof(t_pcb), 0);
+		}
 	}
 
 	// Libero memoria del logger
@@ -163,22 +167,22 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 	// 5) Retornar la posicion de la variable
 	// TODO Guardar el contexto en el pcb del programa
 	// TODO Corregir mensajes con la UMV
-	t_mensaje msg;
 	t_puntero ptr;
-	msg.id_proceso = CPU;
-	msg.tipo = MEMORIAREQUEST;
-	msg.datosNumericos = 4;
-	send(sockUmv, &msg, sizeof(t_mensaje), 0);
-	recv(sockUmv, &msg, sizeof(t_mensaje), 0);
-	msg.id_proceso = CPU;
-	msg.tipo = VARIABLEREQUEST;
-	msg.mensaje[0] = var;
-	send(sockUmv, &msg, sizeof(t_mensaje), 0);
-	recv(sockUmv, &msg, sizeof(t_mensaje), 0);
-	ptr = msg.datosNumericos;
+	msg_solicitud_bytes.base = 0;
+	msg_solicitud_bytes.offset = 0;
+	msg_solicitud_bytes.tamanio = 0;
+	send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
+	recv(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
+	msg_envio_bytes.base = 0;
+	msg_envio_bytes.offset = 0;
+	msg_envio_bytes.tamanio = 0;
+	msg_envio_bytes.buffer[0] = var;
+	send(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
+	recv(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
 	t_variable variable;
 	variable.nombre = var;
-	variable.direccion = msg.datosNumericos;
+	variable.direccion = msg_envio_bytes.base;
+	ptr = msg_envio_bytes.base;
 	list_add(diccionario, &variable);
 	return ptr;
 }
