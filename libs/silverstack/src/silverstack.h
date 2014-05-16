@@ -152,14 +152,15 @@ typedef struct _t_nodo_cpu {
 }t_nodo_cpu;
 
 typedef struct _pcb {
-	unsigned int unique_id; /* Identificador Único */
-	t_segment code_segment; /* Código Ansisop del programa */
-	t_segment stack_segment; /* Segmento de stack */
-	int stack_pointer; /* Puntero al inicio del contexto de ejecución actual */
-	t_instruction_index instruction_index; /* Índice de código */
-	t_etiquetas_index etiquetas_index; /* Índice de etiquetas */
-	int program_counter; /* Número de la próxima instrucción */
-	int context_actual;
+	unsigned int unique_id; 		/* Identificador Único */
+	int code_segment; 				/* Direccion Logica del comienzo del Segmento Código Ansisop */
+	int stack_segment; 				/* Direccion Logica del comienzo del Segmento Stack */
+	int stack_pointer; 				/* Direccion Logica del puntero actual dentro del Segmento Stack */
+	int instruction_index; 			/* Direccion Logica del comienzo del Segmento Indice de Instrucciones */
+	int etiquetas_index; 			/* Direccion Logica del comienzo del Segmento Indice de Etiquetas */
+	int size_etiquetas_index; 	/* Tamaño del Indice de Etiquetas */
+	int program_counter; 			/* Número de la próxima instrucción */
+	int context_actual;				/* Tamaño del Contexto Actual */
 	int peso;
 } t_pcb;
 

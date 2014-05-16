@@ -684,7 +684,6 @@ int escuchar_Programa(int sock_program, char* buffer)
 
 void create_pcb(char* buffer, int tamanio_buffer, int sock_program)
 {
-	// TODO: Cambiar estructura PCB
 	t_medatada_program* metadata;
 	t_pcb* new_pcb = (t_pcb*) malloc(sizeof(t_pcb));
 
@@ -697,36 +696,20 @@ void create_pcb(char* buffer, int tamanio_buffer, int sock_program)
 	metadata = metadatada_desde_literal(buffer);
 
 	new_pcb->unique_id = process_Id;
-	new_pcb->code_segment.offset = tamanio_buffer;
-	new_pcb->code_segment.start = send_umv_code_segment(buffer, ++process_Id); // Envio el Code Segment
-	new_pcb->code_segment.code_identifier = CODE_SEGMENT;
+	new_pcb->code_segment = send_umv_code_segment(buffer, ++process_Id);
+	new_pcb->stack_segment = receive_umv_stack();
+	new_pcb->stack_pointer = new_pcb->stack_segment;
+	new_pcb->instruction_index = send_umv_instructions(	metadata->instrucciones_size,
+														metadata->instrucciones_serializado);
 
-	list_add(list_segment, segment_create(new_pcb->code_segment.start,
-										  new_pcb->code_segment.offset));
-
-	new_pcb->stack_segment.code_identifier = STACK_SEGMENT;
-	new_pcb->stack_segment.start = receive_umv_stack(); // Recibo el Stack Segment
-	new_pcb->stack_segment.offset = 100; // ¿Cuando recibo el tamanio?
-
-	list_add(list_segment, segment_create(new_pcb->stack_segment.start,
-										  new_pcb->stack_segment.offset));
-
-	new_pcb->stack_pointer = new_pcb->stack_segment.start;
-
-	t_intructions*	indice_instrucciones = (t_intructions*) malloc (sizeof(t_intructions) * metadata->instrucciones_size);
-	memcpy(indice_instrucciones,metadata->instrucciones_serializado,sizeof(t_intructions)*metadata->instrucciones_size);
-	new_pcb->instruction_index.index = indice_instrucciones;
-	new_pcb->instruction_index.size = metadata->instrucciones_size;
-
-	char* etiquetas = (char*) malloc (sizeof(char) * metadata->etiquetas_size);
-	memcpy(etiquetas,metadata->etiquetas,sizeof(char) * metadata->etiquetas_size);
-	new_pcb->etiquetas_index.etiquetas = etiquetas;
-	new_pcb->etiquetas_index.size = metadata->etiquetas_size;
+	new_pcb->etiquetas_index = send_umv_etiquetas(	metadata->etiquetas_size,
+													metadata->etiquetas);
 
 	new_pcb->program_counter = metadata->instruccion_inicio;
 	new_pcb->context_actual = 0;
-	new_pcb->peso = 5 * metadata->cantidad_de_etiquetas + 3 * metadata->cantidad_de_funciones +
-							metadata->instrucciones_size;
+	new_pcb->peso = 5 * metadata->cantidad_de_etiquetas +
+					3 * metadata->cantidad_de_funciones +
+					metadata->instrucciones_size;
 
 	list_add(list_pcb_new, new_pcb);
 	list_add(list_process,process_create(new_pcb->unique_id, sock_program));
