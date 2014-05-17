@@ -179,6 +179,7 @@ int semaphore_signal(char* sem_name);
 int escuchar_Nuevo_Programa(int sock_program);
 int escuchar_Programa(int sock_program, char* buffer);
 void create_pcb(char* buffer, int tamanio_buffer, int sock_program);
+int send_umv_instructions(int instrucciones_size, t_intructions* instrucciones_serializado);
 
 void sort_plp(void);
 void planificador_sjn(void);

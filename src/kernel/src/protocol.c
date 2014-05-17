@@ -617,6 +617,7 @@ int escuchar_Nuevo_Programa(int sock_program)
 
 	log_info(logger, "Se recibieron %d bytes desde programa", mensaje.datosNumericos);
 	log_info(logger, "File \n%s", buffer);
+
 	//create_pcb(buffer,numbytes, new_socket);
 
 	return new_socket;
@@ -722,6 +723,8 @@ int send_umv_code_segment(char* buffer, int pid)
 	t_mensaje mensaje;
 	int numbytes;
 	char* buffer_msg;
+	int tamanio_code_segment = strlen(buffer);
+	int direccion_logica;
 
 	if((buffer_msg = (char*) malloc (sizeof(char) * ( strlen(buffer) + 1 ) )) == NULL)
 	{
@@ -729,14 +732,15 @@ int send_umv_code_segment(char* buffer, int pid)
 		return -1;
 	}
 
+	log_info(logger,"Envio el t_mensaje");
+
 	mensaje.id_proceso = KERNEL;
-	mensaje.tipo = NEW_PROGRAM_REQUEST;
-	mensaje.datosNumericos = pid;
+	mensaje.tipo = CREARSEGMENTO;
+	mensaje.datosNumericos = 0;
 
 	memset(buffer_msg,'\0',MAXDATASIZE);
 	memcpy(buffer_msg,&mensaje,SIZE_MSG);
 
-	log_info(logger,"Envio el PID");
 	if((numbytes=write(sock_umv,buffer_msg,SIZE_MSG))<=0)
 	{
 		log_error(logger, "Error en el write del codigo");
@@ -745,15 +749,18 @@ int send_umv_code_segment(char* buffer, int pid)
 		return -1;
 	}
 
-	mensaje.id_proceso = KERNEL;
-	mensaje.tipo = TAMANIO_REQUEST;
-	mensaje.datosNumericos = strlen(buffer);
+	log_info(logger,"Envio el msg_crear_segmento");
+
+	t_msg_crear_segmento msg_crear_segmento;
+	int size_msg_crear_segmento = sizeof(t_msg_crear_segmento);
+
+	msg_crear_segmento.id_programa = pid;
+	msg_crear_segmento.tamanio = tamanio_code_segment;
 
 	memset(buffer_msg,'\0',MAXDATASIZE);
-	memcpy(buffer_msg,&mensaje,SIZE_MSG);
+	memcpy(buffer_msg,&msg_crear_segmento,size_msg_crear_segmento);
 
-	log_info(logger,"Pregunto si hay espacio disponible");
-	if((numbytes=write(sock_umv,buffer_msg,SIZE_MSG))<=0)
+	if((numbytes=write(sock_umv,buffer_msg,size_msg_crear_segmento))<=0)
 	{
 		log_error(logger, "Error en el write del codigo");
 		close(sock_umv);
@@ -762,11 +769,11 @@ int send_umv_code_segment(char* buffer, int pid)
 	}
 
 	memset(buffer_msg,'\0',MAXDATASIZE);
-
 	log_info(logger,"Respuesta acerca del espacio disponible");
+
 	if((numbytes=read(sock_umv,buffer_msg,SIZE_MSG))<=0)
 	{
-		log_error(logger, "Error en el write del codigo");
+		log_error(logger, "Error en el read de sock_umv");
 		close(sock_umv);
 		free(buffer_msg);
 		return -1;
@@ -788,7 +795,38 @@ int send_umv_code_segment(char* buffer, int pid)
 		return -1; /* Todo MAL*/
 	}
 
-	log_info(logger,"Envio Codigo ANSISOP");
+	direccion_logica = mensaje.datosNumericos;
+
+	log_info(logger,"Envio msg_cambio_proceso_activo");
+
+	t_msg_cambio_proceso_activo msg_proceso_activo;
+	int size_msg_proceso_activo = sizeof(t_msg_cambio_proceso_activo);
+
+	msg_proceso_activo.id_programa = pid;
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+	memcpy(buffer_msg,&msg_proceso_activo,size_msg_proceso_activo);
+
+	if((numbytes=write(sock_umv,buffer_msg,size_msg_proceso_activo)<=0))
+	{
+		log_error(logger, "Error en el write del codigo");
+		close(sock_umv);
+		free(buffer_msg);
+		return -1;
+	}
+
+	log_info(logger,"Envio msg_envio_bytes");
+
+	t_msg_envio_bytes msg_envio_bytes;
+	int size_msg_envio_bytes = sizeof(t_msg_envio_bytes);
+
+	msg_envio_bytes.base = direccion_logica;
+	msg_envio_bytes.offset = direccion_logica + tamanio_code_segment;
+	msg_envio_bytes.tamanio = tamanio_code_segment;
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+	memcpy(buffer_msg,&msg_envio_bytes,size_msg_envio_bytes);
+
 	if((numbytes=write(sock_umv,buffer,strlen(buffer))<=0))
 	{
 		log_error(logger, "Error en el write del codigo");
@@ -799,7 +837,7 @@ int send_umv_code_segment(char* buffer, int pid)
 
 	memset(buffer_msg,'\0',MAXDATASIZE);
 
-	log_info(logger,"Espero respuesta");
+	log_info(logger,"Espero respuesta msg_envio_bytes ");
 	if((numbytes=read(sock_umv,buffer_msg,SIZE_MSG))<=0)
 	{
 		log_error(logger, "Error en el write del codigo");
@@ -812,7 +850,7 @@ int send_umv_code_segment(char* buffer, int pid)
 	if(mensaje.tipo == NEW_PROGRAMOK)
 	{
 		free(buffer_msg);
-		return mensaje.datosNumericos; /* ALL GOOD*/
+		return direccion_logica; /* ALL GOOD*/
 	}
 
 	free(buffer_msg);
@@ -1075,8 +1113,8 @@ int send_umv_etiquetas(int etiquetas_size, char* etiquetas)
 
 void destroy_pcb(t_pcb* self)
 {
-	free(self->instruction_index.index);
-	free(self->etiquetas_index.etiquetas);
+	//free(self->instruction_index.index);
+	//free(self->etiquetas_index.etiquetas);
 	free(self);
 }
 
@@ -1135,7 +1173,8 @@ int conectar_umv(void)
 	unsigned char buffer[MAXDATASIZE];
 	int numbytes,sockfd;
 	struct sockaddr_in their_addr;
-	t_mensaje mensaje;
+	t_msg_handshake mensaje;
+	int size_msg_handshake = sizeof(t_msg_handshake);
 
 	their_addr.sin_family=AF_INET;
 	their_addr.sin_port=htons(port_umv);
@@ -1156,14 +1195,13 @@ int conectar_umv(void)
 		return 1;
 	}
 
-	mensaje.tipo = HANDSHAKE;
-	mensaje.id_proceso = KERNEL;
-	mensaje.datosNumericos = 0;
-	strcpy(mensaje.mensaje,"Hola UMV!");
+	//mensaje.tipo = HANDSHAKE;
+	//mensaje.id_proceso = KERNEL;
+	//mensaje.datosNumericos = 0;
+	mensaje.tipo = KERNEL;
+	memcpy(buffer,&mensaje,size_msg_handshake);
 
-	memcpy(buffer,&mensaje,SIZE_MSG);
-
-	if((numbytes=write(sockfd,buffer,SIZE_MSG))<=0)
+	if((numbytes=write(sockfd,buffer,size_msg_handshake))<=0)
 	{
 		log_error(logger, "Error en el write en el socket UMV");
 		return -1;
@@ -1171,16 +1209,16 @@ int conectar_umv(void)
 
 	memset(buffer,'\0',MAXDATASIZE);
 
-	if((numbytes=read(sockfd,buffer,SIZE_MSG))<=0)
+	if((numbytes=read(sockfd,buffer,size_msg_handshake))<=0)
 	{
 		log_error(logger, "Error en el read en el socket UMV");
 		close(sockfd);
 		return -1;
 	}
 
-	memcpy(&mensaje,buffer,SIZE_MSG);
+	memcpy(&mensaje,buffer,size_msg_handshake);
 
-	if(mensaje.tipo==HANDSHAKE_OK)
+	if(mensaje.tipo  == UMV)
 	{
 		log_info(logger, "Conexion Lograda con la UMV");
 		return sockfd;
@@ -1228,7 +1266,6 @@ void planificador_sjn(void)
 		sem_post(&sem_cpu_list); // Tiene que haber un CPU conectado minimo
 	} // for(;;)
 }
-
 
 /*
  * Function: is_Connected_CPU

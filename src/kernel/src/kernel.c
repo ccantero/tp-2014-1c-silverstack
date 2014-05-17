@@ -17,8 +17,6 @@ int main(int argc, char *argv[])
 	int a = 0; // To Avoid Warning
 	int b = 0; // To Avoid Warning
 	int i, descriptor_mayor, nuevo_maximo; /* for aux */
-	pthread_t th_plp;
-	pthread_t th_pcp;
 
 	int sock_program, sock_cpu;
 	int new_socket;
