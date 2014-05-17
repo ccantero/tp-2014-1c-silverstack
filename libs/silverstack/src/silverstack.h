@@ -14,26 +14,13 @@
 #include <parser/metadata_program.h>
 #include <commons/collections/queue.h>
 
-#define MAXDATASIZE 1024
-//#define MSG_CON_PRG 0x01
-//#define MSG_CON_PRG_OK 0x02
-//#define MSG_CON_PRG_FAIL 0x03
-//#define MSG_CON_PRG_TXT 0x04
-//#define MSG_CON_PRG_TXT_OK 0x05
-#define CODE_SEGMENT 0x20
-#define STACK_SEGMENT 0x21
 #define HANDSHAKE 100
 #define HANDSHAKEOK 101
 #define CPU 200
 #define UMV 201
 #define KERNEL 202
 #define PROGRAMA 203
-#define INSTRUCCIONREQUEST 300
 #define QUANTUMFINISH 301
-#define MEMORIAREQUEST 302
-#define VARIABLEREQUEST 303
-#define POSICIONREQUEST 304
-#define REQUESTOK 305
 #define ASIGNACION 306
 #define IMPRIMIR 307
 #define IMPRIMIRTEXTO 308
@@ -53,7 +40,11 @@
 #define INSTRUCTIONREQUESTOK 410
 #define ETIQUETASREQUEST 409
 #define ETIQUETASREQUESTOK 410
-
+#define SOLICITUDBYTES 500
+#define ENVIOBYTES 501
+#define CAMBIOPROCACT 502
+#define CREARSEGMENTO 503
+#define DESTRUIRSEGMENTOS 504
 
 // Estructura de mensaje global para usar entre kernel, programas y cpu's
 typedef struct {
@@ -75,7 +66,6 @@ typedef struct {
 	int base;
 	int offset;
 	int tamanio;
-	char buffer[100];
 } t_msg_envio_bytes;
 
 typedef struct {
