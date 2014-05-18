@@ -697,36 +697,161 @@ void create_pcb(char* buffer, int tamanio_buffer, int sock_program)
 	metadata = metadatada_desde_literal(buffer);
 
 	new_pcb->unique_id = process_Id;
-	new_pcb->code_segment = send_umv_code_segment(buffer, ++process_Id);
-	new_pcb->stack_segment = receive_umv_stack();
+	new_pcb->code_segment = send_segment_umv(++process_Id, buffer, tamanio_buffer);
+	new_pcb->stack_segment = send_umv_stack(process_Id);
 	new_pcb->stack_pointer = new_pcb->stack_segment;
-	new_pcb->instruction_index = send_umv_instructions(	metadata->instrucciones_size,
-														metadata->instrucciones_serializado);
-
-	new_pcb->etiquetas_index = send_umv_etiquetas(	metadata->etiquetas_size,
-													metadata->etiquetas);
-
+	new_pcb->etiquetas_index = send_segment_umv(process_Id, (char*) metadata->instrucciones_serializado, metadata->instrucciones_size);
+	new_pcb->etiquetas_index = send_segment_umv(process_Id, (char*) metadata->etiquetas, metadata->etiquetas_size);
 	new_pcb->program_counter = metadata->instruccion_inicio;
 	new_pcb->context_actual = 0;
 	new_pcb->peso = 5 * metadata->cantidad_de_etiquetas +
 					3 * metadata->cantidad_de_funciones +
 					metadata->instrucciones_size;
 
+	sem_wait(&mutex_new_queue);
 	list_add(list_pcb_new, new_pcb);
+	sem_post(&mutex_new_queue);
+
+	sem_wait(&mutex_process_list);
 	list_add(list_process,process_create(new_pcb->unique_id, sock_program));
+	sem_post(&mutex_process_list);
+
 	sem_post(&sem_plp);
 	metadata_destruir(metadata);
 }
 
-int send_umv_code_segment(char* buffer, int pid)
+/*
+ * Function: create_segment
+ * Purpose: Create Segment
+ * Created on: 17/05/2014
+ * Author: SilverStack
+*/
+
+int create_segment(int process_id, int tamanio)
+{
+	char* buffer_msg;
+	int numbytes;
+	t_msg_crear_segmento msg_crear_segmento;
+	int size_msg_crear_segmento = sizeof(t_msg_crear_segmento);
+
+	log_info(logger,"Envio el msg_crear_segmento");
+
+	msg_crear_segmento.id_programa = process_id;
+	msg_crear_segmento.tamanio = tamanio;
+
+	if((buffer_msg = (char*) malloc (sizeof(char) * MAXDATASIZE )) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria create_segment");
+		return -1;
+	}
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+	memcpy(buffer_msg,&msg_crear_segmento,size_msg_crear_segmento);
+
+	if((numbytes=write(sock_umv,buffer_msg,size_msg_crear_segmento))<=0)
+	{
+		log_error(logger, "Error en el write msg_crear_segmento");
+		close(sock_umv);
+		free(buffer_msg);
+		return -1;
+	}
+
+	free(buffer_msg);
+	return 0;
+}
+
+/*
+ * Function: change_process
+ * Purpose: Send msg to umv to change active process
+ * Created on: 17/05/2014
+ * Author: SilverStack
+*/
+
+int change_process(int process_id)
+{
+	char* buffer_msg;
+	int numbytes;
+	t_msg_cambio_proceso_activo msg_cambio_proceso_activo;
+	int size_msg_cambio_proceso_activo = sizeof(t_msg_cambio_proceso_activo);
+
+	msg_cambio_proceso_activo.id_programa = process_id;
+
+	if((buffer_msg = (char*) malloc (sizeof(char) * MAXDATASIZE )) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria change_process");
+		return -1;
+	}
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+	memcpy(buffer_msg,&msg_cambio_proceso_activo,size_msg_cambio_proceso_activo);
+
+	if((numbytes=write(sock_umv,buffer_msg,size_msg_cambio_proceso_activo))<=0)
+	{
+		log_error(logger, "Error en el write change_process");
+		close(sock_umv);
+		free(buffer_msg);
+		return -1;
+	}
+
+	free(buffer_msg);
+	return 0;
+}
+
+/*
+ * Function: send_bytes
+ * Purpose: Send set of bytes to umv
+ * Created on: 17/05/2014
+ * Author: SilverStack
+*/
+
+int send_bytes(int base, int offset, int tamanio)
+{
+	char* buffer_msg;
+	int numbytes;
+	t_msg_envio_bytes msg_envio_bytes;
+	int size_msg_envio_bytes = sizeof(t_msg_envio_bytes);
+
+	if((buffer_msg = (char*) malloc (sizeof(char) * MAXDATASIZE )) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria send_bytes");
+		return -1;
+	}
+
+	msg_envio_bytes.base = base;
+	msg_envio_bytes.offset = offset;
+	msg_envio_bytes.tamanio = tamanio;
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+	memcpy(buffer_msg,&msg_envio_bytes,size_msg_envio_bytes);
+
+	if((numbytes=write(sock_umv,buffer_msg,size_msg_envio_bytes))<=0)
+	{
+		log_error(logger, "Error en el write send_bytes");
+		close(sock_umv);
+		free(buffer_msg);
+		return -1;
+	}
+
+	free(buffer_msg);
+	return 0;
+}
+
+/*
+ * Function: send_umv_data
+ * Purpose: Send Segment To UMV
+ * Created on: 17/05/2014
+ * Author: SilverStack
+*/
+
+int send_segment_umv(int pid, char* buffer, int tamanio)
 {
 	t_mensaje mensaje;
 	int numbytes;
 	char* buffer_msg;
-	int tamanio_code_segment = strlen(buffer);
+	int tamanio_code_segment = tamanio;
 	int direccion_logica;
 
-	if((buffer_msg = (char*) malloc (sizeof(char) * ( strlen(buffer) + 1 ) )) == NULL)
+	if((buffer_msg = (char*) malloc (sizeof(char) * MAXDATASIZE )) == NULL)
 	{
 		log_error(logger,"Error al reservar memoria para el pcb de nodo en send_umv_code_segment");
 		return -1;
@@ -749,27 +874,14 @@ int send_umv_code_segment(char* buffer, int pid)
 		return -1;
 	}
 
-	log_info(logger,"Envio el msg_crear_segmento");
-
-	t_msg_crear_segmento msg_crear_segmento;
-	int size_msg_crear_segmento = sizeof(t_msg_crear_segmento);
-
-	msg_crear_segmento.id_programa = pid;
-	msg_crear_segmento.tamanio = tamanio_code_segment;
-
-	memset(buffer_msg,'\0',MAXDATASIZE);
-	memcpy(buffer_msg,&msg_crear_segmento,size_msg_crear_segmento);
-
-	if((numbytes=write(sock_umv,buffer_msg,size_msg_crear_segmento))<=0)
+	if(create_segment(pid, tamanio_code_segment) != 0)
 	{
-		log_error(logger, "Error en el write del codigo");
-		close(sock_umv);
+		log_error(logger, "Error Inesperado create_segmento");
 		free(buffer_msg);
 		return -1;
 	}
 
 	memset(buffer_msg,'\0',MAXDATASIZE);
-	log_info(logger,"Respuesta acerca del espacio disponible");
 
 	if((numbytes=read(sock_umv,buffer_msg,SIZE_MSG))<=0)
 	{
@@ -785,49 +897,30 @@ int send_umv_code_segment(char* buffer, int pid)
 	{
 		log_error(logger,"Memoria Insuficiente");
 		free(buffer_msg);
-		return -1; /* Todo MAL*/
-	}
-
-	if(mensaje.tipo != TAMANIOOK)
-	{
-		log_error(logger,"Error en descriptor");
-		free(buffer_msg);
-		return -1; /* Todo MAL*/
+		return -1; /* ALL is Wrong*/
 	}
 
 	direccion_logica = mensaje.datosNumericos;
 
 	log_info(logger,"Envio msg_cambio_proceso_activo");
 
-	t_msg_cambio_proceso_activo msg_proceso_activo;
-	int size_msg_proceso_activo = sizeof(t_msg_cambio_proceso_activo);
-
-	msg_proceso_activo.id_programa = pid;
-
-	memset(buffer_msg,'\0',MAXDATASIZE);
-	memcpy(buffer_msg,&msg_proceso_activo,size_msg_proceso_activo);
-
-	if((numbytes=write(sock_umv,buffer_msg,size_msg_proceso_activo)<=0))
+	if(change_process(pid) != 0)
 	{
-		log_error(logger, "Error en el write del codigo");
-		close(sock_umv);
+		log_error(logger, "Error Inesperado change_process");
 		free(buffer_msg);
 		return -1;
 	}
 
 	log_info(logger,"Envio msg_envio_bytes");
 
-	t_msg_envio_bytes msg_envio_bytes;
-	int size_msg_envio_bytes = sizeof(t_msg_envio_bytes);
+	if(send_bytes(direccion_logica, direccion_logica + tamanio_code_segment, tamanio_code_segment) != 0)
+	{
+		log_error(logger, "Error Inesperado change_process");
+		free(buffer_msg);
+		return -1;
+	}
 
-	msg_envio_bytes.base = direccion_logica;
-	msg_envio_bytes.offset = direccion_logica + tamanio_code_segment;
-	msg_envio_bytes.tamanio = tamanio_code_segment;
-
-	memset(buffer_msg,'\0',MAXDATASIZE);
-	memcpy(buffer_msg,&msg_envio_bytes,size_msg_envio_bytes);
-
-	if((numbytes=write(sock_umv,buffer,strlen(buffer))<=0))
+	if((numbytes=write(sock_umv,buffer,tamanio_code_segment)<=0))
 	{
 		log_error(logger, "Error en el write del codigo");
 		close(sock_umv);
@@ -847,6 +940,7 @@ int send_umv_code_segment(char* buffer, int pid)
 	}
 	memcpy(&mensaje,buffer_msg,SIZE_MSG);
 
+	// TODO: Mejorar Mensaje de Respuesta
 	if(mensaje.tipo == NEW_PROGRAMOK)
 	{
 		free(buffer_msg);
@@ -858,31 +952,33 @@ int send_umv_code_segment(char* buffer, int pid)
 }
 
 /*
- * Function: receive_umv_stack
+ * Function: send_umv_stack
  * Purpose: Get from UMV Socket the Stack Pointer
  * Created on: 10/05/2014
  * Author: SilverStack
 */
 
-int receive_umv_stack(void)
+int send_umv_stack(int process_id)
 {
 	t_mensaje mensaje;
-	char* buffer_msg;
 	int numbytes;
+	char* buffer_msg;
+	int tamanio_stack = 100;
 
-	if((buffer_msg = (char*) malloc (sizeof(char) * MAXDATASIZE )) == NULL)
+	if((buffer_msg = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
 	{
 		log_error(logger,"Error al reservar memoria para el pcb de nodo en send_umv_code_segment");
 		return -1;
 	}
 
+	log_info(logger,"Envio el t_mensaje");
+
 	mensaje.id_proceso = KERNEL;
-	mensaje.tipo = STACKREQUEST;
+	mensaje.tipo = CREARSEGMENTO;
+	mensaje.datosNumericos = 0;
 
 	memset(buffer_msg,'\0',MAXDATASIZE);
 	memcpy(buffer_msg,&mensaje,SIZE_MSG);
-
-	log_error(logger, "Envio solicitud para el STACK");
 
 	if((numbytes=write(sock_umv,buffer_msg,SIZE_MSG))<=0)
 	{
@@ -892,9 +988,15 @@ int receive_umv_stack(void)
 		return -1;
 	}
 
+	if(create_segment(process_id, tamanio_stack) != 0)
+	{
+		log_error(logger, "Error Inesperado create_segmento");
+		free(buffer_msg);
+		return -1;
+	}
+
 	memset(buffer_msg,'\0',MAXDATASIZE);
 
-	log_error(logger, "Recibo respuesta");
 	if((numbytes=read(sock_umv,buffer_msg,SIZE_MSG))<=0)
 	{
 		log_error(logger, "Error en el write del codigo");
@@ -916,188 +1018,6 @@ int receive_umv_stack(void)
 	{
 		free(buffer_msg);
 		return mensaje.datosNumericos; /* ALL GOOD */
-	}
-
-	free(buffer_msg);
-	return -1;
-}
-
-int send_umv_instructions(int instrucciones_size, t_intructions* instrucciones_serializado)
-{
-	t_mensaje mensaje;
-	char* buffer_msg;
-	int numbytes;
-
-	if((buffer_msg = (char*) malloc (sizeof(char) * MAXDATASIZE )) == NULL)
-	{
-		log_error(logger,"Error al reservar memoria para el pcb de nodo en send_umv_code_segment");
-		return -1;
-	}
-
-	mensaje.id_proceso = KERNEL;
-	mensaje.tipo = INSTRUCTIONREQUEST;
-	mensaje.datosNumericos = instrucciones_size;
-
-	memset(buffer_msg,'\0',MAXDATASIZE);
-	memcpy(buffer_msg,&mensaje,SIZE_MSG);
-
-	log_error(logger, "Envio tamanio de instrucciones");
-
-	if((numbytes=write(sock_umv,buffer_msg,SIZE_MSG))<=0)
-	{
-		log_error(logger, "Error en el write del codigo");
-		close(sock_umv);
-		free(buffer_msg);
-		return -1;
-	}
-
-	memset(buffer_msg,'\0',MAXDATASIZE);
-
-	log_info(logger, "Recibo respuesta");
-	if((numbytes=read(sock_umv,buffer_msg,SIZE_MSG))<=0)
-	{
-		log_error(logger, "Error en el write del codigo");
-		close(sock_umv);
-		free(buffer_msg);
-		return -1;
-	}
-
-	memcpy(&mensaje,buffer_msg,SIZE_MSG);
-
-	if(mensaje.tipo == LOW_MEMORY)
-	{
-		log_error(logger,"Memoria Insuficiente");
-		free(buffer_msg);
-		return -1; /* ALL WRONG*/
-	}
-
-	if(mensaje.tipo != INSTRUCTIONREQUESTOK)
-	{
-		log_error(logger,"Todo MAL");
-		free(buffer_msg);
-		return -1; /* ALL WRONG*/
-	}
-
-	memset(buffer_msg,'\0',MAXDATASIZE);
-	memcpy(buffer_msg,instrucciones_serializado,instrucciones_size);
-
-	log_error(logger, "Envio indice de instrucciones");
-
-	if((numbytes=write(sock_umv,buffer_msg,instrucciones_size))<=0)
-	{
-		log_error(logger, "Error en el write del codigo");
-		close(sock_umv);
-		return -1;
-	}
-
-	memset(buffer_msg,'\0',MAXDATASIZE);
-
-	log_info(logger, "Recibo respuesta");
-	if((numbytes=read(sock_umv,buffer_msg,SIZE_MSG))<=0)
-	{
-		log_error(logger, "Error en el write del codigo");
-		close(sock_umv);
-		return -1;
-	}
-
-	memcpy(&mensaje,buffer_msg,SIZE_MSG);
-
-	if(mensaje.tipo == INSTRUCTIONREQUESTOK)
-	{
-		free(buffer_msg);
-		return mensaje.datosNumericos; /* ALL OK*/
-	}
-
-	free(buffer_msg);
-	return -1;
-}
-
-int send_umv_etiquetas(int etiquetas_size, char* etiquetas)
-{
-	t_mensaje mensaje;
-	char* buffer_msg;
-	int numbytes;
-
-	if((buffer_msg = (char*) malloc (sizeof(char) * MAXDATASIZE )) == NULL)
-	{
-		log_error(logger,"Error al reservar memoria para el pcb de nodo en send_umv_code_segment");
-		return -1;
-	}
-
-	mensaje.id_proceso = KERNEL;
-	mensaje.tipo = ETIQUETASREQUEST;
-	mensaje.datosNumericos = etiquetas_size;
-
-	memset(buffer_msg,'\0',MAXDATASIZE);
-	memcpy(buffer_msg,&mensaje,SIZE_MSG);
-
-	log_info(logger, "Envio tamanio de instrucciones");
-
-	if((numbytes=write(sock_umv,buffer_msg,SIZE_MSG))<=0)
-	{
-		log_error(logger, "Error en el write del codigo");
-		close(sock_umv);
-		free(buffer_msg);
-		return -1;
-	}
-
-	memset(buffer_msg,'\0',MAXDATASIZE);
-
-	log_info(logger, "Recibo respuesta");
-	if((numbytes=read(sock_umv,buffer_msg,SIZE_MSG))<=0)
-	{
-		log_error(logger, "Error en el write del codigo");
-		close(sock_umv);
-		free(buffer_msg);
-		return -1;
-	}
-
-	memcpy(&mensaje,buffer_msg,SIZE_MSG);
-
-	if(mensaje.tipo == LOW_MEMORY)
-	{
-		log_error(logger,"Memoria Insuficiente");
-		free(buffer_msg);
-		return -1; /* ALL WRONG*/
-	}
-
-	if(mensaje.tipo != ETIQUETASREQUESTOK)
-	{
-		log_error(logger,"Descriptor Incorrecto");
-		free(buffer_msg);
-		return -1; /* ALL WRONG*/
-	}
-
-	memset(buffer_msg,'\0',MAXDATASIZE);
-	memcpy(buffer_msg,etiquetas,etiquetas_size);
-
-	log_info(logger, "Envio indice de etiquetas");
-
-	if((numbytes=write(sock_umv,buffer_msg,etiquetas_size))<=0)
-	{
-		log_error(logger, "Error en el write del codigo");
-		close(sock_umv);
-		free(buffer_msg);
-		return -1;
-	}
-
-	memset(buffer_msg,'\0',MAXDATASIZE);
-
-	log_info(logger, "Recibo respuesta");
-	if((numbytes=read(sock_umv,buffer_msg,SIZE_MSG))<=0)
-	{
-		log_error(logger, "Error en el write del codigo");
-		close(sock_umv);
-		free(buffer_msg);
-		return -1;
-	}
-
-	memcpy(&mensaje,buffer_msg,SIZE_MSG);
-
-	if(mensaje.tipo == ETIQUETASREQUESTOK)
-	{
-		free(buffer_msg);
-		return mensaje.datosNumericos; /* ALL OK*/
 	}
 
 	free(buffer_msg);
@@ -1131,7 +1051,9 @@ void sort_plp()
 		return one->peso < two->peso;
 	}
 
+	sem_wait(&mutex_new_queue);
 	list_sort(list_pcb_new, (void*) _menor_peso);
+	sem_post(&mutex_new_queue);
 }
 
 /*
@@ -1241,28 +1163,50 @@ int conectar_umv(void)
 void planificador_sjn(void)
 {
 	int cantidad_procesos_sistema;
+	int cantidad_procesos_ready;
+	int cantidad_procesos_blocked;
+	int cantidad_procesos_executed;
+
 	t_pcb *element;
-	// TODO: Agregar Semaforo de CPU Disponible
 	for(;;)
 	{
 		sem_wait(&sem_plp);
 		sem_wait(&sem_cpu_list); // Tiene que haber un CPU conectado minimo
-		sort_plp();
-		cantidad_procesos_sistema = list_size(list_pcb_ready) +
-								list_size(list_pcb_blocked) +
-								list_size(list_pcb_execute);
+		sem_wait(&mutex_new_queue);
+		/* Begin Region Critica */
+
+		sem_wait(&mutex_ready_queue);
+		cantidad_procesos_ready = list_size(list_pcb_ready);
+		sem_post(&mutex_ready_queue);
+
+		sem_wait(&mutex_block_queue);
+		cantidad_procesos_blocked = list_size(list_pcb_blocked);
+		sem_post(&mutex_block_queue);
+
+		sem_wait(&mutex_execute_queue);
+		cantidad_procesos_executed = list_size(list_pcb_execute);
+		sem_post(&mutex_execute_queue);
+
+		cantidad_procesos_sistema = cantidad_procesos_ready +
+									cantidad_procesos_blocked +
+									cantidad_procesos_executed;
 
 		if(list_size(list_pcb_new) > 0)
 		{
 			if(cantidad_procesos_sistema <= multiprogramacion)
 			{
 				element = list_remove(list_pcb_new, 0);
+
+				sem_wait(&mutex_ready_queue);
 				list_add(list_pcb_ready, element);
+				sem_post(&mutex_ready_queue);
 
 				log_info(logger, "PCB -> %d moved from New Queue to Ready Queue", element->unique_id);
-				sem_post(&sem_plp);
+				sem_post(&sem_pcp);
 			}
 		}
+		sem_post(&mutex_new_queue);
+		/* End Region Critica */
 		sem_post(&sem_cpu_list); // Tiene que haber un CPU conectado minimo
 	} // for(;;)
 }
@@ -1305,16 +1249,23 @@ int is_Connected_CPU(int socket)
  * Author: SilverStack
 */
 
-int escuchar_Nuevo_cpu(int sock_cpu,char* buffer)
+int escuchar_Nuevo_cpu(int sock_cpu)
 {
 	socklen_t sin_size;
 	struct sockaddr_in my_addr;
 	struct sockaddr_in their_addr;
 	t_mensaje mensaje;
 	int size_msg = sizeof(t_mensaje);
+	char* buffer;
 
 	int new_socket;
 	int numbytes;
+
+	if((buffer = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria para el buffer en escuchar_Nuevo_cpu");
+		return -1;
+	}
 
 	my_addr.sin_port=htons(port_cpu); /* No creo que sea necesario para el sizeof */
 	my_addr.sin_family=AF_INET; /* No creo que sea necesario para el sizeof */
@@ -1342,15 +1293,11 @@ int escuchar_Nuevo_cpu(int sock_cpu,char* buffer)
 
 	memcpy(&mensaje,buffer,size_msg);
 
-	//if(mensaje.tipo==HANDSHAKE && mensaje.id_proceso ==CPU)
 	if(mensaje.tipo==HANDSHAKE && mensaje.id_proceso ==CPU)
 	{
-		/* Es un nuevo cpu que quiere conectarse */
-
 		memset(buffer,'\0',MAXDATASIZE);
 		mensaje.tipo=HANDSHAKE_OK;
 		memcpy(buffer,&mensaje,size_msg);
-		log_info(logger,"Mensaje recibido = %s", mensaje.mensaje);
 
 		if((numbytes=write(new_socket,buffer,size_msg))<=0)
 		{
@@ -1377,13 +1324,20 @@ int escuchar_Nuevo_cpu(int sock_cpu,char* buffer)
  * Author: SilverStack
 */
 
-int escuchar_cpu(int sock_cpu, char* buffer)
+int escuchar_cpu(int sock_cpu)
 {
 	t_mensaje mensaje;
 	int numbytes;
 	int size_mensaje = sizeof(t_mensaje);
+	char* buffer;
 
 	log_info(logger, "Recepcion de datos desde CPU");
+	if((buffer = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria para el buffer en escuchar_cpu");
+		return -1;
+	}
+
 	memset(buffer,'\0',MAXDATASIZE);
 	if((numbytes=read(sock_cpu,buffer,size_mensaje))<=0)
 	{
@@ -1392,7 +1346,6 @@ int escuchar_cpu(int sock_cpu, char* buffer)
 	}
 
 	memcpy(&mensaje,buffer,size_mensaje);
-	log_info(logger,"Mensaje recibido en escuchar_cpu = %s", mensaje.mensaje);
 
 	switch(mensaje.tipo)
 	{
@@ -1406,18 +1359,6 @@ int escuchar_cpu(int sock_cpu, char* buffer)
 		case WAITSEM: { semaphore_wait(); isBlocked(); break };*/
 	};
 
-	/*if(mensaje.tipo==QUANTUMFINISH && mensaje.id_proceso ==CPU)
-	{
-		cpu_update(sock_cpu);
-		process_update(sock_cpu);
-		return 0;
-	}
-	else
-	{
-		log_error(logger, "Error en el descriptor. escuchar_cpu");
-		return -1;
-	}
-	*/
 	return -1;
 }
 
@@ -1537,24 +1478,26 @@ void process_update(int pid, unsigned char previous_status, unsigned char next_s
 {
 	t_list* from;
 	t_list* to;
+	sem_t* mutex_list_previous;
+	sem_t* mutex_list_next;
 	unsigned char status;
 	int process_id = pid;
 	int flag_found = 0;
 
 	switch(previous_status)
 	{
-		case PROCESS_NEW: from = list_pcb_new; break;
-		case PROCESS_READY: from = list_pcb_ready; break;
-		case PROCESS_EXECUTE: from = list_pcb_execute; break;
-		case PROCESS_BLOCKED: from = list_pcb_blocked; break;
+		case PROCESS_NEW: from = list_pcb_new; mutex_list_previous = &mutex_new_queue; break;
+		case PROCESS_READY: from = list_pcb_ready; mutex_list_previous = &mutex_ready_queue; break;
+		case PROCESS_EXECUTE: from = list_pcb_execute; mutex_list_previous = &mutex_execute_queue; break;
+		case PROCESS_BLOCKED: from = list_pcb_blocked; mutex_list_previous = &mutex_block_queue; break;
 	}
 
 	switch(next_status)
 	{
-		case PROCESS_NEW: to = list_pcb_new; status = PROCESS_NEW; break;
-		case PROCESS_READY: to = list_pcb_ready; status = PROCESS_READY; break;
-		case PROCESS_EXECUTE: to = list_pcb_execute; status = PROCESS_EXECUTE; break;
-		case PROCESS_BLOCKED: to = list_pcb_blocked; status = PROCESS_BLOCKED; break;
+		case PROCESS_NEW: to = list_pcb_new; status = PROCESS_NEW; mutex_list_next = &mutex_block_queue; break;
+		case PROCESS_READY: to = list_pcb_ready; status = PROCESS_READY; mutex_list_next = &mutex_block_queue; break;
+		case PROCESS_EXECUTE: to = list_pcb_execute; status = PROCESS_EXECUTE; mutex_list_next = &mutex_block_queue; break;
+		case PROCESS_BLOCKED: to = list_pcb_blocked; status = PROCESS_BLOCKED; mutex_list_next = &mutex_block_queue; break;
 	}
 
 	void _change_status(t_process *s)
@@ -1573,7 +1516,11 @@ void process_update(int pid, unsigned char previous_status, unsigned char next_s
 
 	if(flag_found == 1)
 	{
+		sem_wait(mutex_list_previous);
+		sem_wait(mutex_list_next);
 		pcb_move(process_id,from, to);
+		sem_post(mutex_list_previous);
+		sem_post(mutex_list_next);
 	}
 }
 
@@ -1604,7 +1551,7 @@ void pcb_move(unsigned int pid,t_list* from, t_list* to)
 	list_iterate(from, (void*) _get_node);
 
 	if(flag_found == 0)
-		log_error(logger, "PID %d no encontrado en queue execute", pid);
+		log_error(logger, "PID %d no encontrado en pcb_move", pid);
 
 	t_pcb *pcb = list_remove(from, indice_buscado);
 	list_add(to,pcb);
@@ -1648,7 +1595,6 @@ void io_wait(unsigned int pid, char* io_name, int amount)
 	if(flag_found == 0)
 		log_error(logger, "No se encontro elemento de IO %s", io_id);
 
-
 	free(io_id);
 }
 
@@ -1685,7 +1631,6 @@ void retardo_io(void *ptr)
 	{
 		if(strcmp(s->name, name_io) == 0)
 		{
-			//semaphore_local = s->io_sem;
 			io_node = s;
 		}
 	}
@@ -1705,10 +1650,9 @@ void retardo_io(void *ptr)
 			log_info(logger,"[retardo_io] Finish Critical Section IO = %s",name_io);
 			/* END CRITICAL REGION */
 		sem_post(&free_io_queue); // Up Semaphore
-
 		log_info(logger,"[retardo_io] Dormir = %d",io_queue_nodo->retardo);
 		sleep(io_queue_nodo->retardo / 1000);
-		//pcb_move(io_queue_nodo->pcb,list_pcb_blocked, list_pcb_ready);
+		process_update(io_queue_nodo->pcb,PROCESS_BLOCKED,PROCESS_READY);
 		log_info(logger,"[retardo_io] Finalizo el retardo = %d",name_io);
 		free(io_queue_nodo);
 	}
@@ -1741,7 +1685,9 @@ void planificador_rr(void)
 		sem_wait(&sem_pcp);
 		sem_wait(&sem_cpu_list);
 
+		sem_wait(&mutex_cpu_list);
 		found_cpus_available();
+		sem_post(&mutex_cpu_list);
 
 		flag_cpu_found = 0;
 
@@ -1752,16 +1698,20 @@ void planificador_rr(void)
 		if(flag_cpu_found == 1)
 		{
 			log_info(logger, "Enviar PCB a CPU en socket %d", cpu->socket);
-			sem_wait(&sem_ready_queue);
+
+			sem_wait(&mutex_ready_queue);
 			pcb = list_remove(list_pcb_ready, 0);
-			sem_post(&sem_ready_queue);
+			sem_post(&mutex_ready_queue);
+
+			sem_wait(&mutex_execute_queue);
 			list_add(list_pcb_execute, pcb);
+			sem_post(&mutex_execute_queue);
+			process_update(pcb->unique_id,PROCESS_READY, PROCESS_EXECUTE);
 			ejecutar_proceso(pcb->unique_id, cpu->socket);
-			// process->status = PROCESS_EXECUTE
 			// process->current_cpu_socket = cpu->socket
-			// process->quantum_available = quantum;
 			// cpu->status = CPU_WORKING
 		}
+		sem_post(&sem_cpu_list);
 	} //for(;;)
 
 	return;
@@ -1899,21 +1849,34 @@ int is_Connected_Program(int sock_program)
 void process_remove_by_socket(int socket)
 {
 	// TODO: Desarrollar Funcion
-	log_error(logger, "Funcion process_remove() aun no desarrollada");
+	log_error(logger, "Funcion process_remove_by_socket() aun no desarrollada");
 	return;
 }
 
 /*
- * Function: process_remove_by_socket
- * Purpose: Remove a Process from list_process
+ * Function: ejecutar_proceso
+ * Purpose: Update CPU Socket on Proces_List
  * Created on: 11/05/2014
  * Author: SilverStack
 */
 
-void ejecutar_proceso(int unique_id, int cpu_socket)
+void ejecutar_proceso(int unique_id, int socket)
 {
-	// TODO: Desarrollar Funcion
-	log_error(logger, "Funcion process_remove() aun no desarrollada");
+	int flag_process_found = 0;
+	int process_id = unique_id;
+	int cpu_socket = socket;
+
+	void _get_process_element(t_process *p)
+	{
+		if(p->pid == process_id && flag_process_found == 0)
+		{
+			p->current_cpu_socket = cpu_socket;
+			flag_process_found = 1;
+		}
+	}
+
+	sem_wait(&mutex_process_list);
+	list_iterate(list_process, (void*) _get_process_element);
+	sem_post(&mutex_process_list);
 	return;
 }
-

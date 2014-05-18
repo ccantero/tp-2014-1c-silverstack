@@ -14,11 +14,9 @@
 
 int main(int argc, char *argv[])
 {
-	int a = 0; // To Avoid Warning
-	int b = 0; // To Avoid Warning
 	int i, descriptor_mayor, nuevo_maximo; /* for aux */
 
-	int sock_program, sock_cpu;
+	int sock_program = 0, sock_cpu = 0;
 	int new_socket;
 	fd_set descriptoresLectura;
 
@@ -50,8 +48,15 @@ int main(int argc, char *argv[])
 	process_Id = 10000;
 	cantidad_cpu = 0;
 
+	sem_init(&mutex_new_queue, 0, 1);
+	sem_init(&mutex_ready_queue, 0, 1);
+	sem_init(&mutex_execute_queue, 0, 1);
+	sem_init(&mutex_block_queue, 0, 1);
+
+	sem_init(&mutex_process_list, 0, 1);
+
 	sem_init(&free_io_queue, 0, 1);
-	sem_init(&sem_ready_queue, 0, 1);
+
 
 	sem_init(&sem_plp, 0, 0); // Empieza en cero porque tiene que bloquearse hasta que aparezca algo
 	sem_init(&sem_pcp, 0, 0); // Empieza en cero porque tiene que bloquearse hasta que aparezca algo
@@ -62,14 +67,12 @@ int main(int argc, char *argv[])
 
 	signal(SIGINT,depurar);
 
-	//pthread_create(&th_plp,NULL,(void*)planificador_sjn,(void*)a);
-	//pthread_create(&th_pcp,NULL,(void*)planificador_rr,(void*)b);
+	//pthread_create(&th_plp,NULL,(void*)planificador_sjn,NULL);
+	//pthread_create(&th_pcp,NULL,(void*)planificador_rr,NULL);
 
-	//sock_umv = conectar_umv();
-	sock_umv = 0;
+	sock_umv = conectar_umv();
 	sock_program = servidor_Programa();
-	sock_cpu = 0;
-	//sock_cpu = servidor_CPU();
+	sock_cpu = servidor_CPU();
 
 	if(sock_umv == -1 || sock_program == -1 || sock_cpu == -1)
 	{
@@ -79,8 +82,8 @@ int main(int argc, char *argv[])
 
 	FD_ZERO (&descriptoresLectura);
 	FD_SET (sock_program, &descriptoresLectura);
-	//FD_SET (sock_umv, &descriptoresLectura);
-	//FD_SET (sock_cpu, &descriptoresLectura);
+	FD_SET (sock_umv, &descriptoresLectura);
+	FD_SET (sock_cpu, &descriptoresLectura);
 
 	nuevo_maximo = buscar_Mayor(sock_program, sock_umv, sock_cpu);
 
@@ -123,7 +126,7 @@ int main(int argc, char *argv[])
 
 				if (i == sock_cpu)
 				{
-					new_socket = escuchar_Nuevo_cpu(i,buffer);
+					new_socket = escuchar_Nuevo_cpu(i);
 					if(new_socket == -1)
 					{
 						//FD_CLR(i, &descriptoresLectura);
@@ -163,7 +166,7 @@ int main(int argc, char *argv[])
 				if(is_Connected_CPU(i))
 				{
 					log_info(logger,"Select detecto actividad en CPU Existente");
-					if(escuchar_cpu(i, buffer) == -1)
+					if(escuchar_cpu(i) == -1)
 					{
 						close(i);
 						FD_CLR(i, &descriptoresLectura);

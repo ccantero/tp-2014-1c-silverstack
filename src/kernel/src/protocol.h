@@ -161,7 +161,13 @@ int port_cpu,port_program,port_umv,sockPrin,multiprogramacion,quantum,retardo,st
 int sock_umv, process_Id, cantidad_cpu;
 char myip[16],umv_ip[16];
 sem_t free_io_queue;
-sem_t sem_ready_queue;
+
+sem_t mutex_new_queue;
+sem_t mutex_ready_queue;
+sem_t mutex_execute_queue;
+sem_t mutex_block_queue;
+
+sem_t mutex_process_list;
 sem_t sem_plp;
 sem_t sem_pcp;
 sem_t mutex_cpu_list;
@@ -179,15 +185,17 @@ int semaphore_signal(char* sem_name);
 int escuchar_Nuevo_Programa(int sock_program);
 int escuchar_Programa(int sock_program, char* buffer);
 void create_pcb(char* buffer, int tamanio_buffer, int sock_program);
-int send_umv_instructions(int instrucciones_size, t_intructions* instrucciones_serializado);
+int create_segment(int process_id, int tamanio);
+int change_process(int process_id);
+int send_bytes(int base, int offset, int tamanio);
 
 void sort_plp(void);
 void planificador_sjn(void);
 t_nodo_segment* segment_create(int start, int offset);
 void segment_destroy(t_nodo_segment *self);
 int is_Connected_CPU(int socket);
-int escuchar_Nuevo_cpu(int sock_cpu,char* buffer);
-int escuchar_cpu(int sock_cpu, char* buffer);
+int escuchar_Nuevo_cpu(int sock_cpu);
+int escuchar_cpu(int sock_cpu);
 t_nodo_cpu* cpu_create(int socket);
 void cpu_remove(int socket);
 void cpu_update(int socket);
@@ -198,7 +206,7 @@ t_io_queue_nodo* io_queue_create(unsigned int process_id, int retardo);
 void retardo_io(void *ptr);
 void found_cpus_available(void);
 void depurar(int signum);
-int send_umv_code_segment(char* buffer, int pid);
+int send_segment_umv(int pid, char* buffer, int tamanio);
 int servidor_Programa(void);
 int servidor_CPU(void);
 int buscar_Mayor(int a, int b, int c);
@@ -207,7 +215,7 @@ int is_Connected_Program(int sock_program);
 void process_remove_by_socket(int socket);
 void planificador_rr(void);
 void ejecutar_proceso(int unique_id, int cpu_socket);
-int receive_umv_stack(void);
+int send_umv_stack(int process_id);
 
 int get_Segment_Start(int offset);			// A revisar si va o no va
 void io_destroy(t_io*); 					// A revisar si va o no va
