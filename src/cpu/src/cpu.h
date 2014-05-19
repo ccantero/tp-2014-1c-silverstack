@@ -24,13 +24,6 @@
 #include <src/silverstack.h>
 #include <semaphore.h>
 
-typedef struct {
-	char nombre;
-	int direccion;
-	int contenido;
-} t_variable;
-
-t_list *diccionario;
 t_pcb pcb;
 int port_kernel;
 int port_umv;
@@ -41,6 +34,7 @@ int sockUmv;
 struct sockaddr_in kernel_addr;
 struct sockaddr_in umv_addr;
 t_mensaje mensaje;
+t_msg_handshake msg_handshake;
 t_msg_cambio_proceso_activo msg_cambio_proceso_activo;
 t_msg_envio_bytes msg_envio_bytes;
 t_msg_solicitud_bytes msg_solicitud_bytes;

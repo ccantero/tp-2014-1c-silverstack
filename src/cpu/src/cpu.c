@@ -5,8 +5,6 @@
  *      Author: utnso
  */
 
-// El proceso cpu recibe como primer parámetro el archivo de configuracion y
-// como segundo parámetro el nombre de archivo de log.
 
 #include "cpu.h"
 
@@ -39,16 +37,15 @@ int main(int argc, char *argv[])
 	t_log *logger;
 	t_config *config;
 	int seguirEjecutando = 1; // Mediante la señal SIGUSR1 se puede dejar de ejecutar el cpu
-	diccionario = list_create();
 
 	// Obtengo datos de archivo de configuracion y se crea el logger
-	config = config_create(argv[1]);
+	config = config_create("../cpu.config");
 	strcpy(umvip, config_get_string_value(config, "UMV_IP"));
 	strcpy(kernelip, config_get_string_value(config, "KERNEL_IP"));
 	port_kernel = config_get_int_value(config, "PORT_KERNEL");
 	port_umv = config_get_int_value(config, "PORT_UMV");
 	config_destroy(config);
-	logger = log_create(argv[2], "cpu", true, LOG_LEVEL_INFO);
+	logger = log_create("../logcpu.log", "CPU", true, LOG_LEVEL_INFO);
 	log_info(logger, "Se leyo el arch de config y se creo el logger satisfactoriamente.");
 
 	// Me conecto al kernel
@@ -64,7 +61,6 @@ int main(int argc, char *argv[])
 	mensaje.tipo = HANDSHAKE;
 	strcpy(mensaje.mensaje, "Hola kernel.");
 	send(sockKernel, &mensaje, sizeof(t_mensaje), 0);
-	log_info(logger, "Esperando rta de handshake del kernel.");
 	recv(sockKernel, &mensaje, sizeof(t_mensaje), 0);
 	if (mensaje.tipo == HANDSHAKEOK)
 	{
@@ -77,13 +73,10 @@ int main(int argc, char *argv[])
 	}
 
 	// Handshake con la UMV
-	mensaje.id_proceso = CPU;
-	mensaje.tipo = HANDSHAKE;
-	strcpy(mensaje.mensaje, "Hola UMV.");
-	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-	log_info(logger, "Esperando rta de handshake de la umv.");
-	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-	if (mensaje.tipo == HANDSHAKEOK)
+	msg_handshake.tipo = CPU;
+	send(sockUmv, &msg_handshake, sizeof(t_msg_handshake), 0);
+	recv(sockUmv, &msg_handshake, sizeof(t_msg_handshake), 0);
+	if (msg_handshake.tipo == UMV)
 	{
 		log_info(logger, "Handshake con UMV satisfactorio.");
 	}
@@ -107,20 +100,24 @@ int main(int argc, char *argv[])
 		for (i = 0; i < quantum; i++)
 		{
 			// Preparo mensaje para la UMV
-			msg_solicitud_bytes.base = (int)pcb.instruction_index.index->start;
-			msg_solicitud_bytes.offset = (int)pcb.instruction_index.index->offset;
-			msg_solicitud_bytes.tamanio = 0;
+			msg_solicitud_bytes.base = pcb.code_segment;
+			msg_solicitud_bytes.offset = pcb.instruction_index;
+			msg_solicitud_bytes.tamanio = pcb.instruction_index + 4;
+			msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+			send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 			send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
 			// Espero la respuesta de la UMV
-			recv(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
+			recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+			char buffer[mensaje.datosNumericos];
+			recv(sockUmv, &buffer, sizeof(mensaje.datosNumericos), 0);
 			// Analizo la instruccion
-			analizadorLinea(strdup(msg_envio_bytes.buffer), &primitivas, &primitivasKernel);
+			analizadorLinea(strdup(buffer), &primitivas, &primitivasKernel);
 			// Aviso al kernel que termino el quantum del proceso y devuelvo pcb actualizado
 			mensaje.id_proceso = CPU;
 			mensaje.tipo = QUANTUMFINISH;
 			send(sockKernel, &mensaje, sizeof(t_mensaje), 0);
 			pcb.program_counter++;
-			pcb.instruction_index.index = pcb.instruction_index.index + sizeof(t_intructions);
+			pcb.instruction_index += 8;
 			send(sockKernel, &pcb, sizeof(t_pcb), 0);
 		}
 	}
@@ -162,28 +159,28 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 {
 	// 1) Reservar espacio en memoria para la variable
 	// 2) Registrar variable en el Stack
-	// 3) Registrar variable en el dicionario de variables
-	// 4) Guardar contexto actual en el pcb
-	// 5) Retornar la posicion de la variable
-	// TODO Guardar el contexto en el pcb del programa
-	// TODO Corregir mensajes con la UMV
+	// 3) Guardar contexto actual en el pcb
+	// 4) Retornar la posicion de la variable
 	t_puntero ptr;
-	msg_solicitud_bytes.base = 0;
-	msg_solicitud_bytes.offset = 0;
-	msg_solicitud_bytes.tamanio = 0;
+	char buffer;
+	char buffaux[5];
+	msg_solicitud_bytes.base = pcb.stack_pointer;
+	msg_solicitud_bytes.offset = pcb.context_actual;
+	msg_solicitud_bytes.tamanio = 5;
+	msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 	send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
-	recv(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
-	msg_envio_bytes.base = 0;
-	msg_envio_bytes.offset = 0;
-	msg_envio_bytes.tamanio = 0;
-	msg_envio_bytes.buffer[0] = var;
+	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	recv(sockUmv, &buffaux, sizeof(buffaux), 0);
+	msg_envio_bytes.base = pcb.stack_pointer;
+	msg_envio_bytes.offset = pcb.context_actual;
+	msg_envio_bytes.tamanio = 5;
+	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 	send(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
+	send(sockUmv, &buffer, sizeof(buffer), 0);
 	recv(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
-	t_variable variable;
-	variable.nombre = var;
-	variable.direccion = msg_envio_bytes.base;
-	ptr = msg_envio_bytes.base;
-	list_add(diccionario, &variable);
+	ptr = pcb.stack_pointer + pcb.context_actual;
+	pcb.context_actual += 5;
 	return ptr;
 }
 
@@ -191,24 +188,31 @@ t_puntero silverstack_obtenerPosicionVariable(t_nombre_variable var)
 {
 	// 1) Pedir a la UMV la posicion de la variable var
 	// 2) Calcular el desplazamiento respecto del stack
-	t_mensaje msg;
 	t_puntero ptr = 0;
-	int posAux;
-	msg.id_proceso = CPU;
-	msg.tipo = POSICIONREQUEST;
-	msg.mensaje[0] = var;
-	send(sockUmv, &msg, sizeof(t_mensaje), 0);
-	recv(sockUmv, &msg, sizeof(t_mensaje), 0);
-	if (msg.tipo == REQUESTOK)
+	char buffer[5];
+	int offset = 0;
+	// Busco la variable en el diccionario de variables en el stack
+	int no_encontre = 1;
+	while(no_encontre)
 	{
-		posAux = msg.datosNumericos;
+		msg_solicitud_bytes.base = pcb.stack_pointer;
+		msg_solicitud_bytes.offset = offset;
+		msg_solicitud_bytes.tamanio = 5;
+		msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+		send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+		send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
+		recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+		recv(sockUmv, &buffer, sizeof(buffer), 0);
+		if (buffer[0] == var)
+		{
+			no_encontre = 0;
+		}
+		else
+		{
+			offset += 5;
+		}
 	}
-	else
-	{
-		ptr = -1;
-		return ptr;
-	}
-	ptr = posAux - pcb.context_actual;
+	ptr = msg_solicitud_bytes.base + offset;
 	return ptr;
 }
 
@@ -226,26 +230,16 @@ void silverstack_asignar(t_puntero dir_var, t_valor_variable valor)
 {
 	// 1) Mando a la UMV el valor de la variable junto con su direccion
 	// 2) Actualizo diccionario de variables
-	t_mensaje msg;
-	msg.id_proceso = CPU;
-	msg.tipo = ASIGNACION;
-	msg.datosNumericos = dir_var;
-	send(sockUmv, &msg, sizeof(t_mensaje), 0);
-	msg.datosNumericos = valor;
-	send(sockUmv, &msg, sizeof(t_mensaje), 0);
-	recv(sockUmv, &msg, sizeof(t_mensaje), 0);
-	int i;
-	t_variable *varAux;
-	// Busco la variable en el diccionario para actualizarla
-	for (i = 0; i < list_size(diccionario); i++)
-	{
-		varAux = (t_variable *)list_get(diccionario, i);
-		if (varAux->direccion == (int)dir_var)
-		{
-			break;
-		}
-	}
-	varAux->contenido = valor;
+	int buffer;
+	msg_envio_bytes.base = pcb.stack_pointer;
+	msg_envio_bytes.offset = dir_var - pcb.stack_pointer + 1;
+	msg_envio_bytes.tamanio = 4;
+	msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+	send(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
+	buffer = valor;
+	send(sockUmv, &buffer, sizeof(buffer), 0);
+	recv(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
 }
 
 void silverstack_imprimir(t_valor_variable valor)
