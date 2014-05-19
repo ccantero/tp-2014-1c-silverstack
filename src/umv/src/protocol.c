@@ -11,57 +11,57 @@
 
 void consola (void* param)
 {
-
 	char comando[100];
 	char *c;
 	int flag_comandoOK;
-
+	int nuevo_valor;
+	log_info(logger, "Se lanzo el hilo de consola");
+	// Bucle principal esperando peticiones del usuario
 	for(;;)
 	{
-		//system("clear");
 		flag_comandoOK = 0;
-
-		log_info(logger, "Se lanzo el hilo de consola");
     	printf("-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-\n");
     	printf("         Bienvenido a la consola de UMV           \n");
     	printf("-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-\n");
-
     	printf("Ingrese el comando: \n");
     	printf(">");
-
     	scanf("%s",comando);
-    	c=strtok(comando,"\n");
-
+    	c = strtok(comando,"\n");
    		if (flag_comandoOK == 0 && strncmp(c,"operacion",strlen("operacion"))==0 )
    		{
    			printf("Llamar a funcion operacion\n");
    			flag_comandoOK = 1;
    		}
-
    		if (flag_comandoOK == 0 && strncmp(c,"retardo",strlen("retardo"))==0)
    		{
-   			printf("Llamar a funcion retardo\n");
+   			log_info(logger, "Se cambio el valor de retardo por consola.");
+   			printf("Nuevo valor de retardo: ");
+   			scanf("%d", &nuevo_valor);
+   			printf("Valor anterior de retardo: %d\n", retardo);
+   			cambiar_retardo(nuevo_valor);
+   			printf("Valor actual de retardo: %d\n", retardo);
    			flag_comandoOK = 1;
    		}
-
    		if (flag_comandoOK == 0 && strncmp(c,"algoritmo",strlen("algoritmo"))==0)
    		{
-   			printf("Llamar a funcion algoritmo\n");
+   			log_info(logger, "Se cambio el algoritmo por consola.");
+   			printf("Se cambio el algoritmo.\n");
+   			printf("Algoritmo anterior: %s\n", algoritmo);
+   			cambiar_algoritmo();
+   			printf("Algoritmo actual: %s\n", algoritmo);
    		   	flag_comandoOK = 1;
    		}
-
    		if (flag_comandoOK == 0 && strncmp(c,"compactacion",strlen("compactacion"))==0)
    		{
-   			printf("Llamar a funcion compactacion\n");
+   			log_info(logger, "Se pidio compactar memoria por consola.");
+   			compactar_memoria();
    		   	flag_comandoOK = 1;
    		}
-
    		if (flag_comandoOK == 0 && strncmp(c,"dump",strlen("dump"))==0)
    		{
    			printf("Llamar a funcion dump\n");
    		   	flag_comandoOK = 1;
    		}
-
    		if(flag_comandoOK == 0)
    		{
    			printf("Por favor verifique la sintaxis de los comandos utilizados\n");
@@ -73,7 +73,6 @@ void consola (void* param)
    			printf("\tdump\n");
    		}
    	}
-	return;
 }
 
 void GetInfoConfFile(void)
@@ -88,6 +87,7 @@ void GetInfoConfFile(void)
 	strcpy(algoritmo,config_get_string_value(config, "ALGORITMO"));
 	port=config_get_string_value(config, "PORT");
 	space=config_get_int_value(config, "DISK_SPACE");
+	retardo = config_get_int_value(config, "RETARDO");
 	return;
 }
 
@@ -199,3 +199,110 @@ int sockets_send(int sockfd, t_mensaje *mensaje, char *data) {
 int atenderPedido(int sockfd) {
 	return 0;
 }
+
+void cambiar_algoritmo()
+{
+	pthread_mutex_lock(&semAlgoritmo);
+	if (!strcmp(algoritmo, "WF") ||
+		!strcmp(algoritmo, "Wf") ||
+		!strcmp(algoritmo, "wf") ||
+		!strcmp(algoritmo, "Worst-Fit") ||
+		!strcmp(algoritmo, "Worst-fit") ||
+		!strcmp(algoritmo, "worst-fit"))
+	{
+		strcpy(algoritmo, "First-Fit");
+	}
+	else
+	{
+		strcpy(algoritmo, "Worst-Fit");
+	}
+	pthread_mutex_unlock(&semAlgoritmo);
+}
+
+void cambiar_retardo(int valor)
+{
+	pthread_mutex_lock(&semRetardo);
+	retardo = valor;
+	pthread_mutex_unlock(&semRetardo);
+}
+
+void compactar_memoria()
+{
+	pthread_mutex_lock(&semCompactacion);
+	int primer_direccion = space;
+	int primer_programa;
+	int i;
+	int j;
+	int nueva_direccion = 0;
+	int arranque = 0;
+	t_info_programa *prog;
+	t_info_segmento *segm;
+	int cant_segmentos = obtener_cant_segmentos();
+	int cont;
+	if (cant_segmentos != 0)
+	{
+		// TODO Reflejar cambios en "memoria"
+		printf("Compactando...\n");
+		for (cont = 0; cont < cant_segmentos; cont++)
+		{
+			// Busco la menor direccion en mi lista de segmentos utilizados
+			for (i = 0; i < list_size(list_programas); i++)
+			{
+				prog = list_get(list_programas, i);
+				for (j = 0; j < list_size(prog->segmentos); j++)
+				{
+					segm = list_get(prog->segmentos, j);
+					if (segm->dirFisica < primer_direccion && segm->dirFisica >= arranque)
+					{
+						primer_direccion = segm->dirFisica;
+						primer_programa = segm->id;
+					}
+					else
+					{
+						// TODO
+					}
+				}
+			}
+			for (i = 0; i < list_size(list_programas); i++)
+			{
+				prog = list_get(list_programas, i);
+				if (prog->programa == primer_programa)
+				{
+					break;
+				}
+			}
+			for (j = 0; j < list_size(prog->segmentos); j++)
+			{
+				segm = list_get(prog->segmentos, j);
+				if (segm->dirFisica == primer_direccion)
+				{
+					break;
+				}
+			}
+			segm->dirFisica = nueva_direccion;
+			nueva_direccion = segm->tamanio + 1;
+			primer_direccion = space;
+			arranque = nueva_direccion;
+		}
+	}
+	else
+	{
+		printf("Todavia no hay segmentos a compactar.\n");
+	}
+	pthread_mutex_unlock(&semCompactacion);
+}
+
+int obtener_cant_segmentos()
+{
+	int cant = 0;
+	int i, j;
+	t_info_programa *prog;
+	t_info_segmento *segm;
+	for (i = 0; i < list_size(list_programas); i++)
+	{
+		prog = list_get(list_programas, i);
+		cant += list_size(prog->segmentos);
+	}
+	return cant;
+}
+

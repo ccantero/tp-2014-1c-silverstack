@@ -35,16 +35,23 @@ typedef struct {
 
 typedef struct {
 	char* programa;
-	t_info_segmento* segmentos;
+	t_list *segmentos;
 } t_info_programa;
 
 t_log* logger;
 t_list* list_programas;
 t_dictionary* dic_cpus;
 
+pthread_mutex_t semRetardo = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t semAlgoritmo = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t semCompactacion = PTHREAD_MUTEX_INITIALIZER;
+
 int sockPrin,space, socketKernel;
-char hostip[16],algoritmo[3];
-char* memoria, *myip, *port;
+char hostip[16],algoritmo[16];
+char* memoria, *myip;
+int port;
+int proceso_activo;
+int retardo;
 
 void consola (void* param);
 void GetInfoConfFile(void);
@@ -54,5 +61,10 @@ int sockets_createServer(char *addr, char *port, int backlog);
 int sockets_send(int sockfd, t_mensaje *m, char *mensaje);
 int sockets_accept(int sockfd);
 int atenderPedido(int sockfd);
+void compactar_memoria();
+int obtener_cant_segmentos();
+void cambiar_retardo(int valor);
+void cambiar_algoritmo();
+
 
 #endif /* PROTOCOL_H_ */
