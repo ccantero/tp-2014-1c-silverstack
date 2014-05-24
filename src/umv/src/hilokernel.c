@@ -7,6 +7,9 @@
 
 #include "protocol.h"
 
+t_info_programa* crearPrograma(int pid);
+int pedidoDeMemoria(int pid, int tamanioPedido, t_info_segmento* segm);
+
 void *hilokernel(void *socket_desc)
 {
     //Get the socket descriptor
@@ -34,7 +37,9 @@ int ReservarNuevoPrograma(int pid) {
 	t_mensaje m;
 
 	sem_wait(&mutex_program_list);
-	list_add(list_programas, crearPrograma(pid));
+
+	t_info_programa* prog = crearPrograma(pid);
+	list_add(list_programas, prog);
 	sem_post(&mutex_program_list);
 	recibirMensaje(socketKernel, &m);
 	int tamanioPedido = m.datosNumericos;
@@ -42,6 +47,7 @@ int ReservarNuevoPrograma(int pid) {
 	t_info_segmento segm;
 	pedidoDeMemoria(pid, tamanioPedido, &segm);
 	char* codigo = malloc(tamanioPedido);
+	recv(socketKernel, codigo, tamanioPedido, 0);
 	guardarEnSegmento(pid, segm.id, codigo);
 	free(codigo);
 
@@ -52,18 +58,23 @@ int ReservarNuevoPrograma(int pid) {
 	return 0;
 }
 
-int crearPrograma(int pid) {
-	return 0;
+t_info_programa* crearPrograma(int pid) {
+	t_info_programa* prog = malloc(sizeof(t_info_programa));
+	prog->pid = pid;
+	prog->segmentos = list_create();
+	return prog;
 }
 
 int pedidoDeMemoria(int pid, int tamanioPedido, t_info_segmento* segm) {
-	t_mensaje m;
 	int dir;
 	if((dir = buscarMemoriaDisponible(tamanioPedido))) {
-		segm = crearSegmento(pid, dir, tamanioPedido);
+		crearSegmento(pid, dir, tamanioPedido);
 		return 1;
 	}
-
-	sockets_send(socketKernel, LOW_MEMORY, 0, "");
+	t_mensaje m;
+	m.datosNumericos = 0;
+	m.id_proceso = UMV;
+	m.tipo = LOW_MEMORY;
+	sockets_send(socketKernel, &m, "");
 	return 0;
 }

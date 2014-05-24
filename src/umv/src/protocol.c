@@ -120,7 +120,7 @@ int atenderConexionNueva(int newfd) {
 	return nbytes;
 }
 
-int lanzarHiloKernel(newfd) {
+int lanzarHiloKernel(int newfd) {
 	pthread_t new_th;
 	if(pthread_create(&new_th, NULL, hilokernel, (void*) &newfd) < 0)
 				{
@@ -130,7 +130,7 @@ int lanzarHiloKernel(newfd) {
 	return 1;
 }
 
-int lanzarHiloCPU(newfd) {
+int lanzarHiloCPU(int newfd) {
 	pthread_t new_th;
 	if(pthread_create(&new_th, NULL, hilocpu, (void*) &newfd) < 0)
 				{
@@ -279,7 +279,7 @@ void compactar_memoria()
 					if (segm->dirFisica < primer_direccion && segm->dirFisica >= arranque)
 					{
 						primer_direccion = segm->dirFisica;
-
+						primer_programa = prog->pid;
 					}
 					else
 					{
@@ -290,7 +290,7 @@ void compactar_memoria()
 			for (i = 0; i < list_size(list_programas); i++)
 			{
 				prog = list_get(list_programas, i);
-				if (prog->programa == primer_programa)
+				if (prog->pid == primer_programa)
 				{
 					break;
 				}
@@ -330,6 +330,16 @@ int obtener_cant_segmentos()
 	return cant;
 }
 
+int guardarEnMemoria(t_info_segmento* segm,char* buffer) {
+	int lenBuffer = string_length(buffer);
+	if(segm->tamanio < lenBuffer) {
+		log_error(logger, "Segmentation fault.");
+		return 0;
+	}
+	memcpy(memoria + segm->dirFisica, buffer, lenBuffer);
+	return 1;
+}
+
 int buscarMemoriaDisponible(int tamanio)
 {
 	int dir;
@@ -355,7 +365,7 @@ int getFirstFitMemory(int memSize)
 
 	while((currentAddress + memSize) <= (memoria + space)) {
 
-		if(findAddressOfLastSegmentIn(currentAddress, memSize, &lastSegmentAddress))
+		if(findLastSegmentIn(currentAddress, memSize, &lastSegmentAddress))
 			currentAddress = lastSegmentAddress.dirFisica + lastSegmentAddress.tamanio + 1;
 		else
 			break;
@@ -372,21 +382,56 @@ int getWorstFitMemory(int memSize)
 	return 0;
 }
 
-t_info_segmento* crearSegmento(int pid, int dirFisica, int tamanioPedido) {
+int crearSegmento(int pid, int dirFisica, int tamanioPedido) {
 	t_info_segmento* s = malloc(sizeof(t_info_segmento));
 	s.dirFisica = dirFisica;
 	s.dirLogica = generarDireccionLogica(pid);
 	s.tamanio = tamanioPedido;
-	return s;
+	t_info_programa prog;
+	if(getProgramBy(pid, &prog)) {
+		list_add(prog.segmentos, &prog);
+		return 1;
+	}
+
+	return 0;
 }
 
-int guardarEnSegmento(int pid, int segmId, char* codigo) {
-	t_info_programa prog = list_find(list_programas, )
+int guardarEnSegmento(int pid, int segmId, char* buffer) {
+	t_info_programa prog;
+	t_info_segmento segm;
+	if(getProgramById(pid, &prog)) {
+		if(getSegmentById(segmId, &prog, &segm)) {
+			if(guardarEnMemoria(segm, buffer))
+				return 1;
+		}
+	}
+	return 0;
 }
 
-int getProgramBySegmentId(int segmId, t_info_programa* prog) {
+int getProgramById(int pid, t_info_programa* prog) {
+	int _existe_pid(t_info_programa *p) {
+		return p->pid == pid;
+	}
 
-	if(list_any_satisfy(list_programas, ))
+	if(list_any_satisfy(list_programas, (void *) _existe_pid)) {
+		 prog = list_find(list_programas, (void *) _existe_pid);
+		 return 1;
+	}
+
+	return 0;
+}
+
+int getSegmentById(int segmId, t_info_programa* prog, t_info_segmento* segm) {
+	int _existe_segm(t_info_segmento *s) {
+		return s->id == segmId;
+	}
+
+	if(list_any_satisfy(prog->segmentos, (void *) _existe_segm)) {
+		 segm = list_find(prog->segmentos, (void *) _existe_segm);
+		 return 1;
+	}
+
+	return 0;
 }
 
 int getSegmentByBase(int address, t_info_segmento* segm)
@@ -409,7 +454,6 @@ int getSegmentByBase(int address, t_info_segmento* segm)
 
 int findLastSegmentIn(int address, int limit, t_info_segmento segm)
 {
-
 	int i, j, maxBaseAddress = address;
 
 	for (i = 0; i < list_size(list_programas); i++)

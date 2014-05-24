@@ -34,7 +34,7 @@ typedef struct {
 } t_info_segmento;
 
 typedef struct {
-	char* programa;
+	int pid;
 	t_list *segmentos;
 } t_info_programa;
 
@@ -66,6 +66,18 @@ void compactar_memoria();
 int obtener_cant_segmentos();
 void cambiar_retardo(int valor);
 void cambiar_algoritmo();
-
-
+int findLastSegmentIn(int address, int limit, t_info_segmento segm);
+int getSegmentByBase(int address, t_info_segmento* segm);
+int getProgramBySegmentId(int segmId, t_info_programa* prog);
+int guardarEnSegmento(int pid, int segmId, char* codigo);
+t_info_segmento* crearSegmento(int pid, int dirFisica, int tamanioPedido);
+int getFirstFitMemory(int memSize);
+int getWorstFitMemory(int memSize);
+int buscarMemoriaDisponible(int tamanio);
+int recibirMensaje(int newfd, t_mensaje* m);
+int lanzarHiloCPU(int newfd);
+int lanzarHiloKernel(int newfd);
+int guardarEnMemoria(t_info_segmento* segm,char* buffer);
+void *hilokernel(void *socket_desc);
+void *hilocpu(void *socket_desc);
 #endif /* PROTOCOL_H_ */
