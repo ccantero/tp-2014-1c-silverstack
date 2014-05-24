@@ -42,20 +42,21 @@ t_log* logger;
 t_list* list_programas;
 t_dictionary* dic_cpus;
 
+sem_t mutex_program_list;
+
 pthread_mutex_t semRetardo = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t semAlgoritmo = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t semCompactacion = PTHREAD_MUTEX_INITIALIZER;
 
 int sockPrin,space, socketKernel;
 char hostip[16],algoritmo[16];
-char* memoria, *myip;
-int port;
+char* memoria, *myip, *port;
 int proceso_activo;
 int retardo;
 
 void consola (void* param);
 void GetInfoConfFile(void);
-int aceptarConexionNueva(int newfd, fd_set *lista);
+int atenderConexionNueva(int newfd);
 int enviarHandshake(int sockfd);
 int sockets_createServer(char *addr, char *port, int backlog);
 int sockets_send(int sockfd, t_mensaje *m, char *mensaje);

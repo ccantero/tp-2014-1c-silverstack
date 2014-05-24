@@ -91,43 +91,67 @@ void GetInfoConfFile(void)
 	return;
 }
 
-int aceptarConexionNueva(int newfd, fd_set *lista) {
+int atenderConexionNueva(int newfd) {
 	t_mensaje m;
 	int nbytes;
 
-	if ((nbytes = recv(newfd, &m, sizeof(m), MSG_WAITALL)) <= 0) {
+	recibirMensaje(newfd, &m);
+
+	switch (m.id_proceso) {
+	case KERNEL:
+		nbytes = enviarHandshake(newfd);
+		if (nbytes < 1)
+			log_error(logger, "Envio handshake a Kernel.");
+		else
+			lanzarHiloKernel(newfd);
+		break;
+	case CPU:
+		nbytes = enviarHandshake(newfd);
+		if (nbytes < 1)
+			log_error(logger, "Envio handshake a CPU.");
+		else
+			lanzarHiloCPU(newfd);
+		break;
+	default:
+		return 0;
+		break;
+	}
+
+	return nbytes;
+}
+
+int lanzarHiloKernel(newfd) {
+	pthread_t new_th;
+	if(pthread_create(&new_th, NULL, hilokernel, (void*) &newfd) < 0)
+				{
+					log_error(logger, "No se pudo crear el hilo kernel.");
+					return 0;
+				}
+	return 1;
+}
+
+int lanzarHiloCPU(newfd) {
+	pthread_t new_th;
+	if(pthread_create(&new_th, NULL, hilocpu, (void*) &newfd) < 0)
+				{
+					log_error(logger, "No se pudo crear el hilo cpu.");
+					return 0;
+				}
+	return 1;
+}
+
+int recibirMensaje(int newfd, t_mensaje* m) {
+	int nbytes;
+	if ((nbytes = recv(newfd, m, sizeof(t_mensaje), MSG_WAITALL)) <= 0) {
 		if (nbytes == 0) {//conexion cerrada
-			printf("Select: socket %d desconectado.\n", newfd);
+			log_error(logger, "socket %d desconectado.\n", newfd);
 		}
 		else {
 			log_error(logger, "receive");
 		}
 		close(newfd);
-		FD_CLR(newfd, lista);
 	}
-	else
-	{
-		switch (m.id_proceso) {
-		case KERNEL:
-			nbytes = enviarHandshake(newfd);
-			if (nbytes == -1)
-				log_error(logger, "Envio handshake a Kernel.");
-			socketKernel = newfd;
-			FD_SET(newfd, lista);
-			break;
-		case CPU:
-			nbytes = enviarHandshake(newfd);
-			if (nbytes == -1)
-				log_error(logger, "Envio handshake a CPU.");
-
-			FD_SET(newfd, lista);
-			break;
-		default:
-			log_error(logger, "No se identifica proceso en handshake.");
-			break;
-		}
-	}
-	return newfd;
+	return nbytes;
 }
 
 int enviarHandshake(int sockfd) {
@@ -255,7 +279,7 @@ void compactar_memoria()
 					if (segm->dirFisica < primer_direccion && segm->dirFisica >= arranque)
 					{
 						primer_direccion = segm->dirFisica;
-						primer_programa = segm->id;
+
 					}
 					else
 					{
@@ -306,3 +330,107 @@ int obtener_cant_segmentos()
 	return cant;
 }
 
+int buscarMemoriaDisponible(int tamanio)
+{
+	int dir;
+	switch(algoritmo)
+	{
+	case "First-Fit":
+		dir = getFirstFitMemory(tamanio);
+		break;
+	case "Worst-Fit":
+		dir = getWorstFitMemory(tamanio);
+		break;
+	default:
+		dir = 0;
+		break;
+	}
+	return dir;
+}
+
+int getFirstFitMemory(int memSize)
+{
+	t_info_segmento lastSegmentAddress;
+	int currentAddress = memoria;
+
+	while((currentAddress + memSize) <= (memoria + space)) {
+
+		if(findAddressOfLastSegmentIn(currentAddress, memSize, &lastSegmentAddress))
+			currentAddress = lastSegmentAddress.dirFisica + lastSegmentAddress.tamanio + 1;
+		else
+			break;
+	}
+
+	if ((currentAddress + memSize) >= (memoria + space))
+		return 0;
+
+	return currentAddress;
+}
+
+int getWorstFitMemory(int memSize)
+{
+	return 0;
+}
+
+t_info_segmento* crearSegmento(int pid, int dirFisica, int tamanioPedido) {
+	t_info_segmento* s = malloc(sizeof(t_info_segmento));
+	s.dirFisica = dirFisica;
+	s.dirLogica = generarDireccionLogica(pid);
+	s.tamanio = tamanioPedido;
+	return s;
+}
+
+int guardarEnSegmento(int pid, int segmId, char* codigo) {
+	t_info_programa prog = list_find(list_programas, )
+}
+
+int getProgramBySegmentId(int segmId, t_info_programa* prog) {
+
+	if(list_any_satisfy(list_programas, ))
+}
+
+int getSegmentByBase(int address, t_info_segmento* segm)
+{
+	int i;
+	for (i = 0; i < list_size(list_programas); i++)
+	{
+		t_info_programa* prog = list_get(list_programas, i);
+		int _es_su_base(t_info_segmento *segm) {
+			return segm->dirFisica == address;
+		}
+
+		if(list_any_satisfy(prog->segmentos, (void *) _es_su_base)) { //TODO: hacer funcion que pasandole una dir sepa si es su base
+			segm = list_find(prog->segmentos, _es_su_base);
+			return 1;
+		}
+	}
+	return 0;
+}
+
+int findLastSegmentIn(int address, int limit, t_info_segmento segm)
+{
+
+	int i, j, maxBaseAddress = address;
+
+	for (i = 0; i < list_size(list_programas); i++)
+	{
+		t_info_programa* prog = list_get(list_programas, i);
+		int _existe_segmento(t_info_segmento *segm) {
+			return segm->dirFisica >= address && segm->dirFisica <= (address + limit);
+		}
+
+		t_list* segmentosEnMemoria = list_filter(prog, _existe_segmento);
+
+		for (j = 0; j < list_size(segmentosEnMemoria); j++) {
+			t_info_segmento* segmMax = list_get(segmentosEnMemoria, j);
+			if (segmMax->dirFisica > maxBaseAddress)
+				maxBaseAddress = segmMax->dirFisica;
+		}
+	}
+	if(!getSegmentByBase(maxBaseAddress, &segm))
+	{
+		return 0;
+	}
+
+	return 1;
+}
