@@ -419,12 +419,16 @@ int semaphore_signal(char* sem_name)
 		if(strcmp(semaphore_id,s->identifier) == 0)
 		{
 			s->value = s->value + 1;
-			if(s->value >= 0 && queue_size(s->queue) > 0)
+			if(s->value >= 0 )
 			{
-				nodo = queue_pop(s->queue);
-				pcb_move(nodo->process_id,list_pcb_blocked,list_pcb_ready);
+				while(queue_size(s->queue) > 0)
+				{
+					nodo = queue_pop(s->queue);
+					pthread_mutex_lock(&mutex_pedidos);
+					queue_push(queue_rr,pedido_create(nodo->process_id,PROCESS_BLOCKED,PROCESS_READY));
+					pthread_mutex_unlock(&mutex_pedidos);
+				}
 			}
-
 			flag_found = 1;
 		}
 	}
@@ -586,7 +590,7 @@ int escuchar_Nuevo_Programa(int sock_program)
 	}
 
 	log_info(logger, "Nueva conexion lograda con programa");
-	//return new_socket;
+
 	memset(buffer,'\0',MAXDATASIZE);
 
 	if((numbytes=read(new_socket,buffer,SIZE_MSG))<=0)
@@ -619,8 +623,7 @@ int escuchar_Nuevo_Programa(int sock_program)
 	log_info(logger, "Se recibieron %d bytes desde programa", mensaje.datosNumericos);
 	log_info(logger, "File \n%s", buffer);
 
-	// TODO: Uncomment this line
-	//create_pcb(buffer,numbytes, new_socket);
+	create_pcb(buffer,numbytes, new_socket);
 
 	return new_socket;
 }
@@ -1503,7 +1506,9 @@ void asignar_valor_VariableCompartida(int sock_cpu, char* global_name, int value
 		int pid = get_process_id_by_sock_cpu(sock_cpu);
 		if(pid != -1)
 		{
+			pthread_mutex_lock(&mutex_pedidos);
 			queue_push(queue_rr,pedido_create(pid,PROCESS_EXECUTE,PROCESS_EXIT));
+			pthread_mutex_unlock(&mutex_pedidos);
 			log_error(logger, "Variable Compartida no encontrada. Proceso %d exit", pid);
 		}
 	}
@@ -1731,7 +1736,6 @@ void io_wait(unsigned int pid, char* io_name, int amount)
 	t_io* io_node;
 
 	strcpy(io_id,io_name);
-	queue_push(queue_rr,pedido_create(pid,PROCESS_EXECUTE,PROCESS_BLOCKED));
 
 	void _get_io_node(t_io *s)
 	{
@@ -1739,6 +1743,9 @@ void io_wait(unsigned int pid, char* io_name, int amount)
 		{
 			io_node = s;
 			queue_push(s->io_queue, io_queue_create(process_id,s->retardo * retardo));
+			pthread_mutex_lock(&mutex_pedidos);
+			queue_push(queue_rr,pedido_create(pid,PROCESS_EXECUTE,PROCESS_BLOCKED));
+			pthread_mutex_unlock(&mutex_pedidos);
 			log_info(logger,"Se Agrega a la io_queue %s el proceso %d con retardo %d", s->name, process_id, s->retardo * retardo);
 			flag_found = 1;
 		}
@@ -1783,6 +1790,8 @@ void retardo_io(void *ptr)
 	name_io = (char *) ptr;
 	t_io* io_node;
 	t_io_queue_nodo* io_queue_nodo;
+	struct timeval tv;
+
 
 	void _get_io_node(t_io *s)
 	{
@@ -1808,9 +1817,16 @@ void retardo_io(void *ptr)
 			/* END CRITICAL REGION */
 		sem_post(&free_io_queue); // Up Semaphore
 		log_info(logger,"[retardo_io] Dormir = %d",io_queue_nodo->retardo);
-		//TODO: Optimizar tema de sleep
-		sleep(io_queue_nodo->retardo / 1000);
+		tv.tv_sec = 0;
+		tv.tv_usec = io_queue_nodo->retardo * 1000;
+		if (select(0, NULL, NULL, NULL, &tv) == -1)
+		{
+			log_error(logger, "Error en funcion select en retardo_io");;
+			return;
+		}
+		pthread_mutex_lock(&mutex_pedidos);
 		queue_push(queue_rr,pedido_create(io_queue_nodo->pcb,PROCESS_BLOCKED,PROCESS_READY));
+		pthread_mutex_unlock(&mutex_pedidos);
 		log_info(logger,"[retardo_io] Finalizo el retardo = %d",name_io);
 		free(io_queue_nodo);
 	}
@@ -1892,7 +1908,7 @@ void planificador_rr(void)
 				{
 					case PROCESS_BLOCKED:
 					{
-
+						process_update(new_pedido->process_id,PROCESS_EXECUTE,PROCESS_BLOCKED);
 					}
 					case PROCESS_READY:
 					{
@@ -1915,12 +1931,25 @@ void planificador_rr(void)
 					default:
 					{
 						log_error(logger, "No se reconoce el new_pedido->next_status");
+						break;
 					}
 				}
 				break;
 			}
 			case PROCESS_BLOCKED:
 			{
+				switch(new_pedido->new_status)
+				{
+					case PROCESS_READY:
+					{
+						process_update(new_pedido->process_id,PROCESS_BLOCKED,PROCESS_READY);
+					}
+					default:
+					{
+						log_error(logger, "No se reconoce el new_pedido->next_status");
+						break;
+					}
+				}
 				break;
 			}
 			default:
@@ -2051,9 +2080,21 @@ void escuchar_umv(void)
 
 int is_Connected_Program(int sock_program)
 {
-	// TODO: Desarrollar Funcion
-	log_error(logger, "Funcion is_Connected_Program() aun no desarrollada");
-	return -1;
+	int sock = sock_program;
+
+	int _is_Connected_Program(t_process *p)
+	{
+		return p->program_socket == sock;
+	}
+
+	t_process *process = list_find(list_process, (void*) _is_Connected_Program);
+
+	if(process == NULL)
+	{
+		return -1;
+	}
+
+	return 0;
 }
 
 /*
@@ -2093,8 +2134,15 @@ void process_execute(int unique_id, int socket)
 {
 	int flag_process_found = 0;
 	int flag_cpu_found = 0;
+	int flag_pcb_found = 0;
 	int process_id = unique_id;
 	int cpu_socket = socket;
+	int numbytes;
+	int index = 0;
+	int indice_buscado = 0;
+	t_mensaje mensaje;
+
+	t_pcb* pcb;
 
 	void _get_cpu_element(t_nodo_cpu *cpu)
 	{
@@ -2114,6 +2162,20 @@ void process_execute(int unique_id, int socket)
 		}
 	}
 
+	void _get_pcb_element(t_pcb *s)
+	{
+		if(s->unique_id == process_id)
+		{
+			indice_buscado = index;
+			flag_pcb_found = 1;
+		}
+		index++;
+	}
+
+	sem_wait(&mutex_execute_queue);
+	list_iterate(list_pcb_execute, (void*) _get_pcb_element);
+	sem_post(&mutex_execute_queue);
+
 	sem_wait(&mutex_cpu_list);
 	list_iterate(list_cpu, (void*) _get_cpu_element); // CPU_WORKING
 	sem_post(&mutex_cpu_list);
@@ -2122,9 +2184,53 @@ void process_execute(int unique_id, int socket)
 	list_iterate(list_process, (void*) _get_process_element); // CPU_SOCKET
 	sem_post(&mutex_process_list);
 
-	if(flag_process_found == 0 || flag_cpu_found == 0)
+	if(flag_process_found == 0 || flag_cpu_found == 0 || flag_pcb_found == 0)
 	{
 		log_error(logger, "PID %d no encontrado en process_execute", process_id);
+		return;
+	}
+
+	pcb = list_remove(list_pcb_execute, indice_buscado);
+
+	if((numbytes=write(cpu_socket,&pcb,sizeof(t_pcb)))<=0)
+	{
+		log_error(logger, "Error en el write en process_execute");
+
+		close(cpu_socket);
+		cpu_remove(cpu_socket);
+		pthread_mutex_lock(&mutex_pedidos);
+		queue_push(queue_rr,pedido_create(process_id,PROCESS_EXECUTE,PROCESS_EXIT));
+		pthread_mutex_unlock(&mutex_pedidos);
+		return;
+	}
+
+	mensaje.id_proceso = KERNEL;
+	mensaje.datosNumericos = quantum;
+
+	if((numbytes=write(cpu_socket,&mensaje,SIZE_MSG))<=0)
+	{
+		log_error(logger, "Error en el write en process_execute");
+
+		close(cpu_socket);
+		cpu_remove(cpu_socket);
+		pthread_mutex_lock(&mutex_pedidos);
+		queue_push(queue_rr,pedido_create(process_id,PROCESS_EXECUTE,PROCESS_EXIT));
+		pthread_mutex_unlock(&mutex_pedidos);
+		return;
+	}
+
+	mensaje.id_proceso = KERNEL;
+	mensaje.datosNumericos = retardo;
+
+	if((numbytes=write(cpu_socket,&mensaje,SIZE_MSG))<=0)
+	{
+		log_error(logger, "Error en el write en process_execute");
+
+		close(cpu_socket);
+		cpu_remove(cpu_socket);
+		pthread_mutex_lock(&mutex_pedidos);
+		queue_push(queue_rr,pedido_create(process_id,PROCESS_EXECUTE,PROCESS_EXIT));
+		pthread_mutex_unlock(&mutex_pedidos);
 		return;
 	}
 
@@ -2186,7 +2292,7 @@ void pcb_update(t_pcb* new_pcb, unsigned char previous_status)
 	sem_post(mutex_list);
 
 	if(flag_found == 0)
-		log_error(logger, "PID %d no encontrado en pcb_move", process_id);
+		log_error(logger, "PID %d no encontrado en pcb_update", process_id);
 
 	sem_wait(mutex_list);
 	t_pcb *old_pcb = list_remove(pcb_from, indice_buscado);
@@ -2229,7 +2335,7 @@ int get_sock_cpu_by_process_id(int pid)
 
 	if(flag_process_found == 0)
 	{
-		log_error(logger, "PID %d no encontrado en pcb_move", process_id);
+		log_error(logger, "PID %d no encontrado en get_sock_cpu_by_process_id", process_id);
 		return -1;
 	}
 	return cpu_socket;
@@ -2263,7 +2369,7 @@ int get_process_id_by_sock_cpu(int sock_cpu)
 
 	if(flag_process_found == 0)
 	{
-		log_error(logger, "PID %d no encontrado en pcb_move", process_id);
+		log_error(logger, "PID %d no encontrado en get_process_id_by_sock_cpu", process_id);
 		return -1;
 	}
 	return process_id;
