@@ -153,6 +153,7 @@ t_global* global_create(char *global_name)
 /*
  * Function: global_update
  * Purpose: Update a global variable's value
+ * 			Returns 0 if fails. Otherwise it returns 1
  * Created on: 02/05/2014
  * Author: SilverStack
 */
@@ -172,7 +173,7 @@ int global_update_value(char* global_name, int value)
 
 	void _get_global(t_global *s)
 	{
-		if(strcmp(global_id,s->identifier) == 0)
+		if(flag_mod == 0 && strcmp(global_id,s->identifier) == 0)
 		{
 			s->value = nuevo_valor;
 			flag_mod = 1;
@@ -618,6 +619,7 @@ int escuchar_Nuevo_Programa(int sock_program)
 	log_info(logger, "Se recibieron %d bytes desde programa", mensaje.datosNumericos);
 	log_info(logger, "File \n%s", buffer);
 
+	// TODO: Uncomment this line
 	//create_pcb(buffer,numbytes, new_socket);
 
 	return new_socket;
@@ -663,9 +665,8 @@ int escuchar_Programa(int sock_program, char* buffer)
 			return -1;
 		}
 
-		//log_info(logger, "Se recibieron %d bytes desde programa", hdr.pay_len);
-		log_info(logger, "File \n%s", buffer);
-		create_pcb(buffer,numbytes, sock_program);
+		//log_info(logger, "File \n%s", buffer);
+		pcb_create(buffer,numbytes, sock_program);
 
 		return 0;
 	}
@@ -683,7 +684,7 @@ int escuchar_Programa(int sock_program, char* buffer)
  * Author: SilverStack
 */
 
-void create_pcb(char* buffer, int tamanio_buffer, int sock_program)
+void pcb_create(char* buffer, int tamanio_buffer, int sock_program)
 {
 	t_medatada_program* metadata;
 	t_pcb* new_pcb = (t_pcb*) malloc(sizeof(t_pcb));
@@ -697,11 +698,11 @@ void create_pcb(char* buffer, int tamanio_buffer, int sock_program)
 	metadata = metadatada_desde_literal(buffer);
 
 	new_pcb->unique_id = process_Id;
-	new_pcb->code_segment = send_segment_umv(++process_Id, buffer, tamanio_buffer);
-	new_pcb->stack_segment = send_umv_stack(process_Id);
+	new_pcb->code_segment = umv_send_segment(++process_Id, buffer, tamanio_buffer);
+	new_pcb->stack_segment = umv_send_segment(process_Id, buffer, -1);
 	new_pcb->stack_pointer = new_pcb->stack_segment;
-	new_pcb->etiquetas_index = send_segment_umv(process_Id, (char*) metadata->instrucciones_serializado, metadata->instrucciones_size);
-	new_pcb->etiquetas_index = send_segment_umv(process_Id, (char*) metadata->etiquetas, metadata->etiquetas_size);
+	new_pcb->etiquetas_index = umv_send_segment(process_Id, (char*) metadata->instrucciones_serializado, metadata->instrucciones_size);
+	new_pcb->etiquetas_index = umv_send_segment(process_Id, (char*) metadata->etiquetas, metadata->etiquetas_size);
 	new_pcb->program_counter = metadata->instruccion_inicio;
 	new_pcb->context_actual = 0;
 	new_pcb->peso = 5 * metadata->cantidad_de_etiquetas +
@@ -727,7 +728,7 @@ void create_pcb(char* buffer, int tamanio_buffer, int sock_program)
  * Author: SilverStack
 */
 
-int create_segment(int process_id, int tamanio)
+int umv_create_segment(int process_id, int tamanio)
 {
 	char* buffer_msg;
 	int numbytes;
@@ -767,7 +768,7 @@ int create_segment(int process_id, int tamanio)
  * Author: SilverStack
 */
 
-int change_process(int process_id)
+int umv_change_process(int process_id)
 {
 	char* buffer_msg;
 	int numbytes;
@@ -804,7 +805,7 @@ int change_process(int process_id)
  * Author: SilverStack
 */
 
-int send_bytes(int base, int offset, int tamanio)
+int umv_send_bytes(int base, int offset, int tamanio)
 {
 	char* buffer_msg;
 	int numbytes;
@@ -837,13 +838,66 @@ int send_bytes(int base, int offset, int tamanio)
 }
 
 /*
+ * Function: destroy_segment
+ * Purpose: Send to UMV instrucction to destroy all related segments with process
+ * Created on: 20/05/2014
+ * Author: SilverStack
+*/
+
+void umv_destroy_segment(int process_id)
+{
+	char* buffer_msg;
+	t_mensaje mensaje;
+	int size_mensaje = sizeof(t_mensaje);
+	int numbytes;
+	t_msg_destruir_segmentos msg_destruir_segmentos;
+	int size_msg_destruir_segmentos = sizeof(t_msg_destruir_segmentos);
+
+	if((buffer_msg = (char*) malloc (sizeof(char) * MAXDATASIZE )) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria destroy_segment");
+		return ;
+	}
+
+	mensaje.id_proceso = KERNEL;
+	mensaje.tipo = DESTRUIRSEGMENTOS;
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+	memcpy(buffer_msg,&mensaje,size_mensaje);
+
+	if((numbytes=write(sock_umv,buffer_msg,size_mensaje))<=0)
+	{
+		log_error(logger, "Error en el write destroy_segment");
+		close(sock_umv);
+		free(buffer_msg);
+		return;
+	}
+
+	msg_destruir_segmentos.id_programa = process_id;
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+	memcpy(buffer_msg,&msg_destruir_segmentos,size_msg_destruir_segmentos);
+
+	if((numbytes=write(sock_umv,buffer_msg,size_msg_destruir_segmentos))<=0)
+	{
+		log_error(logger, "Error en el write destroy_segment");
+		close(sock_umv);
+		free(buffer_msg);
+		return;
+	}
+
+	free(buffer_msg);
+	return;
+}
+
+/*
  * Function: send_umv_data
  * Purpose: Send Segment To UMV
  * Created on: 17/05/2014
  * Author: SilverStack
 */
 
-int send_segment_umv(int pid, char* buffer, int tamanio)
+int umv_send_segment(int pid, char* buffer, int tamanio)
 {
 	t_mensaje mensaje;
 	int numbytes;
@@ -874,7 +928,7 @@ int send_segment_umv(int pid, char* buffer, int tamanio)
 		return -1;
 	}
 
-	if(create_segment(pid, tamanio_code_segment) != 0)
+	if(umv_create_segment(pid, tamanio_code_segment) != 0)
 	{
 		log_error(logger, "Error Inesperado create_segmento");
 		free(buffer_msg);
@@ -904,7 +958,7 @@ int send_segment_umv(int pid, char* buffer, int tamanio)
 
 	log_info(logger,"Envio msg_cambio_proceso_activo");
 
-	if(change_process(pid) != 0)
+	if(umv_change_process(pid) != 0)
 	{
 		log_error(logger, "Error Inesperado change_process");
 		free(buffer_msg);
@@ -913,7 +967,7 @@ int send_segment_umv(int pid, char* buffer, int tamanio)
 
 	log_info(logger,"Envio msg_envio_bytes");
 
-	if(send_bytes(direccion_logica, direccion_logica + tamanio_code_segment, tamanio_code_segment) != 0)
+	if(umv_send_bytes(direccion_logica, direccion_logica + tamanio_code_segment, tamanio_code_segment) != 0)
 	{
 		log_error(logger, "Error Inesperado change_process");
 		free(buffer_msg);
@@ -940,7 +994,6 @@ int send_segment_umv(int pid, char* buffer, int tamanio)
 	}
 	memcpy(&mensaje,buffer_msg,SIZE_MSG);
 
-	// TODO: Mejorar Mensaje de Respuesta
 	if(mensaje.tipo == NEW_PROGRAMOK)
 	{
 		free(buffer_msg);
@@ -988,7 +1041,7 @@ int send_umv_stack(int process_id)
 		return -1;
 	}
 
-	if(create_segment(process_id, tamanio_stack) != 0)
+	if(umv_create_segment(process_id, tamanio_stack) != 0)
 	{
 		log_error(logger, "Error Inesperado create_segmento");
 		free(buffer_msg);
@@ -1031,7 +1084,7 @@ int send_umv_stack(int process_id)
  * Author: SilverStack
 */
 
-void destroy_pcb(t_pcb* self)
+void pcb_destroy(t_pcb* self)
 {
 	//free(self->instruction_index.index);
 	//free(self->etiquetas_index.etiquetas);
@@ -1162,51 +1215,54 @@ int conectar_umv(void)
 
 void planificador_sjn(void)
 {
-	int cantidad_procesos_sistema;
-	int cantidad_procesos_ready;
-	int cantidad_procesos_blocked;
-	int cantidad_procesos_executed;
+	int cantidad_procesos_new = 0;
+	int cantidad_procesos_exit = 0;
 
 	t_pcb *element;
 	for(;;)
 	{
 		sem_wait(&sem_plp);
 		sem_wait(&sem_cpu_list); // Tiene que haber un CPU conectado minimo
+
 		sem_wait(&mutex_new_queue);
-		/* Begin Region Critica */
+		cantidad_procesos_new = list_size(list_pcb_new);
+		sem_post(&mutex_new_queue);
 
-		sem_wait(&mutex_ready_queue);
-		cantidad_procesos_ready = list_size(list_pcb_ready);
-		sem_post(&mutex_ready_queue);
+		sem_wait(&mutex_exit_queue);
+		cantidad_procesos_exit = list_size(list_pcb_exit);
+		sem_post(&mutex_exit_queue);
 
-		sem_wait(&mutex_block_queue);
-		cantidad_procesos_blocked = list_size(list_pcb_blocked);
-		sem_post(&mutex_block_queue);
-
-		sem_wait(&mutex_execute_queue);
-		cantidad_procesos_executed = list_size(list_pcb_execute);
-		sem_post(&mutex_execute_queue);
-
-		cantidad_procesos_sistema = cantidad_procesos_ready +
-									cantidad_procesos_blocked +
-									cantidad_procesos_executed;
-
-		if(list_size(list_pcb_new) > 0)
+		if(cantidad_procesos_new > 0)
 		{
 			if(cantidad_procesos_sistema <= multiprogramacion)
 			{
-				element = list_remove(list_pcb_new, 0);
+				sort_plp();
+				sem_wait(&mutex_new_queue);
+				element = list_get(list_pcb_new, 0); // Pareciera que no lo saca. CHAN!
+				sem_post(&mutex_new_queue);
 
 				sem_wait(&mutex_ready_queue);
-				list_add(list_pcb_ready, element);
+				process_update(element->unique_id,PROCESS_NEW,PROCESS_READY);
 				sem_post(&mutex_ready_queue);
 
 				log_info(logger, "PCB -> %d moved from New Queue to Ready Queue", element->unique_id);
 				sem_post(&sem_pcp);
+				cantidad_procesos_sistema++;
+			}
+			else
+			{
+				sem_post(&sem_plp); // Vuelvo a incrementar el semaforo porque no se movio el proceso de la cola de NEW
 			}
 		}
-		sem_post(&mutex_new_queue);
-		/* End Region Critica */
+
+		if(cantidad_procesos_exit > 0)
+		{
+			sem_wait(&mutex_exit_queue);
+			element = list_get(list_pcb_exit, 0); // Pareciera que no lo saca. CHAN!
+			sem_post(&mutex_exit_queue);
+			program_exit(element->unique_id);
+			cantidad_procesos_sistema--;
+		}
 		sem_post(&sem_cpu_list); // Tiene que haber un CPU conectado minimo
 	} // for(;;)
 }
@@ -1341,7 +1397,7 @@ int escuchar_cpu(int sock_cpu)
 	memset(buffer,'\0',MAXDATASIZE);
 	if((numbytes=read(sock_cpu,buffer,size_mensaje))<=0)
 	{
-		log_error(logger, "Error en el read en escuchar_Programa");
+		log_error(logger, "Error en el read en escuchar_cpu");
 		return -1;
 	}
 
@@ -1349,17 +1405,110 @@ int escuchar_cpu(int sock_cpu)
 
 	switch(mensaje.tipo)
 	{
-		//case QUANTUMFINISH: finalizo_Quantum(sock_cpu); break;
+		case QUANTUMFINISH: finalizo_Quantum(sock_cpu); break;
+		case ASIGNACION: asignar_valor_VariableCompartida(sock_cpu, mensaje.mensaje, mensaje.datosNumericos); break;
 		/*case IMPRIMIR: imprimir(); break;
 		case IMPRIMIRTEXTO: imprimirTexto(); break;
-		case ASIGNACION: asignar_valor_VariableCompartida(); break;
 		case VARCOMREQUEST: obtener_valor_VariableCompartida(); break;
 		case ENTRADASALIDA: io(); break;
 		case SIGNALSEM: { semaphore_signal(); isBlocked(); break };
 		case WAITSEM: { semaphore_wait(); isBlocked(); break };*/
 	};
 
+	free(buffer);
 	return -1;
+}
+
+/*
+ * Function: finalizo_Quantum
+ * Purpose: Receives an update PCB from CPU. Update and move to correct queue.
+ * Created on: 20/05/2014
+ * Author: SilverStack
+*/
+
+void finalizo_Quantum(int sock_cpu)
+{
+	int numbytes;
+	t_pcb pcb;
+
+	char* buffer;
+
+	log_info(logger, "finalizo_Quantum");
+	if((buffer = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria para el buffer en finalizo_Quantum");
+		return;
+	}
+
+	memset(buffer,'\0',MAXDATASIZE);
+	if((numbytes=read(sock_cpu,buffer,sizeof(t_pcb)))<=0)
+	{
+		log_error(logger, "Error en el read en finalizo_Quantum");
+		return;
+	}
+
+	memcpy(&pcb,buffer,sizeof(t_pcb));
+
+	pcb_update(&pcb,PROCESS_EXECUTE);
+
+	pthread_mutex_lock(&mutex_pedidos);
+	queue_push(queue_rr,pedido_create(pcb.unique_id,PROCESS_EXECUTE,PROCESS_READY));
+	pthread_mutex_unlock(&mutex_pedidos);
+}
+
+/*
+ * Function: asignar_valor_VariableCompartida
+ * Purpose: Receives a global variable and updaes its value.
+ * 			In case of error, returns fails.
+ * Created on: 20/05/2014
+ * Author: SilverStack
+*/
+
+void asignar_valor_VariableCompartida(int sock_cpu, char* global_name, int value)
+{
+	t_mensaje mensaje;
+	int numbytes;
+	int size_mensaje = sizeof(t_mensaje);
+	char* buffer;
+
+	log_info(logger, "asignar_valor_VariableCompartida");
+	if((buffer = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria para el buffer en asignar_valor_VariableCompartida");
+		return;
+	}
+
+	mensaje.id_proceso = KERNEL;
+	mensaje.datosNumericos = value;
+	mensaje.tipo = ASIGNACION;
+
+	if(global_update_value(global_name,value) == 0)
+	{
+		mensaje.tipo = ERROR;
+	}
+
+	memset(buffer,'\0',MAXDATASIZE);
+	memcpy(buffer,&mensaje,size_mensaje);
+
+	if((numbytes=write(sock_cpu,buffer,size_mensaje))<=0)
+	{
+		log_error(logger, "Error en el write en asignar_valor_VariableCompartida");
+		close(sock_cpu);
+		free(buffer);
+		return;
+	}
+
+	if(mensaje.tipo == ERROR)
+	{
+		int pid = get_process_id_by_sock_cpu(sock_cpu);
+		if(pid != -1)
+		{
+			queue_push(queue_rr,pedido_create(pid,PROCESS_EXECUTE,PROCESS_EXIT));
+			log_error(logger, "Variable Compartida no encontrada. Proceso %d exit", pid);
+		}
+	}
+
+	free(buffer);
 }
 
 /*
@@ -1377,6 +1526,7 @@ t_nodo_cpu* cpu_create(int socket)
 		new_cpu->status = CPU_AVAILABLE;
 	else
 		new_cpu->status = CPU_IDLE;
+
 	return new_cpu;
 }
 
@@ -1434,7 +1584,9 @@ void cpu_update(int socket)
 		}
 	}
 
+	sem_wait(&mutex_cpu_list);
 	list_iterate(list_cpu, (void*) _change_status);
+	sem_post(&mutex_cpu_list);
 
 	if(flag_found == 0)
 	{
@@ -1480,7 +1632,7 @@ void process_update(int pid, unsigned char previous_status, unsigned char next_s
 	t_list* to;
 	sem_t* mutex_list_previous;
 	sem_t* mutex_list_next;
-	unsigned char status;
+	unsigned char status = next_status;
 	int process_id = pid;
 	int flag_found = 0;
 
@@ -1490,6 +1642,7 @@ void process_update(int pid, unsigned char previous_status, unsigned char next_s
 		case PROCESS_READY: from = list_pcb_ready; mutex_list_previous = &mutex_ready_queue; break;
 		case PROCESS_EXECUTE: from = list_pcb_execute; mutex_list_previous = &mutex_execute_queue; break;
 		case PROCESS_BLOCKED: from = list_pcb_blocked; mutex_list_previous = &mutex_block_queue; break;
+		case PROCESS_EXIT: from = list_pcb_exit; mutex_list_previous = &mutex_exit_queue; break;
 	}
 
 	switch(next_status)
@@ -1498,18 +1651,23 @@ void process_update(int pid, unsigned char previous_status, unsigned char next_s
 		case PROCESS_READY: to = list_pcb_ready; status = PROCESS_READY; mutex_list_next = &mutex_block_queue; break;
 		case PROCESS_EXECUTE: to = list_pcb_execute; status = PROCESS_EXECUTE; mutex_list_next = &mutex_block_queue; break;
 		case PROCESS_BLOCKED: to = list_pcb_blocked; status = PROCESS_BLOCKED; mutex_list_next = &mutex_block_queue; break;
+		case PROCESS_EXIT: to = list_pcb_exit; status = PROCESS_EXIT; mutex_list_next = &mutex_exit_queue; break;
 	}
 
 	void _change_status(t_process *s)
 	{
-		if(s->pid == process_id)
+		if(flag_found == 0 && s->pid == process_id)
 		{
 			s->status = status;
 			flag_found = 1;
+			if(status == PROCESS_READY)
+				s->current_cpu_socket = -1;
 		}
 	}
 
+	sem_wait(&mutex_process_list);
 	list_iterate(list_process, (void*) _change_status);
+	sem_post(&mutex_process_list);
 
 	if(flag_found == 0)
 		log_error(logger, "CPU Socket %d no encontrado", socket);
@@ -1573,8 +1731,7 @@ void io_wait(unsigned int pid, char* io_name, int amount)
 	t_io* io_node;
 
 	strcpy(io_id,io_name);
-
-	//pcb_move(process_id,list_pcb_execute, list_pcb_blocked);
+	queue_push(queue_rr,pedido_create(pid,PROCESS_EXECUTE,PROCESS_BLOCKED));
 
 	void _get_io_node(t_io *s)
 	{
@@ -1651,8 +1808,9 @@ void retardo_io(void *ptr)
 			/* END CRITICAL REGION */
 		sem_post(&free_io_queue); // Up Semaphore
 		log_info(logger,"[retardo_io] Dormir = %d",io_queue_nodo->retardo);
+		//TODO: Optimizar tema de sleep
 		sleep(io_queue_nodo->retardo / 1000);
-		process_update(io_queue_nodo->pcb,PROCESS_BLOCKED,PROCESS_READY);
+		queue_push(queue_rr,pedido_create(io_queue_nodo->pcb,PROCESS_BLOCKED,PROCESS_READY));
 		log_info(logger,"[retardo_io] Finalizo el retardo = %d",name_io);
 		free(io_queue_nodo);
 	}
@@ -1669,11 +1827,12 @@ void planificador_rr(void)
 {
 	t_nodo_cpu* cpu;
 	int flag_cpu_found = 0;
-	t_pcb* pcb;
+	t_pedido* new_pedido;
+	int cpu_socket;
 
 	void _get_cpu_element(t_nodo_cpu *c)
 	{
-		if(c->status == CPU_AVAILABLE && flag_cpu_found == 0)
+		if(flag_cpu_found == 0 && c->status == CPU_AVAILABLE)
 		{
 			cpu = c;
 			flag_cpu_found = 1;
@@ -1683,35 +1842,93 @@ void planificador_rr(void)
 	for(;;)
 	{
 		sem_wait(&sem_pcp);
-		sem_wait(&sem_cpu_list);
+		sem_wait(&sem_cpu_list); // ¿Es realmente necesario?
 
-		sem_wait(&mutex_cpu_list);
-		found_cpus_available();
-		sem_post(&mutex_cpu_list);
+		pthread_mutex_lock(&mutex_pedidos);
+		new_pedido = queue_pop(queue_rr);
+		pthread_mutex_unlock(&mutex_pedidos);
 
-		flag_cpu_found = 0;
-
-		sem_wait(&mutex_cpu_list);
-		list_iterate(list_cpu, (void*) _get_cpu_element);
-		sem_post(&mutex_cpu_list);
-
-		if(flag_cpu_found == 1)
+		switch(new_pedido->previous_status)
 		{
-			log_info(logger, "Enviar PCB a CPU en socket %d", cpu->socket);
+			case PROCESS_READY:
+			{
+				switch(new_pedido->new_status)
+				{
+					case PROCESS_EXECUTE:
+					{	// Hay que pasar de Ready a Executed
+						sem_wait(&mutex_cpu_list);
+						found_cpus_available();
+						sem_post(&mutex_cpu_list);
 
-			sem_wait(&mutex_ready_queue);
-			pcb = list_remove(list_pcb_ready, 0);
-			sem_post(&mutex_ready_queue);
+						flag_cpu_found = 0;
 
-			sem_wait(&mutex_execute_queue);
-			list_add(list_pcb_execute, pcb);
-			sem_post(&mutex_execute_queue);
-			process_update(pcb->unique_id,PROCESS_READY, PROCESS_EXECUTE);
-			ejecutar_proceso(pcb->unique_id, cpu->socket);
-			// process->current_cpu_socket = cpu->socket
-			// cpu->status = CPU_WORKING
-		}
-		sem_post(&sem_cpu_list);
+						sem_wait(&mutex_cpu_list);
+						list_iterate(list_cpu, (void*) _get_cpu_element);
+
+						if(flag_cpu_found == 1) // Encontre un CPU AVAILABLE
+						{
+							log_info(logger, "Enviar PCB a CPU en socket %d", cpu->socket);
+							process_update(new_pedido->process_id,PROCESS_READY, PROCESS_EXECUTE); //Mueve el pcb
+							process_execute(new_pedido->process_id, cpu->socket); // Pone el CPU Working
+						}
+						else
+						{
+							sem_post(&sem_pcp); // Incremento el semaforo porque no saque el proceso
+						}
+						sem_post(&mutex_cpu_list);
+						break;
+					}
+					default:
+					{
+						log_error(logger, "No se reconoce el new_pedido->next_status");
+						break;
+					}
+				}
+				break;
+			}
+			case PROCESS_EXECUTE:
+			{
+				switch(new_pedido->new_status)
+				{
+					case PROCESS_BLOCKED:
+					{
+
+					}
+					case PROCESS_READY:
+					{
+						process_update(new_pedido->process_id,PROCESS_EXECUTE,PROCESS_READY);
+						cpu_socket = get_sock_cpu_by_process_id(new_pedido->process_id);
+						if(cpu_socket == -1)
+						{
+							log_error(logger, "No se encontro el cpu_socket");
+							break;
+						}
+						cpu_update(cpu_socket);
+					}
+					case PROCESS_EXIT:
+					{
+						process_update(new_pedido->process_id,PROCESS_EXECUTE,PROCESS_EXIT);
+						umv_destroy_segment(new_pedido->process_id); //Envio a la UMV el dato para que destruya segmentos
+						sem_post(&sem_plp);
+						break;
+					}
+					default:
+					{
+						log_error(logger, "No se reconoce el new_pedido->next_status");
+					}
+				}
+				break;
+			}
+			case PROCESS_BLOCKED:
+			{
+				break;
+			}
+			default:
+			{
+				log_error(logger, "No se reconoce el new_pedido->previous_status");
+				break;
+			}
+		} // switch(new_pedido->previous_status)
 	} //for(;;)
 
 	return;
@@ -1848,8 +2065,20 @@ int is_Connected_Program(int sock_program)
 
 void process_remove_by_socket(int socket)
 {
-	// TODO: Desarrollar Funcion
-	log_error(logger, "Funcion process_remove_by_socket() aun no desarrollada");
+	int sock_prog = socket;
+
+	bool _is_process(t_process *p) {
+		return p->program_socket == sock_prog;
+	}
+
+	sem_wait(&mutex_process_list);
+	t_process *aux = list_remove_by_condition(list_process, (void*) _is_process);
+	sem_post(&mutex_process_list);
+
+	log_info(logger, "Se removio el programa %d de la lista de procesos", aux->pid);
+
+	process_destroy(aux);
+
 	return;
 }
 
@@ -1860,23 +2089,294 @@ void process_remove_by_socket(int socket)
  * Author: SilverStack
 */
 
-void ejecutar_proceso(int unique_id, int socket)
+void process_execute(int unique_id, int socket)
 {
 	int flag_process_found = 0;
+	int flag_cpu_found = 0;
 	int process_id = unique_id;
 	int cpu_socket = socket;
 
+	void _get_cpu_element(t_nodo_cpu *cpu)
+	{
+		if(flag_cpu_found == 0 && cpu->socket == cpu_socket )
+		{
+			cpu->status = CPU_WORKING;
+			flag_cpu_found = 1;
+		}
+	}
+
 	void _get_process_element(t_process *p)
 	{
-		if(p->pid == process_id && flag_process_found == 0)
+		if(flag_process_found == 0 && p->pid == process_id )
 		{
 			p->current_cpu_socket = cpu_socket;
 			flag_process_found = 1;
 		}
 	}
 
+	sem_wait(&mutex_cpu_list);
+	list_iterate(list_cpu, (void*) _get_cpu_element); // CPU_WORKING
+	sem_post(&mutex_cpu_list);
+
+	sem_wait(&mutex_process_list);
+	list_iterate(list_process, (void*) _get_process_element); // CPU_SOCKET
+	sem_post(&mutex_process_list);
+
+	if(flag_process_found == 0 || flag_cpu_found == 0)
+	{
+		log_error(logger, "PID %d no encontrado en process_execute", process_id);
+		return;
+	}
+
+	return;
+}
+
+/*
+ * Function: process_destroy
+ * Purpose: Free memory of current process node
+ * Created on: 20/05/2014
+ * Author: SilverStack
+*/
+
+void process_destroy(t_process *p)
+{
+	free(p);
+	return;
+}
+
+/*
+ * Function: pcb_update
+ * Purpose: Updates PCB Information
+ * Created on: 20/05/2014
+ * Author: SilverStack
+*/
+
+void pcb_update(t_pcb* new_pcb, unsigned char previous_status)
+{
+
+	int flag_found = 0;
+	int process_id = new_pcb->unique_id;
+	int index = 0;
+	int indice_buscado = 0;
+	t_list* pcb_from;
+	sem_t* mutex_list;
+
+	switch(previous_status)
+	{
+		case PROCESS_NEW: pcb_from = list_pcb_new; mutex_list = &mutex_new_queue; break;
+		case PROCESS_READY: pcb_from = list_pcb_ready; mutex_list = &mutex_ready_queue; break;
+		case PROCESS_EXECUTE: pcb_from = list_pcb_execute; mutex_list = &mutex_execute_queue; break;
+		case PROCESS_BLOCKED: pcb_from = list_pcb_blocked; mutex_list = &mutex_block_queue; break;
+		case PROCESS_EXIT: pcb_from = list_pcb_exit; mutex_list = &mutex_exit_queue; break;
+	}
+
+
+	void _get_node(t_pcb *s)
+	{
+		if(s->unique_id == process_id && flag_found == 0)
+		{
+			indice_buscado = index;
+			flag_found = 1;
+		}
+		index++;
+	}
+
+	sem_wait(mutex_list);
+	list_iterate(pcb_from, (void*) _get_node);
+	sem_post(mutex_list);
+
+	if(flag_found == 0)
+		log_error(logger, "PID %d no encontrado en pcb_move", process_id);
+
+	sem_wait(mutex_list);
+	t_pcb *old_pcb = list_remove(pcb_from, indice_buscado);
+	sem_post(mutex_list);
+
+	sem_wait(mutex_list);
+	list_add(pcb_from,new_pcb);
+	sem_post(mutex_list);
+
+	pcb_destroy(old_pcb);
+
+	return;
+}
+
+/*
+ * Function: get_sock_cpu_by_process_id
+ * Purpose: Returns the cpu_socket
+ * Created on: 24/05/2014
+ * Author: SilverStack
+*/
+
+int get_sock_cpu_by_process_id(int pid)
+{
+	int flag_process_found = 0;
+	int process_id = pid;
+	int cpu_socket = -1;
+
+	void _get_process_element(t_process *p)
+	{
+		if(flag_process_found == 0 && p->pid == process_id )
+		{
+			flag_process_found = 1;
+			cpu_socket = p->current_cpu_socket;
+		}
+	}
+
 	sem_wait(&mutex_process_list);
 	list_iterate(list_process, (void*) _get_process_element);
 	sem_post(&mutex_process_list);
+
+	if(flag_process_found == 0)
+	{
+		log_error(logger, "PID %d no encontrado en pcb_move", process_id);
+		return -1;
+	}
+	return cpu_socket;
+}
+
+/*
+ * Function: get_process_id_by_sock_cpu
+ * Purpose: Returns the Process ID
+ * Created on: 20/05/2014
+ * Author: SilverStack
+*/
+
+int get_process_id_by_sock_cpu(int sock_cpu)
+{
+	int flag_process_found = 0;
+	int process_id;
+	int cpu_socket = sock_cpu;
+
+	void _get_process_element(t_process *p)
+	{
+		if(flag_process_found == 0 && p->current_cpu_socket == cpu_socket )
+		{
+			flag_process_found = 1;
+			process_id = p->pid;
+		}
+	}
+
+	sem_wait(&mutex_process_list);
+	list_iterate(list_process, (void*) _get_process_element);
+	sem_post(&mutex_process_list);
+
+	if(flag_process_found == 0)
+	{
+		log_error(logger, "PID %d no encontrado en pcb_move", process_id);
+		return -1;
+	}
+	return process_id;
+}
+
+/*
+ * Function: program_exit
+ * Purpose: Send to Program Process Exit Call
+ * Created on: 20/05/2014
+ * Author: SilverStack
+*/
+
+void program_exit(int pid)
+{
+	int flag_process_found = 0;
+	int flag_pcb_found = 0;
+	int process_id = pid;
+	t_mensaje mensaje;
+	char * buffer;
+	int numbytes;
+	int index = 0;
+	int indice_buscado = 0;
+	t_process* process;
+	t_pcb* pcb;
+
+	if((buffer = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria para el buffer en program_exit");
+		return;
+	}
+
+	void _get_index_element_process(t_process *p)
+	{
+		if(flag_process_found == 0 && p->pid == process_id )
+		{
+			flag_process_found = 1;
+			indice_buscado = index;
+		}
+		index++;
+	}
+
+	void _get_index_element_pcb(t_pcb *p)
+	{
+		if(flag_pcb_found == 0 && p->unique_id == process_id )
+		{
+			flag_pcb_found = 1;
+			indice_buscado = index;
+		}
+		index++;
+	}
+
+	// Remuevo de la lista de Procesos
+	sem_wait(&mutex_process_list);
+	list_iterate(list_process, (void*) _get_index_element_process);
+	sem_post(&mutex_process_list);
+
+	sem_wait(&mutex_process_list);
+	process = list_remove(list_process, indice_buscado);
+	sem_post(&mutex_process_list);
+
+	indice_buscado = 0;
+
+	// Remuevo de la lista de PCB_EXIT
+	sem_wait(&mutex_exit_queue);
+	list_iterate(list_pcb_exit, (void*) _get_index_element_pcb);
+	sem_post(&mutex_exit_queue);
+
+	sem_wait(&mutex_exit_queue);
+	pcb = list_remove(list_pcb_exit, indice_buscado);
+	sem_post(&mutex_exit_queue);
+
+	if(flag_process_found == 0 || flag_pcb_found == 0)
+	{
+		log_error(logger, "PID %d no encontrado en lista de procesos", process_id);
+		return;
+	}
+
+	mensaje.id_proceso = KERNEL;
+	mensaje.datosNumericos = 0;
+	mensaje.tipo = SALIR;
+	memset(buffer,'\0',MAXDATASIZE);
+	memcpy(buffer,&mensaje,SIZE_MSG);
+
+	if((numbytes=write(process->program_socket,buffer,SIZE_MSG))<=0)
+	{
+		log_error(logger, "Error en el write en program_exit");
+		close(process->program_socket);
+		process_destroy(process);
+		free(buffer);
+		return;
+	}
+
+	close(process->program_socket);
+	free(buffer);
+	process_destroy(process);
+	pcb_destroy(pcb);
 	return;
+}
+
+
+t_pedido* pedido_create(int pid, unsigned char previous_status, unsigned char next_status)
+{
+	t_pedido* new_pedido;
+
+	if ((new_pedido = (t_pedido*) malloc(sizeof(t_pedido)))== NULL)
+	{
+		log_error(logger, "No se pudo pedir memoria para el nuevo pedido");
+		return NULL;
+	}
+
+	new_pedido->new_status = next_status;
+	new_pedido->previous_status = previous_status;
+	new_pedido->process_id = pid;
+
+	return new_pedido;
 }
