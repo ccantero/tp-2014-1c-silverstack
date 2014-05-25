@@ -7,8 +7,11 @@
 
 #include "protocol.h"
 
+int ReservarNuevoPrograma(int pid);
 t_info_programa* crearPrograma(int pid);
+int nuevoSegmento(int pid, int tipo, int tipoOk);
 int pedidoDeMemoria(int pid, int tamanioPedido, t_info_segmento* segm);
+int solicitudSegmento(int pid, int tamanioPedido);
 
 void *hilokernel(void *socket_desc)
 {
@@ -34,47 +37,62 @@ void *hilokernel(void *socket_desc)
 }
 
 int ReservarNuevoPrograma(int pid) {
-	t_mensaje m;
-
 	sem_wait(&mutex_program_list);
-
 	t_info_programa* prog = crearPrograma(pid);
-	list_add(list_programas, prog);
 	sem_post(&mutex_program_list);
-	recibirMensaje(socketKernel, &m);
-	int tamanioPedido = m.datosNumericos;
 
-	t_info_segmento segm;
-	pedidoDeMemoria(pid, tamanioPedido, &segm);
-	char* codigo = malloc(tamanioPedido);
-	recv(socketKernel, codigo, tamanioPedido, 0);
-	guardarEnSegmento(pid, segm.id, codigo);
-	free(codigo);
+	nuevoSegmento(pid, TAMANIO_REQUEST, TAMANIOOK);
+	nuevoSegmento(pid, ETIQUETASREQUEST, ETIQUETASREQUESTOK);
+	nuevoSegmento(pid, INSTRUCTIONREQUEST, INSTRUCTIONREQUESTOK);
+	nuevoSegmento(pid, STACKREQUEST, STACKOK);
 
-	recibirMensaje(socketKernel, &m);
-
-	recibirMensaje(socketKernel, &m);
-
-	return 0;
+	return 1;
 }
 
 t_info_programa* crearPrograma(int pid) {
 	t_info_programa* prog = malloc(sizeof(t_info_programa));
 	prog->pid = pid;
 	prog->segmentos = list_create();
+	list_add(list_programas, prog);
 	return prog;
+}
+
+int nuevoSegmento(int pid, int tipo, int tipoOk) {
+	t_mensaje m;
+	recibirMensaje(socketKernel, &m);
+	if(m.tipo == tipo) {
+		if(solicitudSegmento(pid, m.datosNumericos))
+			enviarMensajeKernel(tipoOk, 0);
+		else {
+			log_error(logger, "No se pudo crear segmento: %d.", tipo);
+			return 0;
+		}
+	}
+	else {
+		log_error(logger, "Mensaje inesperado: %d (%d)", m.tipo, tipo);
+		return 0;
+	}
+	return 1;
 }
 
 int pedidoDeMemoria(int pid, int tamanioPedido, t_info_segmento* segm) {
 	int dir;
 	if((dir = buscarMemoriaDisponible(tamanioPedido))) {
-		crearSegmento(pid, dir, tamanioPedido);
+		segm = crearSegmento(pid, dir, tamanioPedido);
 		return 1;
 	}
-	t_mensaje m;
-	m.datosNumericos = 0;
-	m.id_proceso = UMV;
-	m.tipo = LOW_MEMORY;
-	sockets_send(socketKernel, &m, "");
+	enviarMensajeKernel(LOW_MEMORY, 0);
 	return 0;
+}
+
+int solicitudSegmento(int pid, int tamanioPedido) {
+	t_info_segmento* segm = malloc(sizeof(t_info_segmento));
+	if(!pedidoDeMemoria(pid, tamanioPedido, segm))
+		return 0;
+	char* buffer = malloc(tamanioPedido);
+	recv(socketKernel, buffer, tamanioPedido, 0);
+	if(!guardarEnSegmento(pid, segm->id, buffer))
+		return 0;
+	free(buffer);
+	return 1;
 }

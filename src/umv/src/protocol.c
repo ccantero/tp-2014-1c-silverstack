@@ -154,6 +154,14 @@ int recibirMensaje(int newfd, t_mensaje* m) {
 	return nbytes;
 }
 
+int enviarMensajeKernel(int tipo, int datosNumericos) {
+	t_mensaje m;
+	m.datosNumericos = datosNumericos;
+	m.id_proceso = UMV;
+	m.tipo = tipo;
+	return sockets_send(socketKernel, &m, "");
+}
+
 int enviarHandshake(int sockfd) {
 	t_mensaje m;
 	m.id_proceso = UMV;
@@ -343,35 +351,31 @@ int guardarEnMemoria(t_info_segmento* segm,char* buffer) {
 int buscarMemoriaDisponible(int tamanio)
 {
 	int dir;
-	switch(algoritmo)
-	{
-	case "First-Fit":
+	if(algoritmo == "First-Fit")
 		dir = getFirstFitMemory(tamanio);
-		break;
-	case "Worst-Fit":
+	else if(algoritmo == "Worst-Fit")
 		dir = getWorstFitMemory(tamanio);
-		break;
-	default:
+	else
 		dir = 0;
-		break;
-	}
+
 	return dir;
 }
 
 int getFirstFitMemory(int memSize)
 {
-	t_info_segmento lastSegmentAddress;
-	int currentAddress = memoria;
+	t_info_segmento* lastSegmentAddress = malloc(sizeof(t_info_segmento));
+	uintptr_t currentAddress = (uintptr_t) memoria;
 
-	while((currentAddress + memSize) <= (memoria + space)) {
+	while((currentAddress + memSize) <= ((uintptr_t) memoria + space)) {
 
-		if(findLastSegmentIn(currentAddress, memSize, &lastSegmentAddress))
-			currentAddress = lastSegmentAddress.dirFisica + lastSegmentAddress.tamanio + 1;
+		if(findLastSegmentIn(currentAddress, memSize, lastSegmentAddress))
+			currentAddress = lastSegmentAddress->dirFisica + lastSegmentAddress->tamanio + 1;
 		else
 			break;
 	}
+	free(lastSegmentAddress);
 
-	if ((currentAddress + memSize) >= (memoria + space))
+	if ((currentAddress + memSize) >= ((uintptr_t) memoria + space))
 		return 0;
 
 	return currentAddress;
@@ -382,18 +386,18 @@ int getWorstFitMemory(int memSize)
 	return 0;
 }
 
-int crearSegmento(int pid, int dirFisica, int tamanioPedido) {
+t_info_segmento* crearSegmento(int pid, int dirFisica, int tamanioPedido) {
 	t_info_segmento* s = malloc(sizeof(t_info_segmento));
-	s.dirFisica = dirFisica;
-	s.dirLogica = generarDireccionLogica(pid);
-	s.tamanio = tamanioPedido;
+	s->dirFisica = dirFisica;
+	s->dirLogica = generarDireccionLogica(pid);
+	s->tamanio = tamanioPedido;
 	t_info_programa prog;
 	if(getProgramBy(pid, &prog)) {
 		list_add(prog.segmentos, &prog);
-		return 1;
+		return s;
 	}
 
-	return 0;
+	return NULL;
 }
 
 int guardarEnSegmento(int pid, int segmId, char* buffer) {
@@ -401,7 +405,7 @@ int guardarEnSegmento(int pid, int segmId, char* buffer) {
 	t_info_segmento segm;
 	if(getProgramById(pid, &prog)) {
 		if(getSegmentById(segmId, &prog, &segm)) {
-			if(guardarEnMemoria(segm, buffer))
+			if(guardarEnMemoria(&segm, buffer))
 				return 1;
 		}
 	}
@@ -445,14 +449,14 @@ int getSegmentByBase(int address, t_info_segmento* segm)
 		}
 
 		if(list_any_satisfy(prog->segmentos, (void *) _es_su_base)) { //TODO: hacer funcion que pasandole una dir sepa si es su base
-			segm = list_find(prog->segmentos, _es_su_base);
+			segm = list_find(prog->segmentos, (void *) _es_su_base);
 			return 1;
 		}
 	}
 	return 0;
 }
 
-int findLastSegmentIn(int address, int limit, t_info_segmento segm)
+int findLastSegmentIn(int address, int limit, t_info_segmento* segm)
 {
 	int i, j, maxBaseAddress = address;
 
@@ -463,7 +467,7 @@ int findLastSegmentIn(int address, int limit, t_info_segmento segm)
 			return segm->dirFisica >= address && segm->dirFisica <= (address + limit);
 		}
 
-		t_list* segmentosEnMemoria = list_filter(prog, _existe_segmento);
+		t_list* segmentosEnMemoria = list_filter(prog->segmentos, (void *) _existe_segmento);
 
 		for (j = 0; j < list_size(segmentosEnMemoria); j++) {
 			t_info_segmento* segmMax = list_get(segmentosEnMemoria, j);
@@ -471,7 +475,7 @@ int findLastSegmentIn(int address, int limit, t_info_segmento segm)
 				maxBaseAddress = segmMax->dirFisica;
 		}
 	}
-	if(!getSegmentByBase(maxBaseAddress, &segm))
+	if(!getSegmentByBase(maxBaseAddress, segm))
 	{
 		return 0;
 	}
