@@ -7,9 +7,9 @@
 
 #include "protocol.h"
 
-int ReservarNuevoPrograma(int pid);
+int reservarNuevoPrograma(int pid);
 t_info_programa* crearPrograma(int pid);
-int nuevoSegmento(int pid, int tipo, int tipoOk);
+int nuevoSegmento();
 int pedidoDeMemoria(int pid, int tamanioPedido, t_info_segmento* segm);
 int solicitudSegmento(int pid, int tamanioPedido);
 
@@ -24,8 +24,10 @@ void *hilokernel(void *socket_desc)
 	while (recibirMensaje(socketKernel, &m) > 1)
 	{
 		switch (m.tipo) {
-		case NEW_PROGRAM_REQUEST:
-			ReservarNuevoPrograma(m.datosNumericos);
+		case CREARSEGMENTO:
+			nuevoSegmento();
+			break;
+		case DESTRUIRSEGMENTOS:
 			break;
 		default:
 			log_error(logger, "No se identifica mensaje del Kernel");
@@ -36,16 +38,15 @@ void *hilokernel(void *socket_desc)
 	return 0;
 }
 
-int ReservarNuevoPrograma(int pid) {
-	sem_wait(&mutex_program_list);
-	t_info_programa* prog = crearPrograma(pid);
-	sem_post(&mutex_program_list);
-
-	nuevoSegmento(pid, TAMANIO_REQUEST, TAMANIOOK);
-	nuevoSegmento(pid, ETIQUETASREQUEST, ETIQUETASREQUESTOK);
-	nuevoSegmento(pid, INSTRUCTIONREQUEST, INSTRUCTIONREQUESTOK);
-	nuevoSegmento(pid, STACKREQUEST, STACKOK);
-
+int reservarNuevoPrograma(int pid) {
+	int _existe_programa(t_info_programa* p) {
+		return p->pid == pid;
+	}
+	if(!list_any_satisfy(list_programas, (void *) _existe_programa)) {
+		sem_wait(&mutex_program_list);
+		t_info_programa* prog = crearPrograma(pid);
+		sem_post(&mutex_program_list);
+	}
 	return 1;
 }
 
@@ -57,21 +58,24 @@ t_info_programa* crearPrograma(int pid) {
 	return prog;
 }
 
-int nuevoSegmento(int pid, int tipo, int tipoOk) {
-	t_mensaje m;
-	recibirMensaje(socketKernel, &m);
-	if(m.tipo == tipo) {
-		if(solicitudSegmento(pid, m.datosNumericos))
-			enviarMensajeKernel(tipoOk, 0);
-		else {
-			log_error(logger, "No se pudo crear segmento: %d.", tipo);
+int nuevoSegmento() {
+	t_msg_crear_segmento* m = malloc(sizeof(t_msg_crear_segmento));
+
+	reservarNuevoPrograma(m->id_programa);
+
+	if(recv(socketKernel, m, sizeof(t_msg_crear_segmento), MSG_WAITALL)) {
+		if(!solicitudSegmento(m->id_programa, m->tamanio)) {
+			free(m);
+			log_error(logger, "No se pudo crear segmento.");
 			return 0;
 		}
 	}
 	else {
-		log_error(logger, "Mensaje inesperado: %d (%d)", m.tipo, tipo);
+		log_error(logger, "Mensaje inesperado.");
 		return 0;
 	}
+	send(socketKernel, m, sizeof(t_msg_crear_segmento), 0);
+	free(m);
 	return 1;
 }
 

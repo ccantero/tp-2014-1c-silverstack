@@ -92,12 +92,12 @@ void GetInfoConfFile(void)
 }
 
 int atenderConexionNueva(int newfd) {
-	t_mensaje m;
+	t_msg_handshake m;
 	int nbytes;
 
 	recibirMensaje(newfd, &m);
 
-	switch (m.id_proceso) {
+	switch (m.tipo) {
 	case KERNEL:
 		nbytes = enviarHandshake(newfd);
 		if (nbytes < 1)
@@ -163,13 +163,9 @@ int enviarMensajeKernel(int tipo, int datosNumericos) {
 }
 
 int enviarHandshake(int sockfd) {
-	t_mensaje m;
-	m.id_proceso = UMV;
-	m.datosNumericos = 0;
-	m.tipo = HANDSHAKEOK;
-	strcpy(m.mensaje, "hola");
-
-	return send(sockfd, &m, sizeof(t_mensaje), 0);
+	t_msg_handshake m;
+	m.tipo = UMV;
+	return send(sockfd, &m, sizeof(t_msg_handshake), 0);
 }
 
 int sockets_listen(int sockfd, int backlog) {
@@ -261,10 +257,8 @@ void cambiar_retardo(int valor)
 void compactar_memoria()
 {
 	pthread_mutex_lock(&semCompactacion);
-	int primer_direccion = space;
-	int primer_programa;
-	int i;
-	int j;
+	uintptr_t primer_direccion = (uintptr_t) memoria + space;
+	int primer_programa, i, j;
 	int nueva_direccion = 0;
 	int arranque = 0;
 	t_info_programa *prog;
@@ -368,7 +362,7 @@ int getFirstFitMemory(int memSize)
 
 	while((currentAddress + memSize) <= ((uintptr_t) memoria + space)) {
 
-		if(findLastSegmentIn(currentAddress, memSize, lastSegmentAddress))
+		if(findSegmentIn(currentAddress, memSize, lastSegmentAddress))
 			currentAddress = lastSegmentAddress->dirFisica + lastSegmentAddress->tamanio + 1;
 		else
 			break;
@@ -456,7 +450,7 @@ int getSegmentByBase(int address, t_info_segmento* segm)
 	return 0;
 }
 
-int findLastSegmentIn(int address, int limit, t_info_segmento* segm)
+int findSegmentIn(int address, int limit, int getFirst, t_info_segmento* segm)
 {
 	int i, j, maxBaseAddress = address;
 
@@ -471,14 +465,15 @@ int findLastSegmentIn(int address, int limit, t_info_segmento* segm)
 
 		for (j = 0; j < list_size(segmentosEnMemoria); j++) {
 			t_info_segmento* segmMax = list_get(segmentosEnMemoria, j);
-			if (segmMax->dirFisica > maxBaseAddress)
+			if (!getFirst && segmMax->dirFisica > maxBaseAddress)
+				maxBaseAddress = segmMax->dirFisica;
+			else if (segmMax->dirFisica < maxBaseAddress)
 				maxBaseAddress = segmMax->dirFisica;
 		}
 	}
+
 	if(!getSegmentByBase(maxBaseAddress, segm))
-	{
 		return 0;
-	}
 
 	return 1;
 }

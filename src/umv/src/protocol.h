@@ -66,7 +66,7 @@ void compactar_memoria();
 int obtener_cant_segmentos();
 void cambiar_retardo(int valor);
 void cambiar_algoritmo();
-int findLastSegmentIn(int address, int limit, t_info_segmento* segm);
+int findSegmentIn(int address, int limit, int getFirst, t_info_segmento* segm);
 int getSegmentByBase(int address, t_info_segmento* segm);
 int getProgramBySegmentId(int segmId, t_info_programa* prog);
 int guardarEnSegmento(int pid, int segmId, char* codigo);
