@@ -7,6 +7,7 @@
 
 /* Header File */
 
+#include "globales.h"
 #include "protocol.h"
 
 void consola (void* param)
@@ -92,7 +93,7 @@ void GetInfoConfFile(void)
 }
 
 int atenderConexionNueva(int newfd) {
-	t_msg_handshake m;
+	t_mensaje m;
 	int nbytes;
 
 	recibirMensaje(newfd, &m);
@@ -278,7 +279,7 @@ void compactar_memoria()
 				for (j = 0; j < list_size(prog->segmentos); j++)
 				{
 					segm = list_get(prog->segmentos, j);
-					if (segm->dirFisica < primer_direccion && segm->dirFisica >= arranque)
+					if (segm->dirFisica < ((int)primer_direccion) && segm->dirFisica >= arranque)
 					{
 						primer_direccion = segm->dirFisica;
 						primer_programa = prog->pid;
@@ -300,7 +301,7 @@ void compactar_memoria()
 			for (j = 0; j < list_size(prog->segmentos); j++)
 			{
 				segm = list_get(prog->segmentos, j);
-				if (segm->dirFisica == primer_direccion)
+				if (segm->dirFisica == ((int)primer_direccion))
 				{
 					break;
 				}
@@ -362,7 +363,9 @@ int getFirstFitMemory(int memSize)
 
 	while((currentAddress + memSize) <= ((uintptr_t) memoria + space)) {
 
-		if(findSegmentIn(currentAddress, memSize, lastSegmentAddress))
+		//TODO: Verificar parametro getFist
+		// 		Ahora lo puse en 0
+		if(findSegmentIn(currentAddress, memSize, 0, lastSegmentAddress))
 			currentAddress = lastSegmentAddress->dirFisica + lastSegmentAddress->tamanio + 1;
 		else
 			break;
@@ -476,4 +479,14 @@ int findSegmentIn(int address, int limit, int getFirst, t_info_segmento* segm)
 		return 0;
 
 	return 1;
+}
+
+int generarDireccionLogica(int pid)
+{
+	return 0;
+}
+
+int getProgramBy(int pid, t_info_programa prog)
+{
+	return 0;
 }

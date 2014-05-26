@@ -42,11 +42,13 @@ t_log* logger;
 t_list* list_programas;
 t_dictionary* dic_cpus;
 
-sem_t mutex_program_list;
-
+/*
 pthread_mutex_t semRetardo = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t semAlgoritmo = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t semCompactacion = PTHREAD_MUTEX_INITIALIZER;
+*/
+
+sem_t mutex_program_list;
 
 int sockPrin,space, socketKernel;
 char hostip[16],algoritmo[16];
@@ -81,4 +83,5 @@ int lanzarHiloKernel(int newfd);
 int guardarEnMemoria(t_info_segmento* segm,char* buffer);
 void *hilokernel(void *socket_desc);
 void *hilocpu(void *socket_desc);
+int generarDireccionLogica(int pid);
 #endif /* PROTOCOL_H_ */
