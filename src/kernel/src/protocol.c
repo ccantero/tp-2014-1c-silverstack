@@ -623,7 +623,7 @@ int escuchar_Nuevo_Programa(int sock_program)
 	log_info(logger, "Se recibieron %d bytes desde programa", mensaje.datosNumericos);
 	log_info(logger, "File \n%s", buffer);
 
-	create_pcb(buffer,numbytes, new_socket);
+	pcb_create(buffer,numbytes, new_socket);
 
 	return new_socket;
 }
@@ -1151,7 +1151,8 @@ int conectar_umv(void)
 	unsigned char buffer[MAXDATASIZE];
 	int numbytes,sockfd;
 	struct sockaddr_in their_addr;
-	t_msg_handshake mensaje;
+	t_mensaje mensaje;
+	t_msg_handshake msj_handshake;
 	int size_msg_handshake = sizeof(t_msg_handshake);
 
 	their_addr.sin_family=AF_INET;
@@ -1177,9 +1178,9 @@ int conectar_umv(void)
 	//mensaje.id_proceso = KERNEL;
 	//mensaje.datosNumericos = 0;
 	mensaje.tipo = KERNEL;
-	memcpy(buffer,&mensaje,size_msg_handshake);
+	memcpy(buffer,&mensaje,SIZE_MSG);
 
-	if((numbytes=write(sockfd,buffer,size_msg_handshake))<=0)
+	if((numbytes=write(sockfd,buffer,SIZE_MSG))<=0)
 	{
 		log_error(logger, "Error en el write en el socket UMV");
 		return -1;
@@ -1194,9 +1195,9 @@ int conectar_umv(void)
 		return -1;
 	}
 
-	memcpy(&mensaje,buffer,size_msg_handshake);
+	memcpy(&msj_handshake,buffer,size_msg_handshake);
 
-	if(mensaje.tipo  == UMV)
+	if(msj_handshake.tipo  == UMV)
 	{
 		log_info(logger, "Conexion Lograda con la UMV");
 		return sockfd;

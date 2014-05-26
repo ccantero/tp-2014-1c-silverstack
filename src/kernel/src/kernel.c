@@ -85,12 +85,15 @@ int main(int argc, char *argv[])
 	pthread_create(&th_pcp,NULL,(void*)planificador_rr,NULL);
 
 	sock_umv = conectar_umv();
-	sock_program = servidor_Programa();
 	sock_cpu = servidor_CPU();
+	sock_program = servidor_Programa();
 
 	if(sock_umv == -1 || sock_program == -1 || sock_cpu == -1)
 	{
 		printf("ERROR, Alguno de los sockets principales no pudo iniciar. \n");
+		printf("ERROR, sock_umv = %d \n", sock_umv);
+		printf("ERROR, sock_program = %d \n", sock_program);
+		printf("ERROR, sock_cpu = %d \n", sock_cpu);
 		return -1;
 	}
 

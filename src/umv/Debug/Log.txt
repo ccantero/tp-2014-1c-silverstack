@@ -1,0 +1,17 @@
+[INFO] 19:39:49:812 UMV/(17845:17846): Se lanzo el hilo de consola
+[INFO] 19:39:52:892 UMV/(17845:17845): Conexion aceptada.
+[ERROR] 19:39:52:893 UMV/(17845:17853): socket 5 desconectado.
+
+[INFO] 19:42:04:431 UMV/(17998:17999): Se lanzo el hilo de consola
+[INFO] 19:42:07:313 UMV/(17998:17998): Conexion aceptada.
+[ERROR] 19:42:07:314 UMV/(17998:18006): socket 6 desconectado.
+
+[INFO] 19:44:36:777 UMV/(18111:18112): Se lanzo el hilo de consola
+[INFO] 19:44:40:219 UMV/(18111:18111): Conexion aceptada.
+[INFO] 19:44:50:7 UMV/(18111:18111): Conexion aceptada.
+[INFO] 19:49:42:505 UMV/(18355:18356): Se lanzo el hilo de consola
+[INFO] 19:49:46:290 UMV/(18355:18355): Conexion aceptada.
+[ERROR] 19:49:49:109 UMV/(18355:18363): No se pudo crear segmento.
+[ERROR] 19:49:49:148 UMV/(18355:18363): No se identifica mensaje del Kernel
+[ERROR] 19:49:49:149 UMV/(18355:18363): No se identifica mensaje del Kernel
+[ERROR] 19:49:49:149 UMV/(18355:18363): No se identifica mensaje del Kernel
