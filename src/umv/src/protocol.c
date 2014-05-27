@@ -64,7 +64,9 @@ void consola (void* param)
    					printf(">");
    					scanf("%d", &valor_numerico);
    					getchar(); // Para leer el ultimo enter
+   					pthread_mutex_lock(&semCompactacion);
    					respuesta = crear_segmento(proc_id, valor_numerico);
+   					pthread_mutex_unlock(&semCompactacion);
    					switch(respuesta)
    					{
    					case -1:
@@ -96,7 +98,9 @@ void consola (void* param)
    				printf(">");
    				scanf("%d", &proc_id);
    				getchar(); // Para leer el ultimo enter
+   				pthread_mutex_lock(&semCompactacion);
    				respuesta = destruir_segmentos(proc_id);
+   				pthread_mutex_unlock(&semCompactacion);
    				if (respuesta == 1)
    				{
    					printf("Los segmentos del programa fueron destruidos satisfactoriamente.\n");
