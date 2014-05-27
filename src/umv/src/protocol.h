@@ -22,6 +22,7 @@
 #include <commons/collections/queue.h>
 #include <commons/collections/list.h>
 #include <src/silverstack.h>
+#include <ncurses.h>
 
 #define MAX_CONEXIONES 7
 #define PATH_CONFIG "../conf"
@@ -92,5 +93,6 @@ int transformar_direccion_en_fisica(int direccion, int pid);
 int hay_espacio_en_memoria(int tam);
 int asignar_direccion_logica();
 int asignar_direccion_en_memoria();
+void dump_memoria();
 
 #endif /* PROTOCOL_H_ */

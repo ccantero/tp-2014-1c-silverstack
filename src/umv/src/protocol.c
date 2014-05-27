@@ -12,6 +12,9 @@
 
 void consola (void* param)
 {
+	initscr();
+	echo();
+	scrollok(stdscr, TRUE);
 	char comando[100];
 	char comando2[100];
 	int flag_comandoOK;
@@ -24,145 +27,161 @@ void consola (void* param)
 	int respuesta;
 	int dir_fisica;
 	log_info(logger, "Se lanzo el hilo de consola");
-	printf("-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-\n");
-	printf("         Bienvenido a la consola de UMV           \n");
-	printf("-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-\n");
+	printw("-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-\n");
+	printw("         Bienvenido a la consola de UMV           \n");
+	printw("-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-\n");
+	refresh();
 	// Bucle principal esperando peticiones del usuario
 	for(;;)
 	{
 		flag_comandoOK = 0;
 		flag_comandoOK2 = 0;
 		fflush(stdin);
-    	printf("Ingrese el comando: \n");
-    	printf(">");
-    	fgets(comando, 100, stdin);
-   		if (flag_comandoOK == 0 && strcmp(comando, "operacion\n") == 0)
+    	printw("Ingrese el comando: \n");
+    	printw(">");
+    	refresh();
+    	getstr(comando);
+   		if (flag_comandoOK == 0 && strcmp(comando, "operacion") == 0)
    		{
-   			printf("Operaciones disponibles: \n");
-   			printf("\tcrear segmento\n");
-   			printf("\tsolicitar memoria\n");
-   			printf("\tescribir memoria\n");
-   			printf("\tdestruir segmentos\n");
-   			printf("Ingrese la operacion: \n");
-   			printf(">");
-   			fgets(comando2, 100, stdin);
-   			if (flag_comandoOK2 == 0 && strcmp(comando2, "crear segmento\n") == 0)
+   			printw("Operaciones disponibles: \n");
+   			printw("\tcrear segmento\n");
+   			printw("\tsolicitar memoria\n");
+   			printw("\tescribir memoria\n");
+   			printw("\tdestruir segmentos\n");
+   			printw("Ingrese la operacion: \n");
+   			printw(">");
+   			refresh();
+   			getstr(comando2);
+   			if (flag_comandoOK2 == 0 && strcmp(comando2, "crear segmento") == 0)
    			{
-   				printf("Ingrese proceso: \n");
-   				printf(">");
-   				scanf("%d", &proc_id);
-   				getchar(); // Para leer el ultimo enter
+   				printw("Ingrese proceso: \n");
+   				printw(">");
+   				refresh();
+   				scanw("%d", &proc_id);
    				respuesta = verificar_proc_id(proc_id);
    				if (respuesta == 0)
    				{
-   					printf("El proceso ingresado no existe en memoria.\n");
-   					printf("Ingrese un proceso que exista en memoria para crear un segmento.\n");
+   					printw("El proceso ingresado no existe en memoria.\n");
+   					printw("Ingrese un proceso que exista en memoria para crear un segmento.\n");
+   					refresh();
    				}
    				else
    				{
-   					printf("Ingrese tamanio del segmento: ");
-   					printf(">");
-   					scanf("%d", &valor_numerico);
-   					getchar(); // Para leer el ultimo enter
+   					printw("Ingrese tamanio del segmento: \n");
+   					printw(">");
+   					refresh();
+   					scanw("%d", &valor_numerico);
    					pthread_mutex_lock(&semCompactacion);
    					respuesta = crear_segmento(proc_id, valor_numerico);
    					pthread_mutex_unlock(&semCompactacion);
    					switch(respuesta)
    					{
    					case -1:
-   						printf("No hay memoria disponible para ese tamanio de segmento.\n");
-   						printf("El segmento no fue creado.\n");
+   						printw("No hay memoria disponible para ese tamanio de segmento.\n");
+   						printw("El segmento no fue creado.\n");
+   						refresh();
    						break;
    					default:
-   						printf("El segmento fue creado.\n");
+   						log_info(logger, "Segmento de proceso %d creado.", proc_id);
+   						printw("El segmento fue creado.\n");
    						dir_fisica = transformar_direccion_en_fisica(respuesta, proc_id);
-   						printf("Posicion en memoria del segmento: %d", dir_fisica);
+   						printw("Posicion en memoria del segmento: %d\n", dir_fisica);
+   						refresh();
    						break;
    					}
    				}
    				flag_comandoOK2 = 1;
    			}
-   			if (flag_comandoOK2 == 0 && strcmp(comando2, "solicitar memoria\n") == 0)
+   			if (flag_comandoOK2 == 0 && strcmp(comando2, "solicitar memoria") == 0)
    			{
    				// TODO
    				flag_comandoOK2 = 1;
    			}
-   			if (flag_comandoOK2 == 0 && strcmp(comando2, "escribir memoria\n") == 0)
+   			if (flag_comandoOK2 == 0 && strcmp(comando2, "escribir memoria") == 0)
    			{
    				// TODO
    				flag_comandoOK2 = 1;
    			}
-   			if (flag_comandoOK2 == 0 && strcmp(comando2, "destruir segmentos\n") == 0)
+   			if (flag_comandoOK2 == 0 && strcmp(comando2, "destruir segmentos") == 0)
    			{
-   				printf("Ingrese proceso: \n");
-   				printf(">");
-   				scanf("%d", &proc_id);
-   				getchar(); // Para leer el ultimo enter
+   				printw("Ingrese proceso: \n");
+   				printw(">");
+   				refresh();
+   				scanw("%d", &proc_id);
    				pthread_mutex_lock(&semCompactacion);
    				respuesta = destruir_segmentos(proc_id);
    				pthread_mutex_unlock(&semCompactacion);
    				if (respuesta == 1)
    				{
-   					printf("Los segmentos del programa fueron destruidos satisfactoriamente.\n");
+   					log_info(logger, "Segmentos de proceso %d destruidos satisfactoriamente.", proc_id);
+   					printw("Los segmentos del programa fueron destruidos satisfactoriamente.\n");
+   					refresh();
    				}
    				else
    				{
-   					printf("El programa ingresado no es valido.\n");
+   					printw("El programa ingresado no es valido.\n");
+   					refresh();
    				}
    				flag_comandoOK2 = 1;
    			}
    			flag_comandoOK = 1;
    		}
-   		if (flag_comandoOK == 0 && strcmp(comando, "retardo\n") == 0)
+   		if (flag_comandoOK == 0 && strcmp(comando, "retardo") == 0)
    		{
    			log_info(logger, "Se cambio el valor de retardo por consola.");
-   			printf("Nuevo valor de retardo: ");
-   			scanf("%d", &nuevo_valor);
-   			getchar(); // Para leer el ultimo enter
-   			printf("Valor anterior de retardo: %d\n", retardo);
+   			printw("Nuevo valor de retardo: ");
+   			refresh();
+   			scanw("%d", &nuevo_valor);
+   			printw("Valor anterior de retardo: %d\n", retardo);
    			cambiar_retardo(nuevo_valor);
-   			printf("Valor actual de retardo: %d\n", retardo);
+   			printw("Valor actual de retardo: %d\n", retardo);
+   			refresh();
    			flag_comandoOK = 1;
    		}
-   		if (flag_comandoOK == 0 && strcmp(comando, "algoritmo\n") == 0)
+   		if (flag_comandoOK == 0 && strcmp(comando, "algoritmo") == 0)
    		{
    			log_info(logger, "Se cambio el algoritmo por consola.");
-   			printf("Se cambio el algoritmo.\n");
-   			printf("Algoritmo anterior: %s\n", algoritmo);
+   			printw("Se cambio el algoritmo.\n");
+   			printw("Algoritmo anterior: %s\n", algoritmo);
    			cambiar_algoritmo();
-   			printf("Algoritmo actual: %s\n", algoritmo);
+   			printw("Algoritmo actual: %s\n", algoritmo);
+   			refresh();
    		   	flag_comandoOK = 1;
    		}
-   		if (flag_comandoOK == 0 && strcmp(comando, "compactacion\n") == 0)
+   		if (flag_comandoOK == 0 && strcmp(comando, "compactacion") == 0)
    		{
    			log_info(logger, "Se pidio compactar memoria por consola.");
    			compactar_memoria();
    		   	flag_comandoOK = 1;
    		}
-   		if (flag_comandoOK == 0 && strcmp(comando, "dump\n") == 0)
+   		if (flag_comandoOK == 0 && strcmp(comando, "dump") == 0)
    		{
-   			printf("Llamar a funcion dump\n");
+   			pthread_mutex_lock(&semCompactacion);
+   			dump_memoria();
+   			pthread_mutex_unlock(&semCompactacion);
    		   	flag_comandoOK = 1;
    		}
-   		if (flag_comandoOK == 0 && strcmp(comando, "help\n") == 0)
+   		if (flag_comandoOK == 0 && strcmp(comando, "help") == 0)
    		{
-   			printf("Los unicos comandos habilitados son: \n");
-   			printf("\toperacion\n");
-   			printf("\tretardo\n");
-   			printf("\talgoritmo\n");
-   			printf("\tcompactacion\n");
-   			printf("\tdump\n");
+   			printw("Los unicos comandos habilitados son: \n");
+   			printw("\toperacion\n");
+   			printw("\tretardo\n");
+   			printw("\talgoritmo\n");
+   			printw("\tcompactacion\n");
+   			printw("\tdump\n");
+   			refresh();
    			flag_comandoOK = 1;
    		}
    		if(flag_comandoOK == 0)
    		{
-   			printf("Por favor verifique la sintaxis de los comandos utilizados.\n");
-   			printf("Los unicos comandos habilitados son: \n");
-   			printf("\toperacion\n");
-   			printf("\tretardo\n");
-   			printf("\talgoritmo\n");
-   			printf("\tcompactacion\n");
-   			printf("\tdump\n");
+   			printw("Por favor verifique la sintaxis de los comandos utilizados.\n");
+   			printw("Los unicos comandos habilitados son: \n");
+   			printw("\toperacion\n");
+   			printw("\tretardo\n");
+   			printw("\talgoritmo\n");
+   			printw("\tcompactacion\n");
+   			printw("\tdump\n");
+   			refresh();
    		}
    	}
 }
@@ -360,7 +379,8 @@ void compactar_memoria()
 	if (cant_segmentos != 0)
 	{
 		// TODO Reflejar cambios en "memoria"
-		printf("Compactando...\n");
+		printw("Compactando...\n");
+		refresh();
 		for (cont = 0; cont < cant_segmentos; cont++)
 		{
 			// Busco la menor direccion en mi lista de segmentos utilizados
@@ -405,7 +425,8 @@ void compactar_memoria()
 	}
 	else
 	{
-		printf("Todavia no hay segmentos a compactar.\n");
+		printw("Todavia no hay segmentos a compactar.\n");
+		refresh();
 	}
 	pthread_mutex_unlock(&semCompactacion);
 }
@@ -763,4 +784,53 @@ int asignar_direccion_en_memoria()
 		}
 	}
 	return 0;
+}
+
+void dump_memoria()
+{
+	int mem_utilizada = 0;
+	clear();
+	refresh();
+	int x = 0;
+	int y = 0;
+	move(y, x);
+	printw("Id Proceso\n");
+	x += 15;
+	move(y, x);
+	printw("Dir. Fisica Segmento\n");
+	x += 25;
+	move(y, x);
+	printw("Tamanio Segmento\n");
+	refresh();
+	t_info_programa *prog;
+	t_info_segmento *seg;
+	int i;
+	int j;
+	x = 0;
+	y = 1;
+	for (i = 0; i < list_size(list_programas); i++)
+	{
+		prog = list_get(list_programas, i);
+		for (j = 0; j < list_size(prog->segmentos); j++)
+		{
+			seg = list_get(prog->segmentos, j);
+			move(y, x);
+			printw("%d", seg->id);
+			x += 15;
+			move(y, x);
+			printw("%d", seg->dirFisica);
+			x += 25;
+			move(y, x);
+			printw("%d", seg->tamanio);
+			y++;
+			x = 0;
+			refresh();
+			mem_utilizada += seg->tamanio;
+		}
+	}
+	y++;
+	move(y, x);
+	printw("Memoria total: %d\n", space);
+	printw("Memoria utilizada: %d\n", mem_utilizada);
+	refresh();
 }
