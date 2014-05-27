@@ -13,37 +13,114 @@
 void consola (void* param)
 {
 	char comando[100];
-	char *c;
+	char comando2[100];
 	int flag_comandoOK;
+	int flag_comandoOK2;
 	int nuevo_valor;
+	int valor_numerico;
+	int valor_numerico2;
+	int valor_numerico3;
+	int proc_id = -1;
+	int respuesta;
+	int dir_fisica;
 	log_info(logger, "Se lanzo el hilo de consola");
+	printf("-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-\n");
+	printf("         Bienvenido a la consola de UMV           \n");
+	printf("-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-\n");
 	// Bucle principal esperando peticiones del usuario
 	for(;;)
 	{
 		flag_comandoOK = 0;
-    	printf("-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-\n");
-    	printf("         Bienvenido a la consola de UMV           \n");
-    	printf("-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-\n");
+		flag_comandoOK2 = 0;
+		fflush(stdin);
     	printf("Ingrese el comando: \n");
     	printf(">");
-    	scanf("%s",comando);
-    	c = strtok(comando,"\n");
-   		if (flag_comandoOK == 0 && strncmp(c,"operacion",strlen("operacion"))==0 )
+    	fgets(comando, 100, stdin);
+   		if (flag_comandoOK == 0 && strcmp(comando, "operacion\n") == 0)
    		{
-   			printf("Llamar a funcion operacion\n");
+   			printf("Operaciones disponibles: \n");
+   			printf("\tcrear segmento\n");
+   			printf("\tsolicitar memoria\n");
+   			printf("\tescribir memoria\n");
+   			printf("\tdestruir segmentos\n");
+   			printf("Ingrese la operacion: \n");
+   			printf(">");
+   			fgets(comando2, 100, stdin);
+   			if (flag_comandoOK2 == 0 && strcmp(comando2, "crear segmento\n") == 0)
+   			{
+   				printf("Ingrese proceso: \n");
+   				printf(">");
+   				scanf("%d", &proc_id);
+   				getchar(); // Para leer el ultimo enter
+   				respuesta = verificar_proc_id(proc_id);
+   				if (respuesta == 0)
+   				{
+   					printf("El proceso ingresado no existe en memoria.\n");
+   					printf("Ingrese un proceso que exista en memoria para crear un segmento.\n");
+   				}
+   				else
+   				{
+   					printf("Ingrese tamanio del segmento: ");
+   					printf(">");
+   					scanf("%d", &valor_numerico);
+   					getchar(); // Para leer el ultimo enter
+   					respuesta = crear_segmento(proc_id, valor_numerico);
+   					switch(respuesta)
+   					{
+   					case -1:
+   						printf("No hay memoria disponible para ese tamanio de segmento.\n");
+   						printf("El segmento no fue creado.\n");
+   						break;
+   					default:
+   						printf("El segmento fue creado.\n");
+   						dir_fisica = transformar_direccion_en_fisica(respuesta, proc_id);
+   						printf("Posicion en memoria del segmento: %d", dir_fisica);
+   						break;
+   					}
+   				}
+   				flag_comandoOK2 = 1;
+   			}
+   			if (flag_comandoOK2 == 0 && strcmp(comando2, "solicitar memoria\n") == 0)
+   			{
+   				// TODO
+   				flag_comandoOK2 = 1;
+   			}
+   			if (flag_comandoOK2 == 0 && strcmp(comando2, "escribir memoria\n") == 0)
+   			{
+   				// TODO
+   				flag_comandoOK2 = 1;
+   			}
+   			if (flag_comandoOK2 == 0 && strcmp(comando2, "destruir segmentos\n") == 0)
+   			{
+   				printf("Ingrese proceso: \n");
+   				printf(">");
+   				scanf("%d", &proc_id);
+   				getchar(); // Para leer el ultimo enter
+   				respuesta = destruir_segmentos(proc_id);
+   				if (respuesta == 1)
+   				{
+   					printf("Los segmentos del programa fueron destruidos satisfactoriamente.\n");
+   				}
+   				else
+   				{
+   					printf("El programa ingresado no es valido.\n");
+   				}
+   				flag_comandoOK2 = 1;
+   			}
    			flag_comandoOK = 1;
    		}
-   		if (flag_comandoOK == 0 && strncmp(c,"retardo",strlen("retardo"))==0)
+   		if (flag_comandoOK == 0 && strcmp(comando, "retardo\n") == 0)
    		{
    			log_info(logger, "Se cambio el valor de retardo por consola.");
    			printf("Nuevo valor de retardo: ");
    			scanf("%d", &nuevo_valor);
+   			getchar(); // Para leer el ultimo enter
    			printf("Valor anterior de retardo: %d\n", retardo);
    			cambiar_retardo(nuevo_valor);
    			printf("Valor actual de retardo: %d\n", retardo);
    			flag_comandoOK = 1;
    		}
-   		if (flag_comandoOK == 0 && strncmp(c,"algoritmo",strlen("algoritmo"))==0)
+   		if (flag_comandoOK == 0 && strcmp(comando, "algoritmo\n") == 0)
    		{
    			log_info(logger, "Se cambio el algoritmo por consola.");
    			printf("Se cambio el algoritmo.\n");
@@ -52,20 +129,30 @@ void consola (void* param)
    			printf("Algoritmo actual: %s\n", algoritmo);
    		   	flag_comandoOK = 1;
    		}
-   		if (flag_comandoOK == 0 && strncmp(c,"compactacion",strlen("compactacion"))==0)
+   		if (flag_comandoOK == 0 && strcmp(comando, "compactacion\n") == 0)
    		{
    			log_info(logger, "Se pidio compactar memoria por consola.");
    			compactar_memoria();
    		   	flag_comandoOK = 1;
    		}
-   		if (flag_comandoOK == 0 && strncmp(c,"dump",strlen("dump"))==0)
+   		if (flag_comandoOK == 0 && strcmp(comando, "dump\n") == 0)
    		{
    			printf("Llamar a funcion dump\n");
    		   	flag_comandoOK = 1;
    		}
+   		if (flag_comandoOK == 0 && strcmp(comando, "help\n") == 0)
+   		{
+   			printf("Los unicos comandos habilitados son: \n");
+   			printf("\toperacion\n");
+   			printf("\tretardo\n");
+   			printf("\talgoritmo\n");
+   			printf("\tcompactacion\n");
+   			printf("\tdump\n");
+   			flag_comandoOK = 1;
+   		}
    		if(flag_comandoOK == 0)
    		{
-   			printf("Por favor verifique la sintaxis de los comandos utilizados\n");
+   			printf("Por favor verifique la sintaxis de los comandos utilizados.\n");
    			printf("Los unicos comandos habilitados son: \n");
    			printf("\toperacion\n");
    			printf("\tretardo\n");
@@ -488,5 +575,188 @@ int generarDireccionLogica(int pid)
 
 int getProgramBy(int pid, t_info_programa prog)
 {
+	return 0;
+}
+
+int verificar_proc_id(int pid)
+{
+	int i;
+	t_info_programa *prog;
+	for (i = 0; i < list_size(list_programas); i++)
+	{
+		prog = list_get(list_programas, i);
+		if (prog->pid == pid)
+		{
+			return 1;
+		}
+	}
+	return 0;
+}
+
+int crear_segmento(int idproc, int tamanio)
+{
+	int tamanio_lista = list_size(list_programas);
+	t_info_programa *prog;
+	t_info_segmento *seg;
+	int i;
+	if (tamanio_lista != 0)
+	{
+		// Busco al programa en mi lista de programas
+		for (i = 0; i < tamanio_lista; i++)
+		{
+			prog = list_get(list_programas, i);
+			if (prog->pid == idproc)
+			{
+				break;
+			}
+		}
+		seg = (t_info_segmento *)malloc(sizeof(t_info_segmento));
+		seg->id = idproc;
+		seg->tamanio = tamanio;
+		seg->dirFisica = asignar_direccion_en_memoria();
+		seg->dirLogica = asignar_direccion_logica();
+		list_add(prog->segmentos, seg);
+		return seg->dirLogica;
+	}
+	else
+	{
+		if (hay_espacio_en_memoria(tamanio))
+		{
+			prog = (t_info_programa *)malloc(sizeof(t_info_programa));
+			prog->pid = idproc;
+			prog->segmentos = list_create();
+			seg = (t_info_segmento *)malloc(sizeof(t_info_segmento));
+			seg->id = idproc;
+			seg->tamanio = tamanio;
+			seg->dirFisica = asignar_direccion_en_memoria();
+			seg->dirLogica = asignar_direccion_logica();
+			list_add(prog->segmentos, seg);
+			list_add(list_programas, prog);
+			return seg->dirLogica;
+		}
+		else
+		{
+			return -1;
+		}
+	}
+}
+
+int destruir_segmentos(int idproc)
+{
+	int tamanio_lista = list_size(list_programas);
+	int i;
+	int indice;
+	int encontre_programa = 0;
+	t_info_programa *prog;
+	// Busco al programa en mi lista de programas
+	for (i = 0; i < tamanio_lista; i++)
+	{
+		prog = list_get(list_programas, i);
+		if (prog->pid == idproc)
+		{
+			indice = i;
+			encontre_programa = 1;
+			break;
+		}
+	}
+	if (encontre_programa == 1)
+	{
+		for (i = list_size(prog->segmentos) - 1; i >= 0; i--)
+		{
+			list_remove(prog->segmentos, i);
+		}
+		list_destroy(prog->segmentos);
+		list_remove(list_programas, indice);
+		return 1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+int transformar_direccion_en_fisica(int direccion, int pid)
+{
+
+	return 0;
+}
+
+int transformar_direccion_en_logica(int direccion, int pid)
+{
+
+	return 0;
+}
+
+int hay_espacio_en_memoria(int tam)
+{
+	int mem[space];
+	int i;
+	int j;
+	int k;
+	t_info_programa *prog;
+	t_info_segmento *seg;
+	int espacio_libre = 0;
+	for (i = 0; i < space; i++)
+	{
+		mem[i] = 0;
+	}
+	for (i = 0; i < list_size(list_programas); i++)
+	{
+		prog = list_get(list_programas, i);
+		for (j = 0; j < list_size(prog->segmentos); j++)
+		{
+			seg = list_get(prog->segmentos, j);
+			for (k = 0; k < seg->tamanio; k++)
+			{
+				mem[k + seg->dirFisica] = 1;
+			}
+		}
+	}
+	for (i = 0; i < space; i++)
+	{
+		if (mem[i] == 0)
+		{
+			espacio_libre++;
+			if (espacio_libre == tam)
+			{
+				return 1;
+			}
+		}
+		else
+		{
+			espacio_libre = 0;
+		}
+	}
+	return 0;
+}
+
+int asignar_direccion_logica()
+{
+
+	return 0;
+}
+
+int asignar_direccion_en_memoria()
+{
+	if (obtener_cant_segmentos() == 0)
+	{
+		return 0;
+	}
+	else
+	{
+		if (!strcmp(algoritmo, "WF") ||
+			!strcmp(algoritmo, "Wf") ||
+			!strcmp(algoritmo, "wf") ||
+			!strcmp(algoritmo, "Worst-Fit") ||
+			!strcmp(algoritmo, "Worst-fit") ||
+			!strcmp(algoritmo, "worst-fit"))
+		{
+			// El algoritmo es worst-fit
+		}
+		else
+		{
+			// El algoritmo es first-fit
+		}
+	}
 	return 0;
 }

@@ -84,4 +84,13 @@ int guardarEnMemoria(t_info_segmento* segm,char* buffer);
 void *hilokernel(void *socket_desc);
 void *hilocpu(void *socket_desc);
 int generarDireccionLogica(int pid);
+int verificar_proc_id(int pid);
+int crear_segmento(int idproc, int tamanio);
+int destruir_segmentos(int idproc);
+int transformar_direccion_en_logica(int direccion, int pid);
+int transformar_direccion_en_fisica(int direccion, int pid);
+int hay_espacio_en_memoria(int tam);
+int asignar_direccion_logica();
+int asignar_direccion_en_memoria();
+
 #endif /* PROTOCOL_H_ */
