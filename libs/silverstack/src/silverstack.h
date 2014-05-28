@@ -70,7 +70,6 @@ typedef struct {
 } t_msg_envio_bytes;
 
 typedef struct {
-	int id_programa;
 	int tipo;
 } t_msg_handshake;
 

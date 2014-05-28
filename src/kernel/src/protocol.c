@@ -625,6 +625,8 @@ int escuchar_Nuevo_Programa(int sock_program)
 
 	pcb_create(buffer,numbytes, new_socket);
 
+	free(buffer);
+
 	return new_socket;
 }
 
@@ -702,6 +704,7 @@ void pcb_create(char* buffer, int tamanio_buffer, int sock_program)
 
 	new_pcb->unique_id = process_Id;
 	new_pcb->code_segment = umv_send_segment(++process_Id, buffer, tamanio_buffer);
+	return;
 	new_pcb->stack_segment = umv_send_segment(process_Id, buffer, -1);
 	new_pcb->stack_pointer = new_pcb->stack_segment;
 	new_pcb->etiquetas_index = umv_send_segment(process_Id, (char*) metadata->instrucciones_serializado, metadata->instrucciones_size);

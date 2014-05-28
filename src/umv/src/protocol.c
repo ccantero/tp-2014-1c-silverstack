@@ -332,7 +332,7 @@ int sockets_accept(int sockfd) {
 
 int sockets_send(int sockfd, t_mensaje *mensaje, char *data) {
 	strcpy(mensaje->mensaje, "Hola kernel.");
-	return send(sockfd, &mensaje, sizeof(t_mensaje), 0);
+	return send(sockfd, mensaje, sizeof(t_mensaje), 0);
 }
 
 int atenderPedido(int sockfd) {
@@ -378,7 +378,6 @@ void compactar_memoria()
 	int cont;
 	if (cant_segmentos != 0)
 	{
-		// TODO Reflejar cambios en "memoria"
 		printw("Compactando...\n");
 		refresh();
 		for (cont = 0; cont < cant_segmentos; cont++)
@@ -417,6 +416,9 @@ void compactar_memoria()
 					break;
 				}
 			}
+
+			memcpy(&memoria[nueva_direccion],&memoria[segm->dirFisica],segm->tamanio);
+
 			segm->dirFisica = nueva_direccion;
 			nueva_direccion = segm->tamanio + 1;
 			primer_direccion = space;
@@ -458,15 +460,76 @@ int guardarEnMemoria(t_info_segmento* segm,char* buffer) {
 int buscarMemoriaDisponible(int tamanio)
 {
 	int dir;
-	if(algoritmo == "First-Fit")
-		dir = getFirstFitMemory(tamanio);
-	else if(algoritmo == "Worst-Fit")
+	log_info(logger,"buscarMemoriaDisponible");
+	if(strcmp(algoritmo,"First-Fit")==0)
+	{
+		log_info(logger,"First-Fit");
+		dir = getFirstFitMemory2(tamanio);
+		log_info(logger,"Devolvi direccion %d", dir);
+	}
+	else if(strcmp(algoritmo,"Worst-Fit")==0)
+	{
+		log_info(logger,"Worst-Fit");
 		dir = getWorstFitMemory(tamanio);
+	}
 	else
 		dir = 0;
 
 	return dir;
 }
+
+// TODO: getFirstFitMemory2
+
+int getFirstFitMemory2(int memSize)
+{
+	return 100;
+
+	int mem[space];
+	int i;
+	int j;
+	int k;
+	t_info_programa *prog;
+	t_info_segmento *seg;
+	int espacio_libre = 0;
+	int dir_inicial = 0;
+
+	for (i = 0; i < space; i++)
+	{
+		mem[i] = 0;
+	}
+	for (i = 0; i < list_size(list_programas); i++)
+	{
+		prog = list_get(list_programas, i);
+		for (j = 0; j < list_size(prog->segmentos); j++)
+		{
+			seg = list_get(prog->segmentos, j);
+			for (k = 0; k < seg->tamanio; k++)
+			{
+				mem[k + seg->dirFisica] = 1;
+			}
+		}
+	}
+	for (i = 0; i < space; i++)
+	{
+		if (mem[i] == 0)
+		{
+			espacio_libre++;
+			if (espacio_libre == memSize)
+			{
+				return dir_inicial;
+			}
+		}
+		else
+		{
+			espacio_libre = 0;
+			dir_inicial = i + 1;
+		}
+	}
+	return -1;
+
+}
+
+
 
 int getFirstFitMemory(int memSize)
 {
@@ -477,7 +540,7 @@ int getFirstFitMemory(int memSize)
 
 		//TODO: Verificar parametro getFist
 		// 		Ahora lo puse en 0
-		if(findSegmentIn(currentAddress, memSize, 0, lastSegmentAddress))
+		if(findSegmentIn(currentAddress, memSize, 0,lastSegmentAddress))
 			currentAddress = lastSegmentAddress->dirFisica + lastSegmentAddress->tamanio + 1;
 		else
 			break;
@@ -496,26 +559,42 @@ int getWorstFitMemory(int memSize)
 }
 
 t_info_segmento* crearSegmento(int pid, int dirFisica, int tamanioPedido) {
+	log_info(logger, "crearSegmento pid = %d, dirFisica = %d, tamanioPedido = %d", pid, dirFisica, tamanioPedido);
 	t_info_segmento* s = malloc(sizeof(t_info_segmento));
+	s->id = pid;
 	s->dirFisica = dirFisica;
 	s->dirLogica = generarDireccionLogica(pid);
 	s->tamanio = tamanioPedido;
-	t_info_programa prog;
-	if(getProgramBy(pid, &prog)) {
-		list_add(prog.segmentos, &prog);
-		return s;
-	}
+	t_info_programa* prog = malloc(sizeof(t_info_programa));
 
-	return NULL;
+	prog->pid = pid;
+	prog->segmentos = list_create();
+	list_add(prog->segmentos,s);
+	list_add(list_programas,prog);
+
+	//TODO: getProgramBy No anda
+
+	//t_info_programa prog;
+	//if(getProgramBy(pid, &prog)) {
+	//	list_add(prog.segmentos, &prog);
+		return s;
+	//}
+
+	//return NULL;
 }
 
 int guardarEnSegmento(int pid, int segmId, char* buffer) {
 	t_info_programa prog;
 	t_info_segmento segm;
-	if(getProgramById(pid, &prog)) {
-		if(getSegmentById(segmId, &prog, &segm)) {
+
+	if(getProgramById(pid, &prog))
+	{
+		if(getSegmentById(segmId, &prog, &segm))
+		{
 			if(guardarEnMemoria(&segm, buffer))
+			{
 				return 1;
+			}
 		}
 	}
 	return 0;
@@ -535,15 +614,22 @@ int getProgramById(int pid, t_info_programa* prog) {
 }
 
 int getSegmentById(int segmId, t_info_programa* prog, t_info_segmento* segm) {
+
 	int _existe_segm(t_info_segmento *s) {
 		return s->id == segmId;
 	}
 
+	segm = list_find(prog->segmentos, (void *) _existe_segm);
+	if(segm == NULL)
+		return 0;
+
+	return 1;
+	/*
 	if(list_any_satisfy(prog->segmentos, (void *) _existe_segm)) {
 		 segm = list_find(prog->segmentos, (void *) _existe_segm);
 		 return 1;
 	}
-
+	*/
 	return 0;
 }
 

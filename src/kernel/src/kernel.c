@@ -136,8 +136,6 @@ int main(int argc, char *argv[])
 					if(nuevo_maximo < new_socket)
 						nuevo_maximo = new_socket;
 
-
-
 					continue;
 				}
 
