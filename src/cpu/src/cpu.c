@@ -94,32 +94,26 @@ int main(int argc, char *argv[])
 	{
 		// Recibo el pcb del proceso a ejecutar
 		recv(sockKernel, &pcb, sizeof(t_pcb), 0);
-		// Recibo el quantum para saber cuantas instrucciones ejecutar
-		recv(sockKernel, &mensaje, sizeof(t_mensaje), 0);
-		quantum = mensaje.datosNumericos;
-		for (i = 0; i < quantum; i++)
-		{
-			// Preparo mensaje para la UMV
-			msg_solicitud_bytes.base = pcb.code_segment;
-			msg_solicitud_bytes.offset = pcb.instruction_index;
-			msg_solicitud_bytes.tamanio = pcb.instruction_index + 4;
-			msg_cambio_proceso_activo.id_programa = pcb.unique_id;
-			send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
-			send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
-			// Espero la respuesta de la UMV
-			recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-			char buffer[mensaje.datosNumericos];
-			recv(sockUmv, &buffer, sizeof(mensaje.datosNumericos), 0);
-			// Analizo la instruccion
-			analizadorLinea(strdup(buffer), &primitivas, &primitivasKernel);
-			// Aviso al kernel que termino el quantum del proceso y devuelvo pcb actualizado
-			mensaje.id_proceso = CPU;
-			mensaje.tipo = QUANTUMFINISH;
-			send(sockKernel, &mensaje, sizeof(t_mensaje), 0);
-			pcb.program_counter++;
-			pcb.instruction_index += 8;
-			send(sockKernel, &pcb, sizeof(t_pcb), 0);
-		}
+		// Preparo mensaje para la UMV
+		msg_solicitud_bytes.base = pcb.code_segment;
+		msg_solicitud_bytes.offset = pcb.instruction_index;
+		msg_solicitud_bytes.tamanio = pcb.instruction_index + 4;
+		msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+		send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+		send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
+		// Espero la respuesta de la UMV
+		recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+		char buffer[mensaje.datosNumericos];
+		recv(sockUmv, &buffer, sizeof(mensaje.datosNumericos), 0);
+		// Analizo la instruccion
+		analizadorLinea(strdup(buffer), &primitivas, &primitivasKernel);
+		// Aviso al kernel que termino el quantum del proceso y devuelvo pcb actualizado
+		mensaje.id_proceso = CPU;
+		mensaje.tipo = QUANTUMFINISH;
+		send(sockKernel, &mensaje, sizeof(t_mensaje), 0);
+		pcb.program_counter++;
+		pcb.instruction_index += 8;
+		send(sockKernel, &pcb, sizeof(t_pcb), 0);
 	}
 
 	// Libero memoria del logger
