@@ -613,7 +613,6 @@ int getWorstFitMemory(int memSize)
 int generarDireccionLogica(int pid,int memSize)
 {
 	//falta agregar la id del programa para identificarla
-	int mem[space];
 	int i;
 	int j;
 	int k;
@@ -621,40 +620,23 @@ int generarDireccionLogica(int pid,int memSize)
 	t_info_segmento *seg;
 	int espacio_libre = 0;
 	int dir_inicial = 0;
-	int RANDMAX = space - memSize;
 
-	//inicializo toda la memoria como vacia
-	for (i = 0; i < space; i++)
-	{
-		mem[i] = 0;
-	}
 	//busco los segmentos dentro del programa y si estan ocupados les pongo 1
-
-		prog = list_get(list_programas, pid);
-		for (j = 0; j < list_size(prog->segmentos); j++)
+	for (i = 0; i < list_size(list_programas); i++)
+	{
+		prog = list_get(list_programas, i);
+		if (prog->pid == pid)
 		{
-			seg = list_get(prog->segmentos, j);
-			for (k = 0; k < seg->tamanio; k++)
+			for (k = 0; k < list_size(prog->segmentos); k++)
 			{
-				mem[k + seg->dirLogica] = 1;
+				seg = list_get(prog->segmentos, k);
+				// TODO verificar direccion logica del segmento con la direccion logica generada
+				// TODO si es igual, la direccion generada es invalida; hay q generar otra
+				// TODO si la direccion generada esta entre los limites del segmento es invalida; hay
+				// q generar otra
+				// TODO si la direccion es valida hay q devolverla
 			}
 		}
-	while(1)
-	{
-		//hago un random y me fijo que ese y su tamano esten vacios, sino hago random de nuevo
-
-		i = rand(RAND_MAX);
-		dir_inicial = i;
-
-		for(k=i;mem[k]==0;k++)
-		{
-			espacio_libre++;
-		}
-		if(espacio_libre >= memSize)
-		{
-			return dir_inicial;
-		}
-		espacio_libre = 0;
 	}
 	return 0;
 }
