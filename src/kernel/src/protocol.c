@@ -42,6 +42,7 @@ void GetInfoConfFile(char* PATH_CONFIG)
 	port_umv=config_get_int_value(config, "PUERTO_UMV");
 	quantum=config_get_int_value(config, "QUANTUM");
 	retardo=config_get_int_value(config, "RETARDO");
+	stack_size=config_get_int_value(config, "STACK");
 	Globales = config_get_array_value(config, "GLOBALES");
 
 	AUX = ID_HIO;
@@ -691,6 +692,9 @@ int escuchar_Programa(int sock_program, char* buffer)
 
 void pcb_create(char* buffer, int tamanio_buffer, int sock_program)
 {
+
+	log_info(logger,"Inicio pcb_create");
+
 	t_medatada_program* metadata;
 	t_pcb* new_pcb = (t_pcb*) malloc(sizeof(t_pcb));
 
@@ -700,15 +704,21 @@ void pcb_create(char* buffer, int tamanio_buffer, int sock_program)
 		return;
 	}
 
+
 	metadata = metadatada_desde_literal(buffer);
 
 	new_pcb->unique_id = process_Id;
 	new_pcb->code_segment = umv_send_segment(++process_Id, buffer, tamanio_buffer);
-	return;
-	new_pcb->stack_segment = umv_send_segment(process_Id, buffer, -1);
+	new_pcb->stack_segment = umv_send_segment(process_Id, "", stack_size);
 	new_pcb->stack_pointer = new_pcb->stack_segment;
-	new_pcb->etiquetas_index = umv_send_segment(process_Id, (char*) metadata->instrucciones_serializado, metadata->instrucciones_size);
-	new_pcb->etiquetas_index = umv_send_segment(process_Id, (char*) metadata->etiquetas, metadata->etiquetas_size);
+	if(metadata->instrucciones_size >0)
+	{
+		new_pcb->etiquetas_index = umv_send_segment(process_Id, (char*) metadata->instrucciones_serializado, metadata->instrucciones_size);
+	}
+	if(metadata->etiquetas_size >0)
+	{
+		new_pcb->etiquetas_index = umv_send_segment(process_Id, (char*) metadata->etiquetas, metadata->etiquetas_size);
+	}
 	new_pcb->program_counter = metadata->instruccion_inicio;
 	new_pcb->context_actual = 0;
 	new_pcb->peso = 5 * metadata->cantidad_de_etiquetas +
@@ -725,6 +735,8 @@ void pcb_create(char* buffer, int tamanio_buffer, int sock_program)
 
 	sem_post(&sem_plp);
 	metadata_destruir(metadata);
+
+	log_info(logger,"Fin pcb_create");
 }
 
 /*
@@ -961,8 +973,27 @@ int umv_send_segment(int pid, char* buffer, int tamanio)
 	}
 
 	direccion_logica = mensaje.datosNumericos;
+	log_info(logger,"direccion_logica = %d", direccion_logica);
 
-	log_info(logger,"Envio msg_cambio_proceso_activo");
+	if(strlen(buffer) == 0)
+		return direccion_logica;
+
+	mensaje.id_proceso = KERNEL;
+	mensaje.tipo = ENVIOBYTES;
+	mensaje.datosNumericos = 0;
+
+	memset(buffer_msg,'\0',MAXDATASIZE);
+	memcpy(buffer_msg,&mensaje,SIZE_MSG);
+
+	log_info(logger,"Envio t_mensaje ENVIOBYTES");
+
+	if((numbytes=write(sock_umv,buffer_msg,SIZE_MSG))<=0)
+	{
+		log_error(logger, "Error en el write del codigo");
+		close(sock_umv);
+		free(buffer_msg);
+		return -1;
+	}
 
 	if(umv_change_process(pid) != 0)
 	{
@@ -973,13 +1004,14 @@ int umv_send_segment(int pid, char* buffer, int tamanio)
 
 	log_info(logger,"Envio msg_envio_bytes");
 
-	if(umv_send_bytes(direccion_logica, direccion_logica + tamanio_code_segment, tamanio_code_segment) != 0)
+	if(umv_send_bytes(direccion_logica, direccion_logica, tamanio_code_segment) != 0)
 	{
 		log_error(logger, "Error Inesperado change_process");
 		free(buffer_msg);
 		return -1;
 	}
 
+	log_info(logger,"Buffer \n%s",buffer);
 	if((numbytes=write(sock_umv,buffer,tamanio_code_segment)<=0))
 	{
 		log_error(logger, "Error en el write del codigo");
@@ -987,7 +1019,8 @@ int umv_send_segment(int pid, char* buffer, int tamanio)
 		free(buffer_msg);
 		return -1;
 	}
-
+	log_info(logger,"numbytes = %d",numbytes);
+	log_info(logger,"tamanio_code_segment = %d",tamanio_code_segment);
 	memset(buffer_msg,'\0',MAXDATASIZE);
 
 	log_info(logger,"Espero respuesta msg_envio_bytes ");
@@ -1000,11 +1033,15 @@ int umv_send_segment(int pid, char* buffer, int tamanio)
 	}
 	memcpy(&mensaje,buffer_msg,SIZE_MSG);
 
-	if(mensaje.tipo == NEW_PROGRAMOK)
+
+	if(mensaje.tipo == ENVIOBYTES)
 	{
+		log_info(logger,"ENVIOBYTES satisfactorio");
 		free(buffer_msg);
 		return direccion_logica; /* ALL GOOD*/
 	}
+
+	log_info(logger,"ENVIOBYTES Fallo");
 
 	free(buffer_msg);
 	return -1;
@@ -1437,6 +1474,7 @@ void finalizo_Quantum(int sock_cpu)
 {
 	int numbytes;
 	t_pcb pcb;
+	//	 TODO: Verificar queue_RR mandar siempre el mismo pcb al mismo CPU
 
 	char* buffer;
 
@@ -1504,6 +1542,8 @@ void asignar_valor_VariableCompartida(int sock_cpu, char* global_name, int value
 		free(buffer);
 		return;
 	}
+
+	//TODO: No tengo que abortar. Tengo que abortar en QUANTUM_FINISH
 
 	if(mensaje.tipo == ERROR)
 	{
