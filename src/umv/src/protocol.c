@@ -555,6 +555,107 @@ int getFirstFitMemory(int memSize)
 
 int getWorstFitMemory(int memSize)
 {
+	int mem[space];
+	int i;
+	int j;
+	int k;
+	t_info_programa *prog;
+	t_info_segmento *seg;
+	int espacio_libre = 0;
+	int dir_inicial = 0;
+	int dir_maximo = 0;
+	int espacio_maximo = 0;
+
+	//inicializo toda la memoria como vacia
+	for (i = 0; i < space; i++)
+	{
+		mem[i] = 0;
+	}
+	//busco los segmentos dentro de los programas y si estan ocupados les pongo 1
+	for (i = 0; i < list_size(list_programas); i++)
+	{
+		prog = list_get(list_programas, i);
+		for (j = 0; j < list_size(prog->segmentos); j++)
+		{
+			seg = list_get(prog->segmentos, j);
+			for (k = 0; k < seg->tamanio; k++)
+			{
+				mem[k + seg->dirFisica] = 1;
+			}
+		}
+	}
+	//cuento los que no esten ocupados
+	for (i = 0; i < space; i++)
+		{
+			if (mem[i] == 0)
+			{
+				espacio_libre++;
+				if (espacio_libre >= espacio_maximo)
+				{
+					espacio_maximo = espacio_libre;
+					dir_maximo = dir_inicial;
+				}
+			}
+			else
+			{
+				espacio_libre = 0;
+				dir_inicial = i + 1;
+			}
+		}
+	if (espacio_maximo >= memSize )
+	{
+		return dir_maximo;
+	}
+
+	return -1;
+}
+
+int generarDireccionLogica(int pid,int memSize)
+{
+	//falta agregar la id del programa para identificarla
+	int mem[space];
+	int i;
+	int j;
+	int k;
+	t_info_programa *prog;
+	t_info_segmento *seg;
+	int espacio_libre = 0;
+	int dir_inicial = 0;
+	int RANDMAX = space - memSize;
+
+	//inicializo toda la memoria como vacia
+	for (i = 0; i < space; i++)
+	{
+		mem[i] = 0;
+	}
+	//busco los segmentos dentro del programa y si estan ocupados les pongo 1
+
+		prog = list_get(list_programas, pid);
+		for (j = 0; j < list_size(prog->segmentos); j++)
+		{
+			seg = list_get(prog->segmentos, j);
+			for (k = 0; k < seg->tamanio; k++)
+			{
+				mem[k + seg->dirLogica] = 1;
+			}
+		}
+	while(1)
+	{
+		//hago un random y me fijo que ese y su tamano esten vacios, sino hago random de nuevo
+
+		i = rand(RAND_MAX);
+		dir_inicial = i;
+
+		for(k=i;mem[k]==0;k++)
+		{
+			espacio_libre++;
+		}
+		if(espacio_libre >= memSize)
+		{
+			return dir_inicial;
+		}
+		espacio_libre = 0;
+	}
 	return 0;
 }
 
@@ -563,7 +664,7 @@ t_info_segmento* crearSegmento(int pid, int dirFisica, int tamanioPedido) {
 	t_info_segmento* s = malloc(sizeof(t_info_segmento));
 	s->id = pid;
 	s->dirFisica = dirFisica;
-	s->dirLogica = generarDireccionLogica(pid);
+	s->dirLogica = generarDireccionLogica(pid,tamanioPedido);
 	s->tamanio = tamanioPedido;
 	t_info_programa* prog = malloc(sizeof(t_info_programa));
 
@@ -863,6 +964,7 @@ int asignar_direccion_en_memoria()
 			!strcmp(algoritmo, "worst-fit"))
 		{
 			// El algoritmo es worst-fit
+
 		}
 		else
 		{
