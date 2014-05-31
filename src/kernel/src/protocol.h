@@ -109,6 +109,7 @@ typedef struct _t_process {
 	int program_socket;
 	int current_cpu_socket;
 	unsigned char status;
+	int quantum;
 } t_process;
 
 typedef struct _t_io_queue_nodo {
@@ -154,8 +155,6 @@ typedef struct _t_pedido {
 //TODO: Definir en SylverStack.h
 #define SALIR 110 // Programa
 
-#define STACK_AMOUNT 400
-
 t_log *logger;
 t_list *list_io;
 t_list *list_pcb_new;
@@ -172,7 +171,7 @@ t_list *list_process;
 t_queue* queue_rr;
 
 int port_cpu,port_program,port_umv,sockPrin,multiprogramacion,quantum,retardo,stack_tamanio;
-int sock_umv, process_Id, cantidad_cpu, cantidad_procesos_sistema;
+int sock_umv, process_Id, cantidad_cpu, cantidad_procesos_sistema, stack_size;
 char myip[16],umv_ip[16];
 sem_t free_io_queue;
 
