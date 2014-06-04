@@ -1004,7 +1004,7 @@ int umv_send_segment(int pid, char* buffer, int tamanio)
 
 	log_info(logger,"Envio msg_envio_bytes");
 
-	if(umv_send_bytes(direccion_logica, direccion_logica, tamanio_code_segment) != 0)
+	if(umv_send_bytes(direccion_logica, 0, tamanio_code_segment) != 0)
 	{
 		log_error(logger, "Error Inesperado change_process");
 		free(buffer_msg);
