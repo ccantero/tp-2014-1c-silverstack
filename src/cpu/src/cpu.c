@@ -291,6 +291,7 @@ void silverstack_entradaSalida(t_nombre_dispositivo dispositivo, int tiempo)
 	strcpy(msg.mensaje, dispositivo);
 	send(sockKernel, &msg, sizeof(t_mensaje), 0);
 	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
+	proceso_bloqueado = 1;
 }
 
 void silverstack_finalizar()
