@@ -37,7 +37,6 @@ int main(int argc, char *argv[])
 	t_log *logger;
 	t_config *config;
 	int seguirEjecutando = 1; // Mediante la señal SIGUSR1 se puede dejar de ejecutar el cpu
-
 	// Obtengo datos de archivo de configuracion y se crea el logger
 	config = config_create("../cpu.config");
 	strcpy(umvip, config_get_string_value(config, "UMV_IP"));
@@ -47,15 +46,12 @@ int main(int argc, char *argv[])
 	config_destroy(config);
 	logger = log_create("../logcpu.log", "CPU", true, LOG_LEVEL_INFO);
 	log_info(logger, "Se leyo el arch de config y se creo el logger satisfactoriamente.");
-
 	// Me conecto al kernel
 	ConectarA(&sockKernel, &port_kernel, kernelip, &kernel_addr, logger);
 	log_info(logger, "Conectado al kernel.");
-
 	// Obtengo datos de la umv
 	ConectarA(&sockUmv, &port_umv, umvip, &umv_addr, logger);
 	log_info(logger, "Conectado a la UMV.");
-
 	// Handshake con el kernel
 	mensaje.id_proceso = CPU;
 	mensaje.tipo = HANDSHAKE;
@@ -71,7 +67,6 @@ int main(int argc, char *argv[])
 		log_info(logger, "Handshake con kernel erroneo.");
 		exit(1);
 	}
-
 	// Handshake con la UMV
 	msg_handshake.tipo = CPU;
 	send(sockUmv, &msg_handshake, sizeof(t_msg_handshake), 0);
@@ -85,44 +80,47 @@ int main(int argc, char *argv[])
 		log_info(logger, "Handshake con UMV erroneo.");
 		exit(1);
 	}
-
-	int i; // Contador para ciclo for de instrucciones dentro del bucle principal
+	int i;
 	int quantum;
 	char buf[82]; // Variable auxiliar para almacenar la linea de codigo
+	recv(sockKernel, &mensaje, sizeof(t_mensaje), 0);
+	quantum = mensaje.datosNumericos;
 	// Bucle principal del proceso
 	while(seguirEjecutando)
 	{
-		// Recibo el pcb del proceso a ejecutar
+		// Recibo el pcb del kernel
 		recv(sockKernel, &pcb, sizeof(t_pcb), 0);
-		// Preparo mensaje para la UMV
-		msg_solicitud_bytes.base = pcb.code_segment;
-		msg_solicitud_bytes.offset = pcb.instruction_index;
-		msg_solicitud_bytes.tamanio = pcb.instruction_index + 4;
-		msg_cambio_proceso_activo.id_programa = pcb.unique_id;
-		send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
-		send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
-		// Espero la respuesta de la UMV
-		recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-		char buffer[mensaje.datosNumericos];
-		recv(sockUmv, &buffer, sizeof(mensaje.datosNumericos), 0);
-		// Analizo la instruccion
-		analizadorLinea(strdup(buffer), &primitivas, &primitivasKernel);
+		for (i = 0; i < quantum; i++)
+		{
+			// Preparo mensaje para la UMV
+			msg_solicitud_bytes.base = pcb.code_segment;
+			msg_solicitud_bytes.offset = pcb.instruction_index;
+			msg_solicitud_bytes.tamanio = pcb.instruction_index + 4;
+			msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+			mensaje.tipo = SOLICITUDBYTES;
+			send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+			send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+			send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
+			// Espero la respuesta de la UMV
+			recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+			recv(sockUmv, &buf, pcb.instruction_index + 4, 0);
+			// Analizo la instruccion y ejecuto primitivas necesarias
+			analizadorLinea(strdup(buf), &primitivas, &primitivasKernel);
+			// Actualizo el pcb
+			pcb.program_counter++;
+			pcb.instruction_index += 8;
+		}
 		// Aviso al kernel que termino el quantum del proceso y devuelvo pcb actualizado
 		mensaje.id_proceso = CPU;
 		mensaje.tipo = QUANTUMFINISH;
 		send(sockKernel, &mensaje, sizeof(t_mensaje), 0);
-		pcb.program_counter++;
-		pcb.instruction_index += 8;
 		send(sockKernel, &pcb, sizeof(t_pcb), 0);
 	}
-
 	// Libero memoria del logger
 	log_destroy(logger);
-
 	// Cierro los sockets
 	close(sockKernel);
 	close(sockUmv);
-
 	return 0;
 }
 
