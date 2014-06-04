@@ -92,23 +92,30 @@ int main(int argc, char *argv[])
 		recv(sockKernel, &pcb, sizeof(t_pcb), 0);
 		for (i = 0; i < quantum; i++)
 		{
-			// Preparo mensaje para la UMV
-			msg_solicitud_bytes.base = pcb.code_segment;
-			msg_solicitud_bytes.offset = pcb.instruction_index;
-			msg_solicitud_bytes.tamanio = pcb.instruction_index + 4;
-			msg_cambio_proceso_activo.id_programa = pcb.unique_id;
-			mensaje.tipo = SOLICITUDBYTES;
-			send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-			send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
-			send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
-			// Espero la respuesta de la UMV
-			recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-			recv(sockUmv, &buf, pcb.instruction_index + 4, 0);
-			// Analizo la instruccion y ejecuto primitivas necesarias
-			analizadorLinea(strdup(buf), &primitivas, &primitivasKernel);
-			// Actualizo el pcb
-			pcb.program_counter++;
-			pcb.instruction_index += 8;
+			if (proceso_bloqueado == 0)
+			{
+				// Preparo mensaje para la UMV
+				msg_solicitud_bytes.base = pcb.code_segment;
+				msg_solicitud_bytes.offset = pcb.instruction_index;
+				msg_solicitud_bytes.tamanio = pcb.instruction_index + 4;
+				msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+				mensaje.tipo = SOLICITUDBYTES;
+				send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+				send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+				send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
+				// Espero la respuesta de la UMV
+				recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+				recv(sockUmv, &buf, pcb.instruction_index + 4, 0);
+				// Analizo la instruccion y ejecuto primitivas necesarias
+				analizadorLinea(strdup(buf), &primitivas, &primitivasKernel);
+				// Actualizo el pcb
+				pcb.program_counter++;
+				pcb.instruction_index += 8;
+			}
+			else
+			{
+				break;
+			}
 		}
 		// Aviso al kernel que termino el quantum del proceso y devuelvo pcb actualizado
 		mensaje.id_proceso = CPU;
@@ -370,4 +377,8 @@ void silverstack_wait(t_nombre_semaforo identificador_semaforo)
 	strcpy(msg.mensaje, identificador_semaforo);
 	send(sockKernel, &msg, sizeof(t_mensaje), 0);
 	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
+	if (msg.tipo == BLOCK)
+	{
+		proceso_bloqueado = 1;
+	}
 }
