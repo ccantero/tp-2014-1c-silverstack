@@ -167,19 +167,25 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 	msg_solicitud_bytes.offset = pcb.context_actual;
 	msg_solicitud_bytes.tamanio = 5;
 	msg_cambio_proceso_activo.id_programa = pcb.unique_id;
-	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
-	send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
-	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-	recv(sockUmv, &buffaux, sizeof(buffaux), 0);
+	mensaje.tipo = ENVIOBYTES;
 	msg_envio_bytes.base = pcb.stack_pointer;
 	msg_envio_bytes.offset = pcb.context_actual;
 	msg_envio_bytes.tamanio = 5;
+	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 	send(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
 	send(sockUmv, &buffer, sizeof(buffer), 0);
-	recv(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
-	ptr = pcb.stack_pointer + pcb.context_actual;
-	pcb.context_actual += 5;
+	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	if (mensaje.tipo == ENVIOBYTES)
+	{
+		recv(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
+		ptr = pcb.stack_pointer + pcb.context_actual;
+		pcb.context_actual += 5;
+	}
+	else
+	{
+		// TODO Verificar errores de segmentation fault
+	}
 	return ptr;
 }
 
