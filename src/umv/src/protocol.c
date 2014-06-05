@@ -612,30 +612,42 @@ int getWorstFitMemory(int memSize)
 
 int generarDireccionLogica(int pid,int memSize)
 {
-	//falta agregar la id del programa para identificarla
 	int i;
 	int j;
 	int k;
+	int l;
 	t_info_programa *prog;
 	t_info_segmento *seg;
 	int espacio_libre = 0;
 	int dir_inicial = 0;
 
-	//busco los segmentos dentro del programa y si estan ocupados les pongo 1
 	for (i = 0; i < list_size(list_programas); i++)
 	{
 		prog = list_get(list_programas, i);
 		if (prog->pid == pid)
 		{
-			for (k = 0; k < list_size(prog->segmentos); k++)
+			while(1)
 			{
-				seg = list_get(prog->segmentos, k);
-				// TODO verificar direccion logica del segmento con la direccion logica generada
-				// TODO si es igual, la direccion generada es invalida; hay q generar otra
-				// TODO si la direccion generada esta entre los limites del segmento es invalida; hay
-				// q generar otra
-				// TODO si la direccion es valida hay q devolverla
+				dir_inicial = rand();
+				l = 0;
+				for (k = 0; k < list_size(prog->segmentos); k++)
+				{
+					seg = list_get(prog->segmentos, k);
+
+					if((seg->dirLogica == dir_inicial)||((dir_inicial > seg->dirLogica)&&(dir_inicial < seg->dirLogica + seg->tamanio))||(seg->dirLogica == dir_inicial + memSize)||((dir_inicial + memSize > seg->dirLogica)&&(dir_inicial + memSize < seg->dirLogica + seg->tamanio)))
+						{
+
+						}else
+							{
+								l++;
+							}
+				}
+				if (l == k)
+				{
+					return dir_inicial;
+				}
 			}
+
 		}
 	}
 	return 0;
@@ -762,10 +774,6 @@ int findSegmentIn(int address, int limit, int getFirst, t_info_segmento* segm)
 	return 1;
 }
 
-int generarDireccionLogica(int pid)
-{
-	return 0;
-}
 
 int getProgramBy(int pid, t_info_programa prog)
 {

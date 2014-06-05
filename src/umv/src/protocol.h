@@ -84,7 +84,7 @@ int lanzarHiloKernel(int newfd);
 int guardarEnMemoria(t_info_segmento* segm,char* buffer);
 void *hilokernel(void *socket_desc);
 void *hilocpu(void *socket_desc);
-int generarDireccionLogica(int pid);
+int generarDireccionLogica(int pid,int memSize);
 int verificar_proc_id(int pid);
 int crear_segmento(int idproc, int tamanio);
 int destruir_segmentos(int idproc);
