@@ -107,10 +107,9 @@ int main(int argc, char *argv[])
 	for(;;)
 	{
 		descriptor_mayor = nuevo_maximo;
-
 		if (select(descriptor_mayor + 1, &descriptoresLectura, NULL, NULL, NULL) == -1)
 		{
-			log_error(logger, "Error en funcion select");;
+			log_error(logger, "Error en funcion select");
 			exit(1);
 		}
 
@@ -142,6 +141,7 @@ int main(int argc, char *argv[])
 				if (i == sock_cpu)
 				{
 					new_socket = escuchar_Nuevo_cpu(i);
+
 					if(new_socket == -1)
 					{
 						//FD_CLR(i, &descriptoresLectura);
@@ -155,17 +155,19 @@ int main(int argc, char *argv[])
 					list_add(list_cpu, cpu_create(new_socket));
 					sem_post(&mutex_cpu_list);
 
+					log_info(logger,"Se agrego un cpu a la lista de CPU socket %d", new_socket);
+
 					if(cantidad_cpu < multiprogramacion)
-						sem_post(&sem_cpu_list); // Hay un nuevo CPU Disponible
+					{	sem_post(&sem_cpu_list); // Hay un nuevo CPU Disponible
+					}
 
 					if(nuevo_maximo < new_socket)
 						nuevo_maximo = new_socket;
 
-					log_info(logger,"Se agrego un cpu a la lista de CPU socket %d", new_socket);
 					continue;
 				}
 
-				if(is_Connected_Program(i))
+				if(is_Connected_Program(i) == 0)
 				{
 					log_info(logger,"Select detecto actividad en Programa Existente");
 					if(escuchar_Programa(i, buffer) == -1)
@@ -178,7 +180,7 @@ int main(int argc, char *argv[])
 					continue;
 				}
 
-				if(is_Connected_CPU(i))
+				if(is_Connected_CPU(i) == 0)
 				{
 					log_info(logger,"Select detecto actividad en CPU Existente");
 					if(escuchar_cpu(i) == -1)
@@ -195,6 +197,13 @@ int main(int argc, char *argv[])
 				}
 			}
 		} /* for (i = 0; i <= fdmax; i++) */
+		FD_ZERO (&descriptoresLectura);
+		FD_SET (sock_program, &descriptoresLectura);
+		FD_SET (sock_umv, &descriptoresLectura);
+		FD_SET (sock_cpu, &descriptoresLectura);
+		fd_set_program_sockets(&descriptoresLectura);
+		fd_set_cpu_sockets(&descriptoresLectura);
+
 	}/* for(;;) */
 
 

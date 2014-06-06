@@ -243,6 +243,8 @@ int get_process_id_by_sock_cpu(int sock_cpu);
 void program_exit(int pid);
 t_pedido* pedido_create(int pid, unsigned char previous_status, unsigned char next_status);
 int get_sock_cpu_by_process_id(int pid);
+void fd_set_cpu_sockets(fd_set* descriptores);
+void fd_set_program_sockets(fd_set* descriptores);
 
 int get_Segment_Start(int offset);			// A revisar si va o no va
 void io_destroy(t_io*); 					// A revisar si va o no va

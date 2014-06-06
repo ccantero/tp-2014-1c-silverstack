@@ -617,7 +617,8 @@ int escuchar_Nuevo_Programa(int sock_program)
 
 	if((numbytes=read(new_socket,buffer,mensaje.datosNumericos))<=0)
 	{
-		log_error(logger, "Error en el read en escuchar_Nuevo_Programa");
+		log_error(logger, "-->Error en el read en escuchar_Nuevo_Programa");
+		log_error(logger, "-->mensaje.datosNumericos = %d", mensaje.datosNumericos);
 		return -1;
 	}
 
@@ -672,7 +673,7 @@ int escuchar_Programa(int sock_program, char* buffer)
 		}
 
 		//log_info(logger, "File \n%s", buffer);
-		pcb_create(buffer,numbytes, sock_program);
+		//pcb_create(buffer,numbytes, sock_program);
 
 		return 0;
 	}
@@ -1011,7 +1012,6 @@ int umv_send_segment(int pid, char* buffer, int tamanio)
 		return -1;
 	}
 
-	log_info(logger,"Buffer \n%s",buffer);
 	if((numbytes=write(sock_umv,buffer,tamanio_code_segment)<=0))
 	{
 		log_error(logger, "Error en el write del codigo");
@@ -1265,7 +1265,9 @@ void planificador_sjn(void)
 	t_pcb *element;
 	for(;;)
 	{
+		log_info(logger,"planificador_sjn - sem_wait(&sem_plp)");
 		sem_wait(&sem_plp);
+		log_info(logger,"planificador_sjn - sem_wait(&sem_cpu_list)");
 		sem_wait(&sem_cpu_list); // Tiene que haber un CPU conectado minimo
 
 		sem_wait(&mutex_new_queue);
@@ -1288,6 +1290,10 @@ void planificador_sjn(void)
 				sem_wait(&mutex_ready_queue);
 				process_update(element->unique_id,PROCESS_NEW,PROCESS_READY);
 				sem_post(&mutex_ready_queue);
+
+				pthread_mutex_lock(&mutex_pedidos);
+				queue_push(queue_rr,pedido_create(element->unique_id,PROCESS_READY,PROCESS_EXECUTE));
+				pthread_mutex_unlock(&mutex_pedidos);
 
 				log_info(logger, "PCB -> %d moved from New Queue to Ready Queue", element->unique_id);
 				sem_post(&sem_pcp);
@@ -1401,12 +1407,24 @@ int escuchar_Nuevo_cpu(int sock_cpu)
 
 		if((numbytes=write(new_socket,buffer,size_msg))<=0)
 		{
-			log_error(logger, "Error en el write en escuchar_Nuevo_CPU");
+			log_error(logger, "Error en el write de HANDSHAKE_OK en escuchar_Nuevo_CPU");
+			close(new_socket);
+			return -1;
+		}
+
+		memset(buffer,'\0',MAXDATASIZE);
+		mensaje.datosNumericos = quantum;
+		memcpy(buffer,&mensaje,size_msg);
+
+		if((numbytes=write(new_socket,buffer,size_msg))<=0)
+		{
+			log_error(logger, "Error en el write del quantum en escuchar_Nuevo_CPU");
 			close(new_socket);
 			return -1;
 		}
 
 		log_info(logger, "Nueva conexion lograda con cpu");
+
 		return new_socket;
 	}
 	else
@@ -1745,6 +1763,8 @@ void pcb_move(unsigned int pid,t_list* from, t_list* to)
 	int index = 0;
 	int indice_buscado = 0;
 
+	log_info(logger,"Inicia pcb_move");
+
 	void _get_node(t_pcb *s)
 	{
 		if(s->unique_id == process_id)
@@ -1762,6 +1782,8 @@ void pcb_move(unsigned int pid,t_list* from, t_list* to)
 
 	t_pcb *pcb = list_remove(from, indice_buscado);
 	list_add(to,pcb);
+
+	log_info(logger,"Fin pcb_move");
 }
 
 /*
@@ -1901,12 +1923,16 @@ void planificador_rr(void)
 
 	for(;;)
 	{
+		log_info(logger,"planificador_rr - sem_wait(&sem_pcp)");
 		sem_wait(&sem_pcp);
+		log_info(logger,"planificador_rr - sem_wait(&sem_cpu_list)");
 		sem_wait(&sem_cpu_list); // ¿Es realmente necesario?
 
 		pthread_mutex_lock(&mutex_pedidos);
 		new_pedido = queue_pop(queue_rr);
 		pthread_mutex_unlock(&mutex_pedidos);
+
+		log_info(logger,"planificador_rr - new_pedido");
 
 		switch(new_pedido->previous_status)
 		{
@@ -1929,6 +1955,7 @@ void planificador_rr(void)
 						{
 							log_info(logger, "Enviar PCB a CPU en socket %d", cpu->socket);
 							process_update(new_pedido->process_id,PROCESS_READY, PROCESS_EXECUTE); //Mueve el pcb
+							log_info(logger, "process_update PROCESS_READY -> PROCESS_EXECUTE");
 							process_execute(new_pedido->process_id, cpu->socket); // Pone el CPU Working
 						}
 						else
@@ -2128,6 +2155,7 @@ int is_Connected_Program(int sock_program)
 
 	int _is_Connected_Program(t_process *p)
 	{
+		log_info(logger,"p->program_socket == sock %d", p->program_socket == sock);
 		return p->program_socket == sock;
 	}
 
@@ -2513,6 +2541,12 @@ void program_exit(int pid)
 	return;
 }
 
+/*
+ * Function: pedido_create
+ * Purpose: Create pedido node and add it to pedidos queue
+ * Created on: 20/05/2014
+ * Author: SilverStack
+*/
 
 t_pedido* pedido_create(int pid, unsigned char previous_status, unsigned char next_status)
 {
@@ -2529,4 +2563,42 @@ t_pedido* pedido_create(int pid, unsigned char previous_status, unsigned char ne
 	new_pedido->process_id = pid;
 
 	return new_pedido;
+}
+
+/*
+ * Function: fd_set_program_sockets
+ * Purpose: FD_SET all program sockets
+ * Created on: 06/06/2014
+ * Author: SilverStack
+*/
+
+void fd_set_program_sockets(fd_set* descriptores)
+{
+	void _fd_set(t_process *p)
+	{
+		FD_SET(p->program_socket,descriptores);
+	}
+
+	sem_wait(&mutex_process_list);
+	list_iterate(list_process, (void*) _fd_set);
+	sem_post(&mutex_process_list);
+}
+
+/*
+ * Function: fd_set_cpu_sockets
+ * Purpose: FD_SET all cpu sockets
+ * Created on: 06/06/2014
+ * Author: SilverStack
+*/
+
+void fd_set_cpu_sockets(fd_set* descriptores)
+{
+	void _fd_set(t_nodo_cpu *cpu)
+	{
+		FD_SET(cpu->socket,descriptores);
+	}
+
+	sem_wait(&mutex_cpu_list);
+	list_iterate(list_cpu, (void*) _fd_set);
+	sem_post(&mutex_cpu_list);
 }
