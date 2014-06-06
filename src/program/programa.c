@@ -9,11 +9,14 @@
 int main (int argc, char *argv[])
 {
 	// Creo el logger
-	char *nombre_log = strcat(argv[1], ".log");
-	logger = log_create(nombre_log, argv[1], false, LOG_LEVEL_INFO);
-	// recibo nombre del archivo a procesar
-	char *nombreArchivo = (char*) malloc (20);
+	char *nombreArchivo;
+	char nombre_archivo_log[25];
+	strcpy(nombre_archivo_log, argv[1]);
 	nombreArchivo = argv[1];
+	char *nombre_log = strcat(nombre_archivo_log, ".log");
+	logger = log_create(nombre_log, argv[1], true, LOG_LEVEL_INFO);
+	// recibo nombre del archivo a procesar
+	log_info(logger, "Se abrio el archivo %s", nombreArchivo);
 	// leo archivo configuracion
 	config = config_create("program.config");
 	//defino algunas variables
