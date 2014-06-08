@@ -14,11 +14,12 @@
 
 int main(int argc, char *argv[])
 {
-	int i, descriptor_mayor, nuevo_maximo; /* for aux */
+	int i,fdmax; /* for aux */
 
 	int sock_program = 0, sock_cpu = 0;
 	int new_socket;
-	fd_set descriptoresLectura;
+	fd_set read_fds;
+	fd_set master;
 
 	pthread_t th_plp;
 	pthread_t th_pcp;
@@ -97,25 +98,27 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	FD_ZERO (&descriptoresLectura);
-	FD_SET (sock_program, &descriptoresLectura);
-	FD_SET (sock_umv, &descriptoresLectura);
-	FD_SET (sock_cpu, &descriptoresLectura);
+	FD_ZERO (&master);
+	FD_ZERO (&read_fds);
 
-	nuevo_maximo = buscar_Mayor(sock_program, sock_umv, sock_cpu);
+	FD_SET (sock_program, &master);
+	FD_SET (sock_umv, &master);
+	FD_SET (sock_cpu, &master);
 
+	fdmax = buscar_Mayor(sock_program, sock_umv, sock_cpu);
+	//log_info(logger, sock_umv = %d \n", sock_umv);
 	for(;;)
 	{
-		descriptor_mayor = nuevo_maximo;
-		if (select(descriptor_mayor + 1, &descriptoresLectura, NULL, NULL, NULL) == -1)
+		read_fds = master;
+		if (select(fdmax + 1, &read_fds, NULL, NULL, NULL) == -1)
 		{
 			log_error(logger, "Error en funcion select");
 			exit(1);
 		}
 
-		for (i = 0; i <= descriptor_mayor; i++)
+		for (i = 0; i <= fdmax; i++)
 		{
-			if (FD_ISSET(i, &descriptoresLectura))
+			if (FD_ISSET(i, &read_fds))
 			{
 				if(i == sock_umv)
 				{
@@ -131,16 +134,18 @@ int main(int argc, char *argv[])
 						continue;
 					}
 
-					FD_SET(new_socket, &descriptoresLectura);
-					if(nuevo_maximo < new_socket)
-						nuevo_maximo = new_socket;
+					FD_SET(new_socket, &master);
+					if(fdmax < new_socket)
+						fdmax = new_socket;
 
 					continue;
 				}
 
 				if (i == sock_cpu)
 				{
+					log_info(logger,"Begin escuchar_Nuevo_cpu");
 					new_socket = escuchar_Nuevo_cpu(i);
+					log_info(logger,"Finalizar escuchar_Nuevo_cpu");
 
 					if(new_socket == -1)
 					{
@@ -149,7 +154,7 @@ int main(int argc, char *argv[])
 						continue;
 					}
 
-					FD_SET(new_socket, &descriptoresLectura);
+					FD_SET(new_socket, &master);
 					cantidad_cpu++;
 					sem_wait(&mutex_cpu_list);
 					list_add(list_cpu, cpu_create(new_socket));
@@ -161,8 +166,8 @@ int main(int argc, char *argv[])
 					{	sem_post(&sem_cpu_list); // Hay un nuevo CPU Disponible
 					}
 
-					if(nuevo_maximo < new_socket)
-						nuevo_maximo = new_socket;
+					if(fdmax < new_socket)
+						fdmax = new_socket;
 
 					continue;
 				}
@@ -175,7 +180,7 @@ int main(int argc, char *argv[])
 						close(i);
 						process_remove_by_socket(i);
 						log_info(logger,"Se removio un program de la lista de Programas");
-						FD_CLR(i, &descriptoresLectura);
+						FD_CLR(i, &master);
 					}
 					continue;
 				}
@@ -186,7 +191,7 @@ int main(int argc, char *argv[])
 					if(escuchar_cpu(i) == -1)
 					{
 						close(i);
-						FD_CLR(i, &descriptoresLectura);
+						FD_CLR(i, &master);
 						cpu_remove(i);
 						sem_wait(&sem_cpu_list); // Hay un CPU Disponible menos
 						log_info(logger,"Se removio un cpu de la lista de CPU");
@@ -197,13 +202,6 @@ int main(int argc, char *argv[])
 				}
 			}
 		} /* for (i = 0; i <= fdmax; i++) */
-		FD_ZERO (&descriptoresLectura);
-		FD_SET (sock_program, &descriptoresLectura);
-		FD_SET (sock_umv, &descriptoresLectura);
-		FD_SET (sock_cpu, &descriptoresLectura);
-		fd_set_program_sockets(&descriptoresLectura);
-		fd_set_cpu_sockets(&descriptoresLectura);
-
 	}/* for(;;) */
 
 

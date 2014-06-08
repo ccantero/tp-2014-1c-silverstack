@@ -40,6 +40,8 @@ t_msg_envio_bytes msg_envio_bytes;
 t_msg_solicitud_bytes msg_solicitud_bytes;
 int proceso_bloqueado = 0;
 
+t_log *logger;
+
 void ConectarA(int *sock, int *puerto, char *ip, struct sockaddr_in *their_addr, t_log *logger);
 t_puntero silverstack_definirVariable(t_nombre_variable var);
 t_puntero silverstack_obtenerPosicionVariable(t_nombre_variable var);

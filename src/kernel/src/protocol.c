@@ -708,14 +708,12 @@ void pcb_create(char* buffer, int tamanio_buffer, int sock_program)
 
 	metadata = metadatada_desde_literal(buffer);
 
-	new_pcb->unique_id = process_Id;
-	new_pcb->code_segment = umv_send_segment(++process_Id, buffer, tamanio_buffer);
+	new_pcb->unique_id = ++process_Id;
+	new_pcb->code_segment = umv_send_segment(process_Id, buffer, tamanio_buffer);
 	new_pcb->stack_segment = umv_send_segment(process_Id, "", stack_size);
 	new_pcb->stack_pointer = new_pcb->stack_segment;
-	if(metadata->instrucciones_size >0)
-	{
-		new_pcb->etiquetas_index = umv_send_segment(process_Id, (char*) metadata->instrucciones_serializado, metadata->instrucciones_size);
-	}
+	new_pcb->instruction_index = umv_send_segment(process_Id, (char*) metadata->instrucciones_serializado, metadata->instrucciones_size * 8);
+	new_pcb->instruction_size = metadata->instrucciones_size;
 	if(metadata->etiquetas_size >0)
 	{
 		new_pcb->etiquetas_index = umv_send_segment(process_Id, (char*) metadata->etiquetas, metadata->etiquetas_size);
@@ -1955,8 +1953,8 @@ void planificador_rr(void)
 						{
 							log_info(logger, "Enviar PCB a CPU en socket %d", cpu->socket);
 							process_update(new_pedido->process_id,PROCESS_READY, PROCESS_EXECUTE); //Mueve el pcb
-							log_info(logger, "process_update PROCESS_READY -> PROCESS_EXECUTE");
 							process_execute(new_pedido->process_id, cpu->socket); // Pone el CPU Working
+							log_info(logger, "process_update PROCESS_READY -> PROCESS_EXECUTE");
 						}
 						else
 						{
@@ -2152,7 +2150,8 @@ void escuchar_umv(void)
 int is_Connected_Program(int sock_program)
 {
 	int sock = sock_program;
-
+	// TODO: NO anda
+	return -1;
 	int _is_Connected_Program(t_process *p)
 	{
 		log_info(logger,"p->program_socket == sock %d", p->program_socket == sock);
@@ -2212,9 +2211,10 @@ void process_execute(int unique_id, int socket)
 	int numbytes;
 	int index = 0;
 	int indice_buscado = 0;
-	t_mensaje mensaje;
 
 	t_pcb* pcb;
+
+	log_info(logger,"Inicia process_execute, pid = %d", unique_id);
 
 	void _get_cpu_element(t_nodo_cpu *cpu)
 	{
@@ -2244,27 +2244,40 @@ void process_execute(int unique_id, int socket)
 		index++;
 	}
 
+	log_info(logger,"Antes de mutex_execute_queue");
 	sem_wait(&mutex_execute_queue);
 	list_iterate(list_pcb_execute, (void*) _get_pcb_element);
 	sem_post(&mutex_execute_queue);
 
-	sem_wait(&mutex_cpu_list);
+	log_info(logger,"Antes de mutex_cpu_list");
+	// TODO: Verificar Semaforos
+	//sem_wait(&mutex_cpu_list);
+	log_info(logger,"Despues del wait de mutex_cpu_list");
 	list_iterate(list_cpu, (void*) _get_cpu_element); // CPU_WORKING
-	sem_post(&mutex_cpu_list);
+	log_info(logger,"Despuel del iterate de mutex_cpu_list");
+	//sem_post(&mutex_cpu_list);
+
+	log_info(logger,"Antes de mutex_process_list");
 
 	sem_wait(&mutex_process_list);
+	log_info(logger,"Pase el semaforo de mutex_process_list");
 	list_iterate(list_process, (void*) _get_process_element); // CPU_SOCKET
+	log_info(logger,"Pase el list_iterate de mutex_process_list");
 	sem_post(&mutex_process_list);
 
+	log_info(logger,"Fin de todos los semaforos");
 	if(flag_process_found == 0 || flag_cpu_found == 0 || flag_pcb_found == 0)
 	{
 		log_error(logger, "PID %d no encontrado en process_execute", process_id);
 		return;
 	}
 
-	pcb = list_remove(list_pcb_execute, indice_buscado);
+	//TODO: Semaforo pcb_execute
 
-	if((numbytes=write(cpu_socket,&pcb,sizeof(t_pcb)))<=0)
+	pcb = list_get(list_pcb_execute, indice_buscado);
+
+	log_info(logger,"Antes de Mandar el PCB");
+	if((numbytes=write(cpu_socket,pcb,sizeof(t_pcb)))<=0)
 	{
 		log_error(logger, "Error en el write en process_execute");
 
@@ -2276,35 +2289,7 @@ void process_execute(int unique_id, int socket)
 		return;
 	}
 
-	mensaje.id_proceso = KERNEL;
-	mensaje.datosNumericos = quantum;
-
-	if((numbytes=write(cpu_socket,&mensaje,SIZE_MSG))<=0)
-	{
-		log_error(logger, "Error en el write en process_execute");
-
-		close(cpu_socket);
-		cpu_remove(cpu_socket);
-		pthread_mutex_lock(&mutex_pedidos);
-		queue_push(queue_rr,pedido_create(process_id,PROCESS_EXECUTE,PROCESS_EXIT));
-		pthread_mutex_unlock(&mutex_pedidos);
-		return;
-	}
-
-	mensaje.id_proceso = KERNEL;
-	mensaje.datosNumericos = retardo;
-
-	if((numbytes=write(cpu_socket,&mensaje,SIZE_MSG))<=0)
-	{
-		log_error(logger, "Error en el write en process_execute");
-
-		close(cpu_socket);
-		cpu_remove(cpu_socket);
-		pthread_mutex_lock(&mutex_pedidos);
-		queue_push(queue_rr,pedido_create(process_id,PROCESS_EXECUTE,PROCESS_EXIT));
-		pthread_mutex_unlock(&mutex_pedidos);
-		return;
-	}
+	log_info(logger,"Fin process_execute");
 
 	return;
 }
