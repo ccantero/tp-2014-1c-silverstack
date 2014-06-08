@@ -34,7 +34,6 @@ AnSISOP_kernel primitivasKernel = {
 int main(int argc, char *argv[])
 {
 	// Definicion de variables
-
 	t_config *config;
 	int seguirEjecutando = 1; // Mediante la señal SIGUSR1 se puede dejar de ejecutar el cpu
 	// Obtengo datos de archivo de configuracion y se crea el logger
@@ -92,17 +91,24 @@ int main(int argc, char *argv[])
 		// Recibo el pcb del kernel
 		recv(sockKernel, &pcb, sizeof(t_pcb), 0);
 		log_info(logger,"Recibi PCB de Kernel");
+
+		if(pcb.program_counter == 0)
+		{
+			pcb.program_counter++;
+		}
+
 		for (i = 0; i < quantum; i++)
 		{
 			if (proceso_bloqueado == 0)
 			{
 				// Preparo mensaje para la UMV
 				msg_solicitud_bytes.base = pcb.instruction_index;
-				msg_solicitud_bytes.offset = 0;
+				msg_solicitud_bytes.offset = 0 + ((pcb.program_counter - 1) * 8);
 				msg_solicitud_bytes.tamanio = 8;
 				msg_cambio_proceso_activo.id_programa = pcb.unique_id;
 				mensaje.tipo = SOLICITUDBYTES;
 				send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+				log_info(logger, "Se envio solicitud de busqueda de instruccion.");
 				send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 				send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
 				// Espero la respuesta de la UMV
@@ -111,22 +117,23 @@ int main(int argc, char *argv[])
 				// Preparo mensaje para la UMV
 				msg_solicitud_bytes.base = pcb.code_segment;
 				msg_solicitud_bytes.offset = bufferaux[0] + 1;
-				msg_solicitud_bytes.tamanio = bufferaux[1];
+				msg_solicitud_bytes.tamanio = bufferaux[1] - 2;
 				msg_cambio_proceso_activo.id_programa = pcb.unique_id;
 				mensaje.tipo = SOLICITUDBYTES;
+				log_info(logger, "Se envio solicitud de instruccion.");
 				send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 				send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 				send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
 				// Espero la respuesta de la UMV
 				recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 				recv(sockUmv, &buf, bufferaux[1] - 2, 0);
+				buf[bufferaux[1] - 2] = '\0';
 				// Analizo la instruccion y ejecuto primitivas necesarias
 				log_info(logger, "Me llego la instruccion: %s.", buf);
 				analizadorLinea(strdup(buf), &primitivas, &primitivasKernel);
 				log_info(logger, "Se termino de procesar la instruccion: %s.", buf);
 				// Actualizo el pcb
 				pcb.program_counter++;
-				pcb.instruction_index += 8;
 			}
 			else
 			{
@@ -181,11 +188,8 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 	log_info(logger, "Comienzo primitiva silverstack_definirVariable");
 	log_info(logger, "Variable recibida: %c", var);
 	t_puntero ptr;
-	char buffer;
 	char buffaux[5];
-	msg_solicitud_bytes.base = pcb.stack_pointer;
-	msg_solicitud_bytes.offset = pcb.context_actual;
-	msg_solicitud_bytes.tamanio = 5;
+	buffaux[0] = var;
 	msg_cambio_proceso_activo.id_programa = pcb.unique_id;
 	mensaje.tipo = ENVIOBYTES;
 	msg_envio_bytes.base = pcb.stack_pointer;
@@ -194,11 +198,11 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 	send(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
-	send(sockUmv, &buffer, sizeof(buffer), 0);
+	send(sockUmv, buffaux, 5, 0);
 	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	log_info(logger, "Rpta de umv: %d", mensaje.tipo);
 	if (mensaje.tipo == ENVIOBYTES)
 	{
-		recv(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
 		ptr = pcb.stack_pointer + pcb.context_actual;
 		pcb.context_actual += 5;
 	}
@@ -214,9 +218,7 @@ t_puntero silverstack_obtenerPosicionVariable(t_nombre_variable var)
 {
 	// 1) Pedir a la UMV la posicion de la variable var
 	// 2) Calcular el desplazamiento respecto del stack
-
-	log_info(logger,"Primitiva silverstack_obtenerPosicionVariable");
-
+	log_info(logger, "Comienzo primitiva silverstack_obtenerPosicionVariable");
 	t_puntero ptr = 0;
 	char buffer[5];
 	int offset = 0;
@@ -228,6 +230,8 @@ t_puntero silverstack_obtenerPosicionVariable(t_nombre_variable var)
 		msg_solicitud_bytes.offset = offset;
 		msg_solicitud_bytes.tamanio = 5;
 		msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+		mensaje.tipo = SOLICITUDBYTES;
+		send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 		send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 		send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
 		recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
@@ -242,6 +246,7 @@ t_puntero silverstack_obtenerPosicionVariable(t_nombre_variable var)
 		}
 	}
 	ptr = msg_solicitud_bytes.base + offset;
+	log_info(logger, "Fin primitiva silverstack_obtenerPosicionVariable.");
 	return ptr;
 }
 
@@ -251,9 +256,21 @@ t_valor_variable silverstack_dereferenciar(t_puntero dir_var)
 	Obtiene el valor resultante de leer a partir de dir_var, sin importar cual fuera el
 	contexto actual.
 	*/
-	log_info(logger,"Primitiva silverstack_dereferenciar");
-
+	log_info(logger, "Comienzo primitiva silverstack_dereferenciar");
 	t_valor_variable valor = 0;
+	char buffer[5];
+	msg_solicitud_bytes.base = pcb.stack_pointer;
+	msg_solicitud_bytes.offset = dir_var - pcb.stack_pointer;
+	msg_solicitud_bytes.tamanio = 1;
+	msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+	mensaje.tipo = SOLICITUDBYTES;
+	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+	send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
+	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	recv(sockUmv, &buffer, sizeof(buffer), 0);
+	memcpy(&valor, &buffer[1], 4);
+	log_info(logger, "Fin primitiva silverstack_dereferenciar.");
 	return valor;
 }
 
@@ -261,18 +278,19 @@ void silverstack_asignar(t_puntero dir_var, t_valor_variable valor)
 {
 	// 1) Mando a la UMV el valor de la variable junto con su direccion
 	// 2) Actualizo diccionario de variables
-	log_info(logger,"Primitiva silverstack_asignar");
-
+	log_info(logger, "Comienzo primitiva silverstack_asignar");
 	int buffer;
 	msg_envio_bytes.base = pcb.stack_pointer;
 	msg_envio_bytes.offset = dir_var - pcb.stack_pointer + 1;
 	msg_envio_bytes.tamanio = 4;
+	mensaje.tipo = ENVIOBYTES;
 	msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 	send(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
 	buffer = valor;
 	send(sockUmv, &buffer, sizeof(buffer), 0);
-	recv(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
+	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 }
 
 void silverstack_imprimir(t_valor_variable valor)
