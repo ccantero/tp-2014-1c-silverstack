@@ -154,6 +154,7 @@ typedef struct _pcb {
 	int program_counter; 			/* Número de la próxima instrucción */
 	int context_actual;				/* Tamaño del Contexto Actual */
 	int peso;
+	int instruction_size;
 } t_pcb;
 
 

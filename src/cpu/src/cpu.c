@@ -86,7 +86,6 @@ int main(int argc, char *argv[])
 	int bufferaux[2];
 	recv(sockKernel, &mensaje, sizeof(t_mensaje), 0);
 	quantum = mensaje.datosNumericos;
-	log_info(logger,"Recibi QUANTUM");
 	// Bucle principal del proceso
 	while(seguirEjecutando)
 	{
@@ -103,38 +102,28 @@ int main(int argc, char *argv[])
 				msg_solicitud_bytes.tamanio = 8;
 				msg_cambio_proceso_activo.id_programa = pcb.unique_id;
 				mensaje.tipo = SOLICITUDBYTES;
-				log_info(logger,"Comienza Solicitud de Bytes de programa %d", pcb.unique_id);
 				send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 				send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
-				log_info(logger,"Sent msg_cambio_proceso_activo");
 				send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
-				log_info(logger,"Sent msg_solicitud_bytes");
 				// Espero la respuesta de la UMV
 				recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-				log_info(logger,"Received t_mensaje = %d", mensaje.tipo);
 				recv(sockUmv, &bufferaux, 8, 0);
-				log_info(logger,"Recibi Buffer Aux = %d",bufferaux[0] );
-				log_info(logger,"Recibi Buffer Aux = %d",bufferaux[1] );
 				// Preparo mensaje para la UMV
 				msg_solicitud_bytes.base = pcb.code_segment;
-				msg_solicitud_bytes.offset = bufferaux[0];
+				msg_solicitud_bytes.offset = bufferaux[0] + 1;
 				msg_solicitud_bytes.tamanio = bufferaux[1];
 				msg_cambio_proceso_activo.id_programa = pcb.unique_id;
 				mensaje.tipo = SOLICITUDBYTES;
-				log_info(logger,"Comienza Solicitud de Bytes");
 				send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-				log_info(logger,"SENT t_mensaje");
 				send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
-				log_info(logger,"SENT msg_cambio_proceso_activo");
 				send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
-				log_info(logger,"SENT msg_solicitud_bytes");
 				// Espero la respuesta de la UMV
 				recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-				recv(sockUmv, &buf, bufferaux[1] - 1, 0);
+				recv(sockUmv, &buf, bufferaux[1] - 2, 0);
 				// Analizo la instruccion y ejecuto primitivas necesarias
-
-				log_info(logger,"Me llego la instruccion = %s",buf);
+				log_info(logger, "Me llego la instruccion: %s.", buf);
 				analizadorLinea(strdup(buf), &primitivas, &primitivasKernel);
+				log_info(logger, "Se termino de procesar la instruccion: %s.", buf);
 				// Actualizo el pcb
 				pcb.program_counter++;
 				pcb.instruction_index += 8;
@@ -189,9 +178,8 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 	// 2) Registrar variable en el Stack
 	// 3) Guardar contexto actual en el pcb
 	// 4) Retornar la posicion de la variable
-
-	log_info(logger,"Primitiva silverstack_definirVariable");
-
+	log_info(logger, "Comienzo primitiva silverstack_definirVariable");
+	log_info(logger, "Variable recibida: %c", var);
 	t_puntero ptr;
 	char buffer;
 	char buffaux[5];
@@ -218,6 +206,7 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 	{
 		// TODO Verificar errores de segmentation fault
 	}
+	log_info(logger, "Fin de primitiva silverstack_definirVariable");
 	return ptr;
 }
 
