@@ -25,7 +25,6 @@ int main (int argc, char *argv[])
 	char *direccionIp = (char *)malloc(16);
 	char buf[256];
 	int numBytes;
-	int x=1;
 	FILE *file;
 	//veo ip y puerto
 	puerto = config_get_int_value(config, "PUERTO");
@@ -33,7 +32,7 @@ int main (int argc, char *argv[])
 	//creo socket
 	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 	{
-		printf("Error cuando se crea el socket.");
+		log_error(logger,"Error cuando se crea el socket.");
 		exit(1);
 	}
 	//asigno el socket al kernel
@@ -45,7 +44,7 @@ int main (int argc, char *argv[])
 	// Conecto el socket y compruebo errores
 	if (connect(sockfd, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)) == -1)
 	{
-		printf("Error conectando el socket");
+		log_error(logger,"Error conectando el socket");
 		return 0;
 	}
 	t_mensaje msg;
@@ -59,7 +58,7 @@ int main (int argc, char *argv[])
 	// Respuesta handshake y compruebo errores
 	if ((numBytes = recv(sockfd, &msg, sizeof(msg), 0)) == -1)
 	{
-		printf("Error recibiendo mensaje.");
+		log_error(logger,"Error recibiendo mensaje.");
 		exit(1);
 	}
 	//imprimo respuesta handshake
@@ -71,7 +70,7 @@ int main (int argc, char *argv[])
 	char* buffer = (char*) malloc(sizeof(char) * (stat_file.st_size +1));
 	if (file==NULL)
 	{
-		printf("Error de apertura de archivo");
+		log_error(logger,"Error de apertura de archivo");
 	}
 	fread(buffer, stat_file.st_size,1, file);
 	msg.tipo = SENDFILE;
@@ -80,16 +79,14 @@ int main (int argc, char *argv[])
 	send(sockfd, &msg, sizeof(t_mensaje), 0);
 	send(sockfd, buffer, stat_file.st_size, 0);
 	printf("Esperando respuesta...\n");
-	while (x == 1)
+	while (1)
 	{
-		puts("hola#");
 		// Recibo y me fijo si hay errores
 		if ((numBytes = recv(sockfd, &msg, sizeof(msg), 0)) == -1)
 		{
-			printf("Error recibiendo mensaje.");
+			log_error(logger,"Error recibiendo mensaje.");
 			exit(1);
 		}
-		puts("hola#");
 		//me fijo si es imprimir, imprimir texto o salir
 		if(msg.tipo == IMPRIMIR)
 		{
@@ -100,7 +97,7 @@ int main (int argc, char *argv[])
 			//recibo texto y me fijo si tiene error
 			if ((numBytes = recv(sockfd, buf, sizeof(msg.datosNumericos), 0)) == -1)
 			{
-				printf("Error recibiendo mensaje.");
+				log_error(logger,"Error recibiendo mensaje.");
 				exit(1);
 			}
 			//imprimo texto
@@ -108,7 +105,7 @@ int main (int argc, char *argv[])
 		}
 		if (msg.tipo == SALIR)
 		{
-			x =2;
+			exit(1);
 		}
 	}
 	//cierro archivo

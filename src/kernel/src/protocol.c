@@ -1467,9 +1467,9 @@ int escuchar_cpu(int sock_cpu)
 	{
 		case QUANTUMFINISH: finalizo_Quantum(sock_cpu); break;
 		case ASIGNACION: asignar_valor_VariableCompartida(sock_cpu, mensaje.mensaje, mensaje.datosNumericos); break;
-		/*case IMPRIMIR: imprimir(); break;
-		case IMPRIMIRTEXTO: imprimirTexto(); break;
-		case VARCOMREQUEST: obtener_valor_VariableCompartida(); break;
+		case IMPRIMIR: imprimir(sock_cpu,mensaje.datosNumericos); break;
+		case IMPRIMIRTEXTO: imprimirTexto(sock_cpu,mensaje.datosNumericos); break;
+		/*case VARCOMREQUEST: obtener_valor_VariableCompartida(); break;
 		case ENTRADASALIDA: io(); break;
 		case SIGNALSEM: { semaphore_signal(); isBlocked(); break };
 		case WAITSEM: { semaphore_wait(); isBlocked(); break };*/
@@ -1574,6 +1574,77 @@ void asignar_valor_VariableCompartida(int sock_cpu, char* global_name, int value
 	}
 
 	free(buffer);
+}
+
+void imprimir(int sock_cpu,int valor)
+{
+	t_mensaje mensaje;
+	int numbytes;
+	int sock_prog;
+	int size_msg = sizeof(t_mensaje);
+
+	mensaje.tipo = IMPRIMIR;
+	mensaje.datosNumericos = valor;
+	//obtengo el sock program
+
+	sock_prog = get_sock_prog_by_sock_cpu(sock_cpu);
+
+	if((numbytes=write(sock_prog,&mensaje,size_msg))<=0)
+			{
+				log_error(logger, "Error enviando imprimir al programa");
+				close(sock_prog);
+				return ;
+			}
+}
+void imprimirTexto(int sock_cpu,int valor)
+{
+	t_mensaje mensaje;
+	int numbytes;
+	int sock_prog;
+	char* buffer;
+	int size_msg = sizeof(t_mensaje);
+
+	if((buffer = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
+		{
+			log_error(logger,"Error al reservar memoria para el buffer en imprimir texto");
+			return;
+		}
+
+	mensaje.tipo = IMPRIMIRTEXTO;
+	mensaje.datosNumericos = valor;
+	//recibo buffer del cpu con la info a imprimir
+
+	if(mensaje.datosNumericos > MAXDATASIZE)
+	{
+		log_error(logger, "Archivo muy grande %d", mensaje.datosNumericos);
+		return;
+	}
+
+	if((numbytes=read(sock_cpu,buffer,mensaje.datosNumericos))<=0)
+	{
+		log_error(logger, "Error en el read en escuchar_Programa");
+		return;
+	}
+
+
+	sock_prog = get_sock_prog_by_sock_cpu(sock_cpu);
+	//mando el tamanio a imprimir
+
+	if((numbytes=write(sock_prog,&mensaje,size_msg))<=0)
+				{
+					log_error(logger, "Error enviando tamanio al programa");
+					close(sock_prog);
+					return;
+				}
+	//ahora mando el texto
+
+	if((numbytes=write(sock_prog,buffer,valor))<=0)
+					{
+						log_error(logger, "Error enviando el texto al programa");
+						close(sock_prog);
+						return;
+					}
+
 }
 
 /*
@@ -2432,6 +2503,33 @@ int get_process_id_by_sock_cpu(int sock_cpu)
 	return process_id;
 }
 
+int get_sock_prog_by_sock_cpu(int sock_cpu)
+{
+	int flag_process_found = 0;
+	int sock_prog;
+	int cpu_socket = sock_cpu;
+
+	void _get_socket_program(t_process *p)
+	{
+		if(flag_process_found == 0 && p->current_cpu_socket == cpu_socket )
+		{
+			flag_process_found = 1;
+			sock_prog = p->program_socket;
+		}
+	}
+
+	sem_wait(&mutex_process_list);
+	list_iterate(list_process, (void*) _get_socket_program);
+	sem_post(&mutex_process_list);
+
+	if(flag_process_found == 0)
+	{
+		log_error(logger, "socket program %d no encontrado en get_sock_prog_by_sock_cpu", sock_prog);
+		return -1;
+	}
+		return sock_prog;
+
+}
 /*
  * Function: program_exit
  * Purpose: Send to Program Process Exit Call
