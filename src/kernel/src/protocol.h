@@ -251,4 +251,8 @@ void io_destroy(t_io*); 					// A revisar si va o no va
 void semaphore_destroy(t_semaphore *self);	// A revisar si va o no va
 int send_umv_stack(int process_id);			// A revisar si va o no va
 
+void imprimirTexto(int sock_cpu,int valor);
+void imprimir(int sock_cpu,int valor);
+int get_sock_prog_by_sock_cpu(int sock_cpu);
+
 #endif /* PROTOCOL_H_ */
