@@ -8,6 +8,7 @@
 
 int main (int argc, char *argv[])
 {
+	signal(SIGINT, depuracion);
 	// Creo el logger
 	char *nombreArchivo;
 	char nombre_archivo_log[25];
@@ -20,12 +21,10 @@ int main (int argc, char *argv[])
 	// leo archivo configuracion
 	config = config_create("program.config");
 	//defino algunas variables
-	int sockfd;
 	int puerto;
 	char *direccionIp = (char *)malloc(16);
 	char buf[256];
 	int numBytes;
-	FILE *file;
 	//veo ip y puerto
 	puerto = config_get_int_value(config, "PUERTO");
 	direccionIp = config_get_string_value(config, "IP");
@@ -116,4 +115,21 @@ int main (int argc, char *argv[])
 	free(direccionIp);
 	config_destroy(config);
 	return 0;
+}
+
+
+// Funciones
+void depuracion(int senial)
+{
+	switch(senial)
+	{
+	case SIGINT:
+		log_info(logger, "Inicia depuracion de variables y memoria.");
+		fclose(file);
+		close(sockfd);
+		config_destroy(config);
+		log_destroy(logger);
+		exit(0);
+		break;
+	}
 }
