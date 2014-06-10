@@ -24,8 +24,6 @@
 #include <src/silverstack.h>
 #include <semaphore.h>
 
-#define PROGRAMFINISH 20000
-
 t_pcb pcb;
 int port_kernel;
 int port_umv;

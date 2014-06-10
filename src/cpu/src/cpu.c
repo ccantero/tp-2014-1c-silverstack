@@ -109,7 +109,7 @@ int main(int argc, char *argv[])
 
 		for (i = 0; i < quantum; i++)
 		{
-			if (proceso_bloqueado == 0 || proceso_finalizo == 0)
+			if (proceso_bloqueado == 0 && proceso_finalizo == 0)
 			{
 				salir_bucle = 0;
 				inicio_instruccion = 0;
