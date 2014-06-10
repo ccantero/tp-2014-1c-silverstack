@@ -24,6 +24,8 @@
 #include <src/silverstack.h>
 #include <semaphore.h>
 
+#define PROGRAMFINISH 20000
+
 t_pcb pcb;
 int port_kernel;
 int port_umv;
@@ -39,7 +41,7 @@ t_msg_cambio_proceso_activo msg_cambio_proceso_activo;
 t_msg_envio_bytes msg_envio_bytes;
 t_msg_solicitud_bytes msg_solicitud_bytes;
 int proceso_bloqueado = 0;
-
+int proceso_finalizo = 0;
 t_log *logger;
 
 void ConectarA(int *sock, int *puerto, char *ip, struct sockaddr_in *their_addr, t_log *logger);

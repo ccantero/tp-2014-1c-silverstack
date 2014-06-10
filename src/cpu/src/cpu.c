@@ -81,17 +81,27 @@ int main(int argc, char *argv[])
 	}
 	int i;
 	int quantum;
+	int salir_bucle = 0;
+	int inicio_instruccion = 0;
+	int cantidad_letras_instruccion = 0;
+	int pos_en_instruccion = 0;
 	char buf[82]; // Variable auxiliar para almacenar la linea de codigo
+	char instruccion[82];
 	int bufferaux[2];
 	recv(sockKernel, &mensaje, sizeof(t_mensaje), 0);
 	quantum = mensaje.datosNumericos;
+
+	// TODO sacar quantum de prueba
+	quantum = 30;
+
 	// Bucle principal del proceso
 	while(seguirEjecutando)
 	{
 		// Recibo el pcb del kernel
 		recv(sockKernel, &pcb, sizeof(t_pcb), 0);
 		log_info(logger,"Recibi PCB de Kernel");
-
+		log_info(logger, "pcb.context_actual: %d", pcb.context_actual);
+		log_info(logger, "pcb.stack_segment: %d", pcb.stack_segment);
 		if(pcb.program_counter == 0)
 		{
 			pcb.program_counter++;
@@ -99,8 +109,11 @@ int main(int argc, char *argv[])
 
 		for (i = 0; i < quantum; i++)
 		{
-			if (proceso_bloqueado == 0)
+			if (proceso_bloqueado == 0 || proceso_finalizo == 0)
 			{
+				salir_bucle = 0;
+				inicio_instruccion = 0;
+				cantidad_letras_instruccion = 0;
 				// Preparo mensaje para la UMV
 				msg_solicitud_bytes.base = pcb.instruction_index;
 				msg_solicitud_bytes.offset = 0 + ((pcb.program_counter - 1) * 8);
@@ -116,8 +129,8 @@ int main(int argc, char *argv[])
 				recv(sockUmv, &bufferaux, 8, 0);
 				// Preparo mensaje para la UMV
 				msg_solicitud_bytes.base = pcb.code_segment;
-				msg_solicitud_bytes.offset = bufferaux[0] + 1;
-				msg_solicitud_bytes.tamanio = bufferaux[1] - 2;
+				msg_solicitud_bytes.offset = bufferaux[0];
+				msg_solicitud_bytes.tamanio = bufferaux[1];
 				msg_cambio_proceso_activo.id_programa = pcb.unique_id;
 				mensaje.tipo = SOLICITUDBYTES;
 				log_info(logger, "Se envio solicitud de instruccion.");
@@ -126,12 +139,40 @@ int main(int argc, char *argv[])
 				send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
 				// Espero la respuesta de la UMV
 				recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-				recv(sockUmv, &buf, bufferaux[1] - 2, 0);
-				buf[bufferaux[1] - 2] = '\0';
+				recv(sockUmv, &buf, bufferaux[1], 0);
+				buf[bufferaux[1]] = '\0';
+				// Verifico limites de instruccion
+				while (salir_bucle != 1)
+				{
+					if(buf[inicio_instruccion] == '\t' || buf[inicio_instruccion] == '\0')
+					{
+						inicio_instruccion++;
+					}
+					else
+					{
+						salir_bucle = 1;
+					}
+				}
+				salir_bucle = 0;
+				pos_en_instruccion = inicio_instruccion;
+				while (salir_bucle != 1)
+				{
+					if(buf[pos_en_instruccion] != '\n')
+					{
+						cantidad_letras_instruccion++;
+					}
+					else
+					{
+						salir_bucle = 1;
+					}
+					pos_en_instruccion++;
+				}
+				memcpy(&instruccion[0], &buf[inicio_instruccion], cantidad_letras_instruccion);
+				instruccion[cantidad_letras_instruccion] = '\0';
 				// Analizo la instruccion y ejecuto primitivas necesarias
-				log_info(logger, "Me llego la instruccion: %s.", buf);
-				analizadorLinea(strdup(buf), &primitivas, &primitivasKernel);
-				log_info(logger, "Se termino de procesar la instruccion: %s.", buf);
+				log_info(logger, "Me llego la instruccion: %s.", instruccion);
+				analizadorLinea(strdup(instruccion), &primitivas, &primitivasKernel);
+				log_info(logger, "Se termino de procesar la instruccion: %s.", instruccion);
 				// Actualizo el pcb
 				pcb.program_counter++;
 			}
@@ -141,12 +182,25 @@ int main(int argc, char *argv[])
 			}
 		}
 		// Aviso al kernel que termino el quantum del proceso y devuelvo pcb actualizado
-		mensaje.id_proceso = CPU;
-		mensaje.tipo = QUANTUMFINISH;
-		send(sockKernel, &mensaje, sizeof(t_mensaje), 0);
-		log_info(logger,"Envie  QUANTUMFINISH al Kernel");
-		send(sockKernel, &pcb, sizeof(t_pcb), 0);
-		log_info(logger,"Envie  PCB al Kernel");
+		if (proceso_finalizo == 1)
+		{
+			mensaje.id_proceso = CPU;
+			mensaje.tipo = PROGRAMFINISH;
+			send(sockKernel, &mensaje, sizeof(t_mensaje), 0);
+			log_info(logger, "Envie PROGRAMFINISH al kernel.");
+			send(sockKernel, &pcb, sizeof(t_pcb), 0);
+			log_info(logger, "Envie PCB al kernel.");
+			proceso_finalizo = 0;
+		}
+		else
+		{
+			mensaje.id_proceso = CPU;
+			mensaje.tipo = QUANTUMFINISH;
+			send(sockKernel, &mensaje, sizeof(t_mensaje), 0);
+			log_info(logger,"Envie  QUANTUMFINISH al Kernel");
+			send(sockKernel, &pcb, sizeof(t_pcb), 0);
+			log_info(logger,"Envie  PCB al Kernel");
+		}
 	}
 	// Libero memoria del logger
 	log_destroy(logger);
@@ -186,14 +240,13 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 	// 3) Guardar contexto actual en el pcb
 	// 4) Retornar la posicion de la variable
 	log_info(logger, "Comienzo primitiva silverstack_definirVariable");
-	log_info(logger, "Variable recibida: %c", var);
 	t_puntero ptr;
 	char buffaux[5];
 	buffaux[0] = var;
 	msg_cambio_proceso_activo.id_programa = pcb.unique_id;
 	mensaje.tipo = ENVIOBYTES;
 	msg_envio_bytes.base = pcb.stack_pointer;
-	msg_envio_bytes.offset = pcb.context_actual;
+	msg_envio_bytes.offset = 5 * pcb.context_actual;
 	msg_envio_bytes.tamanio = 5;
 	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
@@ -203,8 +256,8 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 	log_info(logger, "Rpta de umv: %d", mensaje.tipo);
 	if (mensaje.tipo == ENVIOBYTES)
 	{
-		ptr = pcb.stack_pointer + pcb.context_actual;
-		pcb.context_actual += 5;
+		ptr = pcb.stack_pointer + (5 * pcb.context_actual);
+		pcb.context_actual++;
 	}
 	else
 	{
@@ -261,7 +314,7 @@ t_valor_variable silverstack_dereferenciar(t_puntero dir_var)
 	char buffer[5];
 	msg_solicitud_bytes.base = pcb.stack_pointer;
 	msg_solicitud_bytes.offset = dir_var - pcb.stack_pointer;
-	msg_solicitud_bytes.tamanio = 1;
+	msg_solicitud_bytes.tamanio = 5;
 	msg_cambio_proceso_activo.id_programa = pcb.unique_id;
 	mensaje.tipo = SOLICITUDBYTES;
 	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
@@ -296,17 +349,20 @@ void silverstack_asignar(t_puntero dir_var, t_valor_variable valor)
 void silverstack_imprimir(t_valor_variable valor)
 {
 	// 1) Envio al kernel el valor para que lo imprima la correspondiente consola
+	log_info(logger, "Comienzo primitiva silverstack_imprimir");
 	t_mensaje msg;
 	msg.id_proceso = CPU;
 	msg.tipo = IMPRIMIR;
 	msg.datosNumericos = valor;
 	send(sockKernel, &msg, sizeof(t_mensaje), 0);
 	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
+	log_info(logger, "Fin primitiva silverstack_imprimir");
 }
 
 void silverstack_imprimirTexto(char *texto)
 {
 	// 1) Envio al kernel la cadena de texto para que la reenvíe a la correspondiente consola
+	log_info(logger, "Comienzo primitiva silverstack_imprimirTexto");
 	t_mensaje msg;
 	msg.id_proceso = CPU;
 	msg.tipo = IMPRIMIRTEXTO;
@@ -316,12 +372,14 @@ void silverstack_imprimirTexto(char *texto)
 	strcpy(buf, texto);
 	send(sockKernel, buf, sizeof(buf), 0);
 	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
+	log_info(logger, "Fin primitiva silverstack_imprimirTexto");
 }
 
 t_valor_variable silverstack_obtenerValorCompartida(t_nombre_compartida varCom)
 {
 	// 1) Solicito al kernel el valor de la variable varCom
 	// 2) Devuelvo el valor recibido
+	log_info(logger, "Comienzo primitiva silverstack_obtenerValorCompartida");
 	t_valor_variable valor = 0;
 	t_mensaje msg;
 	msg.id_proceso = CPU;
@@ -330,12 +388,14 @@ t_valor_variable silverstack_obtenerValorCompartida(t_nombre_compartida varCom)
 	send(sockKernel, &msg, sizeof(t_mensaje), 0);
 	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
 	valor = msg.datosNumericos;
+	log_info(logger, "Fin primitiva silverstack_obtenerValorCompartida");
 	return valor;
 }
 
 void silverstack_entradaSalida(t_nombre_dispositivo dispositivo, int tiempo)
 {
 	// 1) Envio al kernel el tiempo de entrada/salida de dispositivo
+	log_info(logger, "Comienzo primitiva silverstack_entradaSalida");
 	t_mensaje msg;
 	msg.id_proceso = CPU;
 	msg.tipo = ENTRADASALIDA;
@@ -344,6 +404,7 @@ void silverstack_entradaSalida(t_nombre_dispositivo dispositivo, int tiempo)
 	send(sockKernel, &msg, sizeof(t_mensaje), 0);
 	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
 	proceso_bloqueado = 1;
+	log_info(logger, "Fin primitiva silverstack_entradaSalida");
 }
 
 void silverstack_finalizar()
@@ -354,12 +415,23 @@ void silverstack_finalizar()
 	apilados en el Stack. En caso de estar finalizando el Contexto principal (el ubicado al inicio del
 	Stack), deberá finalizar la ejecución del programa devolviendo el valor -1.
 	*/
+	log_info(logger, "Comienzo primitiva silverstack_finalizar");
+	if (pcb.stack_pointer == pcb.stack_segment)
+	{
+		proceso_finalizo = 1;
+	}
+	else
+	{
+		// TODO Verificar cuando se sale de contexto de funcion o procedimiento
+	}
+	log_info(logger, "Fin primitiva silverstack_finalizar");
 }
 
 t_valor_variable silverstack_asignarValorCompartida(t_nombre_compartida varCom, t_valor_variable valor)
 {
 	// 1) Envio al kernel el valor de la variable compartida a asignar
 	// 2) Devuelvo el valor asignado
+	log_info(logger, "Comienzo primitiva silverstack_asignarValorCompartida");
 	t_mensaje msg;
 	msg.id_proceso = CPU;
 	msg.tipo = ASIGNACION;
@@ -367,6 +439,7 @@ t_valor_variable silverstack_asignarValorCompartida(t_nombre_compartida varCom, 
 	strcpy(msg.mensaje, varCom);
 	send(sockKernel, &msg, sizeof(t_mensaje), 0);
 	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
+	log_info(logger, "Fin primitiva silverstack_asignarValorCompartida");
 	return valor;
 }
 
@@ -375,6 +448,9 @@ void silverstack_irAlLabel(t_nombre_etiqueta etiqueta)
 	/*
 	Devuelve el número de la primer instrucción ejecutable de etiqueta y -1 en caso de error.
 	*/
+	log_info(logger, "Comienzo primitiva silverstack_irAlLabel");
+
+	log_info(logger, "Fin primitiva silverstack_irAlLabel");
 }
 
 void silverstack_llamarSinRetorno(t_nombre_etiqueta etiqueta)
@@ -386,6 +462,9 @@ void silverstack_llamarSinRetorno(t_nombre_etiqueta etiqueta)
 	Los parámetros serán definidos luego de esta instrucción de la misma manera que una variable
 	local, con identificadores numéricos empezando por el 0.
 	*/
+	log_info(logger, "Comienzo primitiva silverstack_llamarSinRetorno");
+
+	log_info(logger, "Fin primitiva silverstack_llamarSinRetorno");
 }
 
 void silverstack_llamarConRetorno(t_nombre_etiqueta etiqueta, t_puntero donde_retornar)
@@ -399,6 +478,9 @@ void silverstack_llamarConRetorno(t_nombre_etiqueta etiqueta, t_puntero donde_re
 	local, con identificadores numéricos empezando por el 0.
 	No se pretende que se pueda retornar a una variable global. Sí a un parámetro o variable local
 	*/
+	log_info(logger, "Comienzo primitiva silverstack_llamarConRetorno");
+
+	log_info(logger, "Fin primitiva silverstack_llamarConRetorno");
 }
 
 void silverstack_retornar(t_valor_variable valor)
@@ -408,22 +490,28 @@ void silverstack_retornar(t_valor_variable valor)
 	recuperando el Cursor de Contexto Actual, el Program Counter y la direccion donde retornar,
 	asignando el valor de retorno en esta, previamente apilados en el Stack.
 	*/
+	log_info(logger, "Comienzo primitiva silverstack_retornar");
+
+	log_info(logger, "Fin primitiva silverstack_retornar");
 }
 
 void silverstack_signal(t_nombre_semaforo identificador_semaforo)
 {
 	// 1) Envio al kernel el semaforo para que ejecute signal en él
+	log_info(logger, "Comienzo primitiva silverstack_signal");
 	t_mensaje msg;
 	msg.id_proceso = CPU;
 	msg.tipo = SIGNALSEM;
 	strcpy(msg.mensaje, identificador_semaforo);
 	send(sockKernel, &msg, sizeof(t_mensaje), 0);
 	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
+	log_info(logger, "Fin primitiva silverstack_signal");
 }
 
 void silverstack_wait(t_nombre_semaforo identificador_semaforo)
 {
 	// 1) Envio al kernel el semaforo para que se ejecute wait en él
+	log_info(logger, "Comienzo primitiva silverstack_wait");
 	t_mensaje msg;
 	msg.id_proceso = CPU;
 	msg.tipo = WAITSEM;
@@ -434,4 +522,5 @@ void silverstack_wait(t_nombre_semaforo identificador_semaforo)
 	{
 		proceso_bloqueado = 1;
 	}
+	log_info(logger, "Fin primitiva silverstack_wait");
 }
