@@ -122,7 +122,9 @@ int main(int argc, char *argv[])
 			{
 				if(i == sock_umv)
 				{
-					escuchar_umv();
+					//escuchar_umv();
+					log_error(logger,"Se cayo la UMV");
+					close(sock_umv);
 					continue;
 				}
 
@@ -143,9 +145,7 @@ int main(int argc, char *argv[])
 
 				if (i == sock_cpu)
 				{
-					log_info(logger,"Begin escuchar_Nuevo_cpu");
 					new_socket = escuchar_Nuevo_cpu(i);
-					log_info(logger,"Finalizar escuchar_Nuevo_cpu");
 
 					if(new_socket == -1)
 					{
@@ -185,9 +185,8 @@ int main(int argc, char *argv[])
 					continue;
 				}
 
-				if(is_Connected_CPU(i) == 0)
+				if(is_Connected_CPU(i) != 0)
 				{
-					log_info(logger,"Select detecto actividad en CPU Existente");
 					if(escuchar_cpu(i) == -1)
 					{
 						close(i);
