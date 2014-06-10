@@ -1447,7 +1447,6 @@ int escuchar_cpu(int sock_cpu)
 	int size_mensaje = sizeof(t_mensaje);
 	char* buffer;
 
-	log_info(logger, "Recepcion de datos desde CPU");
 	if((buffer = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
 	{
 		log_error(logger,"Error al reservar memoria para el buffer en escuchar_cpu");
@@ -1515,6 +1514,8 @@ void finalizo_Quantum(int sock_cpu)
 	pthread_mutex_lock(&mutex_pedidos);
 	queue_push(queue_rr,pedido_create(pcb.unique_id,PROCESS_EXECUTE,PROCESS_READY));
 	pthread_mutex_unlock(&mutex_pedidos);
+
+	sem_post(&sem_pcp);
 }
 
 /*
@@ -1596,6 +1597,7 @@ void imprimir(int sock_cpu,int valor)
 				return ;
 			}
 }
+
 void imprimirTexto(int sock_cpu,int valor)
 {
 	t_mensaje mensaje;
@@ -1832,8 +1834,6 @@ void pcb_move(unsigned int pid,t_list* from, t_list* to)
 	int index = 0;
 	int indice_buscado = 0;
 
-	log_info(logger,"Inicia pcb_move");
-
 	void _get_node(t_pcb *s)
 	{
 		if(s->unique_id == process_id)
@@ -1851,8 +1851,6 @@ void pcb_move(unsigned int pid,t_list* from, t_list* to)
 
 	t_pcb *pcb = list_remove(from, indice_buscado);
 	list_add(to,pcb);
-
-	log_info(logger,"Fin pcb_move");
 }
 
 /*
@@ -2049,6 +2047,8 @@ void planificador_rr(void)
 					case PROCESS_BLOCKED:
 					{
 						process_update(new_pedido->process_id,PROCESS_EXECUTE,PROCESS_BLOCKED);
+						log_info(logger, "process_update PROCESS_EXECUTE -> PROCESS_BLOCKED");
+						break;
 					}
 					case PROCESS_READY:
 					{
@@ -2060,12 +2060,15 @@ void planificador_rr(void)
 							break;
 						}
 						cpu_update(cpu_socket);
+						log_info(logger, "process_update PROCESS_EXECUTE -> PROCESS_READY");
+						break;
 					}
 					case PROCESS_EXIT:
 					{
 						process_update(new_pedido->process_id,PROCESS_EXECUTE,PROCESS_EXIT);
 						umv_destroy_segment(new_pedido->process_id); //Envio a la UMV el dato para que destruya segmentos
 						sem_post(&sem_plp);
+						log_info(logger, "process_update PROCESS_EXECUTE -> PROCESS_EXIT");
 						break;
 					}
 					default:
@@ -2083,6 +2086,8 @@ void planificador_rr(void)
 					case PROCESS_READY:
 					{
 						process_update(new_pedido->process_id,PROCESS_BLOCKED,PROCESS_READY);
+						log_info(logger, "process_update PROCESS_BLOCKED -> PROCESS_READY");
+						break;
 					}
 					default:
 					{
@@ -2315,39 +2320,26 @@ void process_execute(int unique_id, int socket)
 		index++;
 	}
 
-	log_info(logger,"Antes de mutex_execute_queue");
 	sem_wait(&mutex_execute_queue);
 	list_iterate(list_pcb_execute, (void*) _get_pcb_element);
 	sem_post(&mutex_execute_queue);
 
-	log_info(logger,"Antes de mutex_cpu_list");
-	// TODO: Verificar Semaforos
-	//sem_wait(&mutex_cpu_list);
-	log_info(logger,"Despues del wait de mutex_cpu_list");
 	list_iterate(list_cpu, (void*) _get_cpu_element); // CPU_WORKING
-	log_info(logger,"Despuel del iterate de mutex_cpu_list");
-	//sem_post(&mutex_cpu_list);
-
-	log_info(logger,"Antes de mutex_process_list");
 
 	sem_wait(&mutex_process_list);
-	log_info(logger,"Pase el semaforo de mutex_process_list");
 	list_iterate(list_process, (void*) _get_process_element); // CPU_SOCKET
-	log_info(logger,"Pase el list_iterate de mutex_process_list");
 	sem_post(&mutex_process_list);
 
-	log_info(logger,"Fin de todos los semaforos");
 	if(flag_process_found == 0 || flag_cpu_found == 0 || flag_pcb_found == 0)
 	{
 		log_error(logger, "PID %d no encontrado en process_execute", process_id);
 		return;
 	}
 
-	//TODO: Semaforo pcb_execute
-
+	sem_wait(&mutex_execute_queue);
 	pcb = list_get(list_pcb_execute, indice_buscado);
+	sem_post(&mutex_execute_queue);
 
-	log_info(logger,"Antes de Mandar el PCB");
 	if((numbytes=write(cpu_socket,pcb,sizeof(t_pcb)))<=0)
 	{
 		log_error(logger, "Error en el write en process_execute");
@@ -2530,6 +2522,7 @@ int get_sock_prog_by_sock_cpu(int sock_cpu)
 		return sock_prog;
 
 }
+
 /*
  * Function: program_exit
  * Purpose: Send to Program Process Exit Call
@@ -2645,6 +2638,7 @@ t_pedido* pedido_create(int pid, unsigned char previous_status, unsigned char ne
 	new_pedido->previous_status = previous_status;
 	new_pedido->process_id = pid;
 
+	log_info(logger,"New Pedido");
 	return new_pedido;
 }
 
