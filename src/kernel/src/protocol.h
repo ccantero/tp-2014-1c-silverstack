@@ -190,6 +190,8 @@ sem_t sem_cpu_list;
 
 pthread_mutex_t mutex_pedidos;
 
+int exit_status;
+
 void GetInfoConfFile(char* PATH_CONFIG);
 int conectar_umv(void);
 t_global* global_create(char *global_name);
@@ -243,16 +245,16 @@ int get_process_id_by_sock_cpu(int sock_cpu);
 void program_exit(int pid);
 t_pedido* pedido_create(int pid, unsigned char previous_status, unsigned char next_status);
 int get_sock_cpu_by_process_id(int pid);
-void fd_set_cpu_sockets(fd_set* descriptores);
-void fd_set_program_sockets(fd_set* descriptores);
-
-int get_Segment_Start(int offset);			// A revisar si va o no va
-void io_destroy(t_io*); 					// A revisar si va o no va
-void semaphore_destroy(t_semaphore *self);	// A revisar si va o no va
-int send_umv_stack(int process_id);			// A revisar si va o no va
-
+void process_finish(int sock_cpu);
 void imprimirTexto(int sock_cpu,int valor);
 void imprimir(int sock_cpu,int valor);
 int get_sock_prog_by_sock_cpu(int sock_cpu);
+
+int get_Segment_Start(int offset);					// A revisar si va o no va
+void io_destroy(t_io*); 							// A revisar si va o no va
+void semaphore_destroy(t_semaphore *self);			// A revisar si va o no va
+int send_umv_stack(int process_id);					// A revisar si va o no va
+void fd_set_cpu_sockets(fd_set* descriptores);		// A revisar si va o no va
+void fd_set_program_sockets(fd_set* descriptores);	// A revisar si va o no va
 
 #endif /* PROTOCOL_H_ */
