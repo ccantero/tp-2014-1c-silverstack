@@ -713,6 +713,7 @@ void pcb_create(char* buffer, int tamanio_buffer, int sock_program)
 	if(metadata->etiquetas_size >0)
 	{
 		new_pcb->etiquetas_index = umv_send_segment(process_Id, (char*) metadata->etiquetas, metadata->etiquetas_size);
+		new_pcb->size_etiquetas_index = metadata->etiquetas_size;
 		log_info(logger,"etiquetas_size = %d", metadata->etiquetas_size);
 	}
 	new_pcb->program_counter = metadata->instruccion_inicio;

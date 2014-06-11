@@ -100,13 +100,10 @@ int main(int argc, char *argv[])
 		// Recibo el pcb del kernel
 		recv(sockKernel, &pcb, sizeof(t_pcb), 0);
 		log_info(logger,"Recibi PCB de Kernel");
-		log_info(logger, "pcb.context_actual: %d", pcb.context_actual);
-		log_info(logger, "pcb.stack_segment: %d", pcb.stack_segment);
 		if(pcb.program_counter == 0)
 		{
 			pcb.program_counter++;
 		}
-
 		for (i = 0; i < quantum; i++)
 		{
 			if (proceso_bloqueado == 0 && proceso_finalizo == 0)
@@ -239,7 +236,6 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 	// 2) Registrar variable en el Stack
 	// 3) Guardar contexto actual en el pcb
 	// 4) Retornar la posicion de la variable
-	log_info(logger, "Comienzo primitiva silverstack_definirVariable");
 	t_puntero ptr;
 	char buffaux[5];
 	buffaux[0] = var;
@@ -253,7 +249,6 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 	send(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
 	send(sockUmv, buffaux, 5, 0);
 	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-	log_info(logger, "Rpta de umv: %d", mensaje.tipo);
 	if (mensaje.tipo == ENVIOBYTES)
 	{
 		ptr = pcb.stack_pointer + (5 * pcb.context_actual);
@@ -263,7 +258,6 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 	{
 		// TODO Verificar errores de segmentation fault
 	}
-	log_info(logger, "Fin de primitiva silverstack_definirVariable");
 	return ptr;
 }
 
@@ -271,7 +265,6 @@ t_puntero silverstack_obtenerPosicionVariable(t_nombre_variable var)
 {
 	// 1) Pedir a la UMV la posicion de la variable var
 	// 2) Calcular el desplazamiento respecto del stack
-	log_info(logger, "Comienzo primitiva silverstack_obtenerPosicionVariable");
 	t_puntero ptr = 0;
 	char buffer[5];
 	int offset = 0;
@@ -299,17 +292,12 @@ t_puntero silverstack_obtenerPosicionVariable(t_nombre_variable var)
 		}
 	}
 	ptr = msg_solicitud_bytes.base + offset;
-	log_info(logger, "Fin primitiva silverstack_obtenerPosicionVariable.");
 	return ptr;
 }
 
 t_valor_variable silverstack_dereferenciar(t_puntero dir_var)
 {
-	/*
-	Obtiene el valor resultante de leer a partir de dir_var, sin importar cual fuera el
-	contexto actual.
-	*/
-	log_info(logger, "Comienzo primitiva silverstack_dereferenciar");
+	// 1) Se lee el valor de la variable almacenada en dir_var
 	t_valor_variable valor = 0;
 	char buffer[5];
 	msg_solicitud_bytes.base = pcb.stack_pointer;
@@ -323,7 +311,6 @@ t_valor_variable silverstack_dereferenciar(t_puntero dir_var)
 	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 	recv(sockUmv, &buffer, sizeof(buffer), 0);
 	memcpy(&valor, &buffer[1], 4);
-	log_info(logger, "Fin primitiva silverstack_dereferenciar.");
 	return valor;
 }
 
@@ -331,7 +318,6 @@ void silverstack_asignar(t_puntero dir_var, t_valor_variable valor)
 {
 	// 1) Mando a la UMV el valor de la variable junto con su direccion
 	// 2) Actualizo diccionario de variables
-	log_info(logger, "Comienzo primitiva silverstack_asignar");
 	int buffer;
 	msg_envio_bytes.base = pcb.stack_pointer;
 	msg_envio_bytes.offset = dir_var - pcb.stack_pointer + 1;
@@ -415,7 +401,6 @@ void silverstack_finalizar()
 	apilados en el Stack. En caso de estar finalizando el Contexto principal (el ubicado al inicio del
 	Stack), deberá finalizar la ejecución del programa devolviendo el valor -1.
 	*/
-	log_info(logger, "Comienzo primitiva silverstack_finalizar");
 	if (pcb.stack_pointer == pcb.stack_segment)
 	{
 		proceso_finalizo = 1;
@@ -424,7 +409,6 @@ void silverstack_finalizar()
 	{
 		// TODO Verificar cuando se sale de contexto de funcion o procedimiento
 	}
-	log_info(logger, "Fin primitiva silverstack_finalizar");
 }
 
 t_valor_variable silverstack_asignarValorCompartida(t_nombre_compartida varCom, t_valor_variable valor)
@@ -448,12 +432,9 @@ void silverstack_irAlLabel(t_nombre_etiqueta etiqueta)
 	/*
 	Devuelve el número de la primer instrucción ejecutable de etiqueta y -1 en caso de error.
 	*/
-	log_info(logger, "Comienzo primitiva silverstack_irAlLabel");
 	int salir = 0;
 	int dir_instruccion;
-	log_info(logger, "pcb.size_etiquetas_index: %d", pcb.size_etiquetas_index);
 	char buffer[pcb.size_etiquetas_index];
-	log_info(logger, "Se crearon las variables a utilizar");
 	msg_solicitud_bytes.base = pcb.etiquetas_index;
 	msg_solicitud_bytes.offset = 0;
 	msg_solicitud_bytes.tamanio = pcb.size_etiquetas_index;
@@ -462,17 +443,10 @@ void silverstack_irAlLabel(t_nombre_etiqueta etiqueta)
 	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 	send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
-	log_info(logger, "Se envio la solicitud de etiquetas");
 	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 	recv(sockUmv, &buffer, sizeof(buffer), 0);
-	log_info(logger, "Antes de ejecutar buscar_etiqueta");
-	log_info(logger, "buffer: %s", buffer);
-	log_info(logger, "etiqueta: %s", etiqueta);
-	log_info(logger, "size_etiquetas_index: %d", pcb.size_etiquetas_index);
 	dir_instruccion = metadata_buscar_etiqueta(etiqueta, buffer, pcb.size_etiquetas_index);
-	log_info(logger, "dir_etiqueta: %d", dir_instruccion);
-	pcb.program_counter = dir_instruccion + 1;
-	log_info(logger, "Fin primitiva silverstack_irAlLabel");
+	pcb.program_counter = dir_instruccion;
 }
 
 void silverstack_llamarSinRetorno(t_nombre_etiqueta etiqueta)
