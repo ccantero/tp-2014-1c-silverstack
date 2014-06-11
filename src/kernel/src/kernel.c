@@ -107,7 +107,10 @@ int main(int argc, char *argv[])
 
 	fdmax = buscar_Mayor(sock_program, sock_umv, sock_cpu);
 	//log_info(logger, sock_umv = %d \n", sock_umv);
-	for(;;)
+
+	exit_status = 1;
+
+	while(exit_status == 1)
 	{
 		read_fds = master;
 		if (select(fdmax + 1, &read_fds, NULL, NULL, NULL) == -1)
@@ -203,8 +206,6 @@ int main(int argc, char *argv[])
 		} /* for (i = 0; i <= fdmax; i++) */
 	}/* for(;;) */
 
-
-	pause();
 	log_destroy(logger);
 	return 1;
 }
