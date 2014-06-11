@@ -449,7 +449,29 @@ void silverstack_irAlLabel(t_nombre_etiqueta etiqueta)
 	Devuelve el número de la primer instrucción ejecutable de etiqueta y -1 en caso de error.
 	*/
 	log_info(logger, "Comienzo primitiva silverstack_irAlLabel");
-
+	int salir = 0;
+	int dir_instruccion;
+	log_info(logger, "pcb.size_etiquetas_index: %d", pcb.size_etiquetas_index);
+	char buffer[pcb.size_etiquetas_index];
+	log_info(logger, "Se crearon las variables a utilizar");
+	msg_solicitud_bytes.base = pcb.etiquetas_index;
+	msg_solicitud_bytes.offset = 0;
+	msg_solicitud_bytes.tamanio = pcb.size_etiquetas_index;
+	msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+	mensaje.tipo = SOLICITUDBYTES;
+	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+	send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
+	log_info(logger, "Se envio la solicitud de etiquetas");
+	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	recv(sockUmv, &buffer, sizeof(buffer), 0);
+	log_info(logger, "Antes de ejecutar buscar_etiqueta");
+	log_info(logger, "buffer: %s", buffer);
+	log_info(logger, "etiqueta: %s", etiqueta);
+	log_info(logger, "size_etiquetas_index: %d", pcb.size_etiquetas_index);
+	dir_instruccion = metadata_buscar_etiqueta(etiqueta, buffer, pcb.size_etiquetas_index);
+	log_info(logger, "dir_etiqueta: %d", dir_instruccion);
+	pcb.program_counter = dir_instruccion + 1;
 	log_info(logger, "Fin primitiva silverstack_irAlLabel");
 }
 
