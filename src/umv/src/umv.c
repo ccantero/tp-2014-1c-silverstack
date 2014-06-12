@@ -629,6 +629,7 @@ int asignar_direccion_ff(int tamanio)
 
 void consola (void* param)
 {
+	cantidad_dumps = 0;
 	char comando[50];
 	char comando2[50];
 	int flag_comandoOK;
@@ -649,6 +650,7 @@ void consola (void* param)
 	int i;
 	int cant_num_leidos;
 	int *buffer_int;
+	int tecla_ingresada;
 	// Bucle principal esperando peticiones del usuario
 	for(;;)
 	{
@@ -915,8 +917,10 @@ void consola (void* param)
    		}
    		if (flag_comandoOK == 0 && strcmp(comando, "dump") == 0)
    		{
+   			printw("¿Desea guardar los datos del dump en un archivo en disco? (s/n): ");
+			tecla_ingresada = getch();
    			pthread_mutex_lock(&semCompactacion);
-   			dump_memoria();
+   			dump_memoria(tecla_ingresada);
    			pthread_mutex_unlock(&semCompactacion);
    		   	flag_comandoOK = 1;
    		}
@@ -945,8 +949,24 @@ void consola (void* param)
    	}
 }
 
-void dump_memoria()
+void dump_memoria(int opcion)
 {
+	int cant_espacios;
+	char buffer_aux[50];
+	int cont_aux;
+	cantidad_dumps++;
+	if (opcion == 115)
+	{
+		strcpy(nombre_archivo_dump, "dump");
+		sprintf(buff_dump, "%d", cantidad_dumps);
+		strcat(nombre_archivo_dump, buff_dump);
+		archivo_dump = fopen(nombre_archivo_dump, "w+");
+		tiempo_dump = time(NULL);
+		ptr_tiempo_dump = gmtime(&tiempo_dump);
+		tiempo_dump_archivo = asctime(ptr_tiempo_dump);
+		fprintf(archivo_dump, "%s", tiempo_dump_archivo);
+		fprintf(archivo_dump, "\n");
+	}
 	int mem_utilizada = 0;
 	clear();
 	refresh();
@@ -955,14 +975,34 @@ void dump_memoria()
 	move(y, x);
 	printw("Id Proceso\n");
 	x += 15;
+	if (opcion == 115)
+	{
+		fprintf(archivo_dump, "Id Proceso");
+		fprintf(archivo_dump, "     ");
+	}
 	move(y, x);
 	printw("Dir. Fisica Segmento\n");
 	x += 25;
+	if (opcion == 115)
+	{
+		fprintf(archivo_dump, "Dir. Fisica Segmento");
+		fprintf(archivo_dump, "     ");
+	}
 	move(y, x);
 	printw("Dir. Logica Segmento\n");
 	x += 30;
+	if (opcion == 115)
+	{
+		fprintf(archivo_dump, "Dir. Logica Segmento");
+		fprintf(archivo_dump, "          ");
+	}
 	move(y, x);
 	printw("Tamanio Segmento\n");
+	if (opcion == 115)
+	{
+		fprintf(archivo_dump, "Tamanio Segmento");
+		fprintf(archivo_dump, "\n");
+	}
 	refresh();
 	t_info_programa *prog;
 	t_info_segmento *seg;
@@ -979,14 +1019,55 @@ void dump_memoria()
 			move(y, x);
 			printw("%d", seg->id);
 			x += 15;
+			if (opcion == 115)
+			{
+				fprintf(archivo_dump, "%d", seg->id);
+				sprintf(buffer_aux, "%d", seg->id);
+				cant_espacios = 5 + 10 - strlen(buffer_aux);
+				for (cont_aux = 0; cont_aux < cant_espacios; cont_aux++)
+				{
+					buffer_aux[cont_aux] = ' ';
+				}
+				buffer_aux[cont_aux] = '\0';
+				fprintf(archivo_dump, "%s", buffer_aux);
+			}
 			move(y, x);
 			printw("%d", seg->dirFisica);
 			x += 25;
+			if (opcion == 115)
+			{
+				fprintf(archivo_dump, "%d", seg->dirFisica);
+				sprintf(buffer_aux, "%d", seg->dirFisica);
+				cant_espacios = 5 + 20 - strlen(buffer_aux);
+				for (cont_aux = 0; cont_aux < cant_espacios; cont_aux++)
+				{
+					buffer_aux[cont_aux] = ' ';
+				}
+				buffer_aux[cont_aux] = '\0';
+				fprintf(archivo_dump, "%s", buffer_aux);
+			}
 			move(y, x);
 			printw("%d", seg->dirLogica);
 			x += 30;
+			if (opcion == 115)
+			{
+				fprintf(archivo_dump, "%d", seg->dirLogica);
+				sprintf(buffer_aux, "%d", seg->dirLogica);
+				cant_espacios = 5 + 25 - strlen(buffer_aux);
+				for (cont_aux = 0; cont_aux < cant_espacios; cont_aux++)
+				{
+					buffer_aux[cont_aux] = ' ';
+				}
+				buffer_aux[cont_aux] = '\0';
+				fprintf(archivo_dump, "%s", buffer_aux);
+			}
 			move(y, x);
 			printw("%d", seg->tamanio);
+			if (opcion == 115)
+			{
+				fprintf(archivo_dump, "%d", seg->tamanio);
+				fprintf(archivo_dump, "\n");
+			}
 			y++;
 			x = 0;
 			refresh();
@@ -996,7 +1077,16 @@ void dump_memoria()
 	y++;
 	move(y, x);
 	printw("Memoria total: %d\n", space);
+	if (opcion == 115)
+	{
+		fprintf(archivo_dump, "Memoria total: %d\n", space);
+	}
 	printw("Memoria utilizada: %d\n", mem_utilizada);
+	if (opcion == 115)
+	{
+		fprintf(archivo_dump, "Memoria utilizada: %d\n", mem_utilizada);
+		fclose(archivo_dump);
+	}
 	refresh();
 }
 

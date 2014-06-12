@@ -62,6 +62,14 @@ int port;
 int proceso_activo;
 int retardo;
 
+FILE *archivo_dump;
+char nombre_archivo_dump[25];
+int cantidad_dumps;
+char buff_dump[3];
+time_t tiempo_dump;
+struct tm *ptr_tiempo_dump;
+char *tiempo_dump_archivo;
+
 void consola (void* param);
 void GetInfoConfFile(void);
 void conexion_nueva(void *param);
@@ -80,7 +88,7 @@ int transformar_direccion_en_logica(int direccion, int pid);
 int verificar_proc_id(int pid);
 int atender_solicitud_bytes(int base, int offset, int tam, int sock, char **buffer);
 int atender_envio_bytes(int base, int offset, int tam, int sock);
-void dump_memoria();
+void dump_memoria(int opcion);
 int asignar_direccion_ff(int tamanio);
 int asignar_direccion_wf(int tamanio);
 int obtener_direccion_segmento(int arranque);

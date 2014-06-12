@@ -96,6 +96,10 @@ int main(int argc, char *argv[])
 		// Recibo el pcb del kernel
 		recv(sockKernel, &pcb, sizeof(t_pcb), 0);
 		log_info(logger,"Recibi PCB de Kernel");
+		log_info(logger, "pcb.unique_id: %d", pcb.unique_id);
+		log_info(logger, "pcb.instruction_index: %d", pcb.instruction_index);
+		log_info(logger, "pcb.code_segment: %d", pcb.code_segment);
+		log_info(logger, "pcb.stack_segment: %d", pcb.stack_segment);
 		if(pcb.program_counter == 0)
 		{
 			pcb.program_counter++;
@@ -115,6 +119,9 @@ int main(int argc, char *argv[])
 				mensaje.tipo = SOLICITUDBYTES;
 				send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 				log_info(logger, "Se envio solicitud de busqueda de instruccion.");
+				log_info(logger, "msg_solicitud_bytes.base: %d", msg_solicitud_bytes.base);
+				log_info(logger, "msg_solicitud_bytes.offset: %d", msg_solicitud_bytes.offset);
+				log_info(logger, "msg_solicitud_bytes.tamanio: %d", msg_solicitud_bytes.tamanio);
 				send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 				send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
 				// Espero la respuesta de la UMV
