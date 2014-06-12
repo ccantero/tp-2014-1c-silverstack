@@ -109,7 +109,6 @@ typedef struct _t_process {
 	int program_socket;
 	int current_cpu_socket;
 	unsigned char status;
-	int quantum;
 } t_process;
 
 typedef struct _t_io_queue_nodo {
@@ -209,7 +208,6 @@ int umv_change_process(int process_id);
 int umv_send_bytes(int base, int offset, int tamanio);
 void finalizo_Quantum(int sock_cpu);
 void pcb_update(t_pcb* pcb,unsigned char actual_state);
-
 void sort_plp(void);
 void planificador_sjn(void);
 t_nodo_segment* segment_create(int start, int offset);
@@ -219,7 +217,6 @@ int escuchar_Nuevo_cpu(int sock_cpu);
 int escuchar_cpu(int sock_cpu);
 t_nodo_cpu* cpu_create(int socket);
 void cpu_remove(int socket);
-void cpu_update(int socket);
 t_process* process_create(unsigned int pid, int socket);
 void process_update(int pid, unsigned char previous_status, unsigned char next_status);
 void process_destroy(t_process *p);
@@ -249,6 +246,7 @@ void process_finish(int sock_cpu);
 void imprimirTexto(int sock_cpu,int valor);
 void imprimir(int sock_cpu,int valor);
 int get_sock_prog_by_sock_cpu(int sock_cpu);
+void cpu_set_status(int socket, unsigned char status);
 
 int get_Segment_Start(int offset);					// A revisar si va o no va
 void io_destroy(t_io*); 							// A revisar si va o no va
@@ -256,5 +254,6 @@ void semaphore_destroy(t_semaphore *self);			// A revisar si va o no va
 int send_umv_stack(int process_id);					// A revisar si va o no va
 void fd_set_cpu_sockets(fd_set* descriptores);		// A revisar si va o no va
 void fd_set_program_sockets(fd_set* descriptores);	// A revisar si va o no va
+void cpu_update(int socket);						// A revisar si va o no va
 
 #endif /* PROTOCOL_H_ */

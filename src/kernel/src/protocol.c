@@ -1481,7 +1481,6 @@ int escuchar_cpu(int sock_cpu)
 	return 0;
 }
 
-
 /*
  * Function: finalizo_Quantum
  * Purpose: Receives an update PCB from CPU. Update and move to correct queue.
@@ -1521,7 +1520,6 @@ void finalizo_Quantum(int sock_cpu)
 
 	sem_post(&sem_pcp);
 }
-
 
 /*
  * Function: process_finish
@@ -1570,7 +1568,6 @@ void process_finish(int sock_cpu)
  * Created on: 20/05/2014
  * Author: SilverStack
 */
-
 
 void asignar_valor_VariableCompartida(int sock_cpu, char* global_name, int value)
 {
@@ -1645,7 +1642,6 @@ void imprimir(int sock_cpu,int valor)
 			}
 }
 
-
 void imprimirTexto(int sock_cpu,int valor)
 {
 	t_mensaje mensaje;
@@ -1697,14 +1693,12 @@ void imprimirTexto(int sock_cpu,int valor)
 
 }
 
-
 /*
 * Function: cpu_create
  * Purpose: Adds cpu to CPU List
  * Created on: 03/05/2014
  * Author: SilverStack
 */
-
 
 t_nodo_cpu* cpu_create(int socket)
 {
@@ -1718,14 +1712,12 @@ t_nodo_cpu* cpu_create(int socket)
 	return new_cpu;
 }
 
-
 /*
  * Function: cpu_remove
  * Purpose: removes a cpu that is not connected any more.
  * Created on: 03/05/2014
  * Author: SilverStack
 */
-
 
 void cpu_remove(int socket)
 {
@@ -1753,14 +1745,12 @@ void cpu_remove(int socket)
 	free(cpu);
 }
 
-
 /*
  * Function: cpu_update
  * Purpose: update cpu's status
  * Created on: 04/05/2014
  * Author: SilverStack
 */
-
 
 void cpu_update(int socket)
 {
@@ -1788,6 +1778,39 @@ void cpu_update(int socket)
 
 }
 
+/*
+ * Function: cpu_set_status
+ * Purpose: update cpu's status.
+ * Pre-Requisites: Must be called within semaphores
+ * Created on: 11/06/2014
+ * Author: SilverStack
+*/
+
+void cpu_set_status(int socket, unsigned char status)
+{
+	int flag_found = 0;
+	int socket_cpu = socket;
+	unsigned char nuevo_status = status;
+
+	void _change_status(t_nodo_cpu *s)
+	{
+		if(s->socket == socket_cpu)
+		{
+			s->status = nuevo_status;
+			flag_found = 1;
+		}
+	}
+
+	list_iterate(list_cpu, (void*) _change_status);
+
+	if(flag_found == 0)
+	{
+		log_error(logger, "CPU Socket %d no encontrado", socket);
+		return;
+	}
+
+	return;
+}
 
 /*
  * Function: process_create
@@ -1795,7 +1818,6 @@ void cpu_update(int socket)
  * Created on: 04/05/2014
  * Author: SilverStack
 */
-
 
 t_process* process_create(unsigned int pid, int sock_program)
 {
@@ -1813,14 +1835,12 @@ t_process* process_create(unsigned int pid, int sock_program)
 	return new_process;
 }
 
-
 /*
  * Function: process_update
  * Purpose: update process node, and moves the PCB to correct queue
  * Created on: 14/05/2014
  * Author: SilverStack
 */
-
 
 void process_update(int pid, unsigned char previous_status, unsigned char next_status)
 {
@@ -1856,8 +1876,6 @@ void process_update(int pid, unsigned char previous_status, unsigned char next_s
 		{
 			s->status = status;
 			flag_found = 1;
-			if(status == PROCESS_READY)
-				s->current_cpu_socket = -1;
 		}
 	}
 
@@ -1881,7 +1899,6 @@ void process_update(int pid, unsigned char previous_status, unsigned char next_s
 	log_error(logger,"Falló Process Update");
 	return;
 }
-
 
 /*
  * Function: pcb_move
@@ -1916,14 +1933,12 @@ void pcb_move(unsigned int pid,t_list* from, t_list* to)
 	list_add(to,pcb);
 }
 
-
 /*
  * Function: io_wait
  * Purpose: Moved PCB From Execute to Blocked
  * Created on: 06/05/2014
  * Author: SilverStack
 */
-
 
 void io_wait(unsigned int pid, char* io_name, int amount)
 {
@@ -1960,14 +1975,12 @@ void io_wait(unsigned int pid, char* io_name, int amount)
 	free(io_id);
 }
 
-
 /*
  * Function: io_queue_create
  * Purpose: Add a Process to IO_Queue
  * Created on: 06/05/2014
  * Author: SilverStack
 */
-
 
 t_io_queue_nodo* io_queue_create(unsigned int process_id, int retardo)
 {
@@ -1977,14 +1990,12 @@ t_io_queue_nodo* io_queue_create(unsigned int process_id, int retardo)
 	return new;
 }
 
-
 /*
  * Function: retardo_io
  * Purpose: Thread function. One per IO Device
  * Created on: 06/05/2014
  * Author: SilverStack
 */
-
 
 void retardo_io(void *ptr)
 {
@@ -2075,7 +2086,7 @@ void planificador_rr(void)
 				switch(new_pedido->new_status)
 				{
 					case PROCESS_EXECUTE:
-					{	// Hay que pasar de Ready a Executed
+					{
 						log_info(logger,"PID = %d - PROCESS_READY -> PROCESS_EXECUTE", new_pedido->process_id);
 						sem_wait(&mutex_cpu_list);
 						found_cpus_available();
@@ -2088,10 +2099,9 @@ void planificador_rr(void)
 
 						if(flag_cpu_found == 1) // Encontre un CPU AVAILABLE
 						{
-							log_info(logger, "Enviar PCB a CPU en socket %d", cpu->socket);
 							process_update(new_pedido->process_id,PROCESS_READY, PROCESS_EXECUTE); //Mueve el pcb
-							process_execute(new_pedido->process_id, cpu->socket); // Pone el CPU Working
-							log_info(logger, "process_update PROCESS_READY -> PROCESS_EXECUTE");
+							process_execute(new_pedido->process_id, cpu->socket);
+							cpu_set_status(cpu->socket, CPU_WORKING); // Pone el CPU Working
 						}
 						else
 						{
@@ -2101,6 +2111,7 @@ void planificador_rr(void)
 							queue_push(queue_rr,pedido_create(new_pedido->process_id,new_pedido->previous_status,new_pedido->new_status));
 							pthread_mutex_unlock(&mutex_pedidos);
 						}
+
 						sem_post(&mutex_cpu_list);
 						break;
 					}
@@ -2120,7 +2131,6 @@ void planificador_rr(void)
 					{
 						log_info(logger,"PID = %d - PROCESS_EXECUTE -> PROCESS_BLOCKED", new_pedido->process_id);
 						process_update(new_pedido->process_id,PROCESS_EXECUTE,PROCESS_BLOCKED);
-						log_info(logger, "process_update PROCESS_EXECUTE -> PROCESS_BLOCKED");
 						break;
 					}
 					case PROCESS_READY:
@@ -2133,8 +2143,16 @@ void planificador_rr(void)
 							log_error(logger, "No se encontro el cpu_socket");
 							break;
 						}
-						cpu_update(cpu_socket);
-						log_info(logger, "process_update PROCESS_EXECUTE -> PROCESS_READY");
+
+						sem_wait(&mutex_cpu_list);
+						cpu_set_status(cpu_socket, CPU_AVAILABLE);
+						sem_post(&mutex_cpu_list);
+
+						pthread_mutex_lock(&mutex_pedidos);
+						queue_push(queue_rr,pedido_create(new_pedido->process_id,PROCESS_READY,PROCESS_EXECUTE));
+						pthread_mutex_unlock(&mutex_pedidos);
+
+						sem_post(&sem_pcp);
 						break;
 					}
 					case PROCESS_EXIT:
@@ -2148,10 +2166,12 @@ void planificador_rr(void)
 							log_error(logger, "No se encontro el cpu_socket");
 							break;
 						}
-						cpu_update(cpu_socket);
+						sem_wait(&mutex_cpu_list);
+						cpu_set_status(cpu_socket, CPU_AVAILABLE);
+						sem_post(&mutex_cpu_list);
+
 						umv_destroy_segment(new_pedido->process_id); //Envio a la UMV el dato para que destruya segmentos
 						sem_post(&sem_plp);
-						log_info(logger, "process_update PROCESS_EXECUTE -> PROCESS_EXIT");
 						break;
 					}
 					default:
@@ -2170,7 +2190,12 @@ void planificador_rr(void)
 					{
 						log_info(logger,"PID = %d - PROCESS_BLOCKED -> PROCESS_READY", new_pedido->process_id);
 						process_update(new_pedido->process_id,PROCESS_BLOCKED,PROCESS_READY);
-						log_info(logger, "process_update PROCESS_BLOCKED -> PROCESS_READY");
+
+						pthread_mutex_lock(&mutex_pedidos);
+						queue_push(queue_rr,pedido_create(new_pedido->process_id,PROCESS_READY,PROCESS_EXECUTE));
+						pthread_mutex_unlock(&mutex_pedidos);
+
+						sem_post(&sem_pcp);
 						break;
 					}
 					default:
@@ -2191,7 +2216,6 @@ void planificador_rr(void)
 
 	return;
 }
-
 
 /*
  * Function: found_cpus_available
@@ -2235,7 +2259,6 @@ void found_cpus_available(void)
 	return;
 }
 
-
 /*
  * Function: depurar
  * Purpose: Close all cpu sockets
@@ -2245,16 +2268,17 @@ void found_cpus_available(void)
 
 void depurar(int signum)
 {
-	log_info(logger,"Depuracion");
 
 	void _get_cpu_element(t_nodo_cpu *c)
 	{
 		close(c->socket);
+		log_info(logger,"Depuracion - Close CPU Socket %d", c->socket);
 	}
 
 	void _get_process_element(t_process *p)
 	{
 		close(p->program_socket);
+		log_info(logger,"Depuracion - Close Process Socket %d", p->program_socket);
 	}
 
 	if(list_size(list_cpu) > 0)
@@ -2267,7 +2291,6 @@ void depurar(int signum)
 
 	return;
 }
-
 
 /*
  * Function: buscar_Mayor
@@ -2290,7 +2313,6 @@ int buscar_Mayor(int a, int b, int c)
 	else
 		return c;
 }
-
 
 /*
  * Function: escuchar_umv
@@ -2334,7 +2356,6 @@ int is_Connected_Program(int sock_program)
 	return 0;
 }
 
-
 /*
  * Function: process_remove_by_socket
  * Purpose: Remove a Process from list_process
@@ -2361,7 +2382,6 @@ void process_remove_by_socket(int socket)
 	return;
 }
 
-
 /*
  * Function: ejecutar_proceso
  * Purpose: Update CPU Socket on Proces_List
@@ -2372,26 +2392,15 @@ void process_remove_by_socket(int socket)
 void process_execute(int unique_id, int socket)
 {
 	int flag_process_found = 0;
-	int flag_cpu_found = 0;
 	int flag_pcb_found = 0;
 	int process_id = unique_id;
 	int cpu_socket = socket;
 	int numbytes;
 	int index = 0;
 	int indice_buscado = 0;
-
 	t_pcb* pcb;
 
-	log_info(logger,"Inicia process_execute, pid = %d", unique_id);
 
-	void _get_cpu_element(t_nodo_cpu *cpu)
-	{
-		if(flag_cpu_found == 0 && cpu->socket == cpu_socket )
-		{
-			cpu->status = CPU_WORKING;
-			flag_cpu_found = 1;
-		}
-	}
 
 	void _get_process_element(t_process *p)
 	{
@@ -2416,13 +2425,11 @@ void process_execute(int unique_id, int socket)
 	list_iterate(list_pcb_execute, (void*) _get_pcb_element);
 	sem_post(&mutex_execute_queue);
 
-	list_iterate(list_cpu, (void*) _get_cpu_element); // CPU_WORKING
-
 	sem_wait(&mutex_process_list);
 	list_iterate(list_process, (void*) _get_process_element); // CPU_SOCKET
 	sem_post(&mutex_process_list);
 
-	if(flag_process_found == 0 || flag_cpu_found == 0 || flag_pcb_found == 0)
+	if(flag_process_found == 0 || flag_pcb_found == 0)
 	{
 		log_error(logger, "PID %d no encontrado en process_execute", process_id);
 		return;
@@ -2443,12 +2450,10 @@ void process_execute(int unique_id, int socket)
 		pthread_mutex_unlock(&mutex_pedidos);
 		return;
 	}
-
-	log_info(logger,"Fin process_execute");
+	log_info(logger,"Se envia PCB = %d a CPU= %d", unique_id, cpu_socket);
 
 	return;
 }
-
 
 /*
  * Function: process_destroy
@@ -2520,7 +2525,6 @@ void pcb_update(t_pcb* new_pcb, unsigned char previous_status)
 	return;
 }
 
-
 /*
  * Function: get_sock_cpu_by_process_id
  * Purpose: Returns the cpu_socket
@@ -2536,6 +2540,7 @@ int get_sock_cpu_by_process_id(int pid)
 
 	void _get_process_element(t_process *p)
 	{
+		log_info(logger,"p->current_cpu_socket = %d", p->current_cpu_socket);
 		if(flag_process_found == 0 && p->pid == process_id )
 		{
 			flag_process_found = 1;
@@ -2552,9 +2557,9 @@ int get_sock_cpu_by_process_id(int pid)
 		log_error(logger, "PID %d no encontrado en get_sock_cpu_by_process_id", process_id);
 		return -1;
 	}
+
 	return cpu_socket;
 }
-
 
 /*
  * Function: get_process_id_by_sock_cpu
@@ -2693,7 +2698,6 @@ void program_exit(int pid)
 	return;
 }
 
-
 /*
  * Function: pedido_create
  * Purpose: Create pedido node and add it to pedidos queue
@@ -2718,7 +2722,6 @@ t_pedido* pedido_create(int pid, unsigned char previous_status, unsigned char ne
 	return new_pedido;
 }
 
-
 /*
  * Function: fd_set_program_sockets
  * Purpose: FD_SET all program sockets
@@ -2737,7 +2740,6 @@ void fd_set_program_sockets(fd_set* descriptores)
 	list_iterate(list_process, (void*) _fd_set);
 	sem_post(&mutex_process_list);
 }
-
 
 /*
  * Function: fd_set_cpu_sockets
