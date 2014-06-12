@@ -90,10 +90,6 @@ int main(int argc, char *argv[])
 	int bufferaux[2];
 	recv(sockKernel, &mensaje, sizeof(t_mensaje), 0);
 	quantum = mensaje.datosNumericos;
-
-	// TODO sacar quantum de prueba
-	quantum = 30;
-
 	// Bucle principal del proceso
 	while(seguirEjecutando)
 	{
