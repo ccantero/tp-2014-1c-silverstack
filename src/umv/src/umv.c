@@ -10,6 +10,10 @@
 
 int main(int argc, char *argv[])
 {
+	initscr();
+	echo();
+	scrollok(stdscr, TRUE);
+	keypad(stdscr, TRUE);
 	logger = log_create("Log.txt", "UMV", false, LOG_LEVEL_INFO);
 	GetInfoConfFile();
 	pthread_t th1;
@@ -625,11 +629,8 @@ int asignar_direccion_ff(int tamanio)
 
 void consola (void* param)
 {
-	initscr();
-	echo();
-	scrollok(stdscr, TRUE);
-	char comando[100];
-	char comando2[100];
+	char comando[50];
+	char comando2[50];
 	int flag_comandoOK;
 	int flag_comandoOK2;
 	int nuevo_valor;
@@ -645,11 +646,9 @@ void consola (void* param)
 	printw("         Bienvenido a la consola de UMV           \n");
 	printw("-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-\n");
 	refresh();
-
 	int i;
 	int cant_num_leidos;
 	int *buffer_int;
-
 	// Bucle principal esperando peticiones del usuario
 	for(;;)
 	{
@@ -761,8 +760,6 @@ void consola (void* param)
    				}
    				flag_comandoOK2 = 1;
    			}
-
-
    			if (flag_comandoOK2 == 0 && strcmp(comando2, "solicitar memoria int") == 0)
 			{
 				printw("Ingrese proceso: \n");
@@ -818,8 +815,6 @@ void consola (void* param)
 				}
 				flag_comandoOK2 = 1;
 			}
-
-
    			if (flag_comandoOK2 == 0 && strcmp(comando2, "escribir memoria") == 0)
    			{
    				printw("Ingrese proceso: \n");
@@ -1247,9 +1242,8 @@ void compactar_memoria()
 int obtener_cant_segmentos()
 {
 	int cant = 0;
-	int i, j;
+	int i;
 	t_info_programa *prog;
-	t_info_segmento *segm;
 	for (i = 0; i < list_size(list_programas); i++)
 	{
 		prog = list_get(list_programas, i);

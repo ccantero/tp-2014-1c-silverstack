@@ -45,7 +45,6 @@ typedef struct {
 
 t_log *logger;
 t_list *list_programas;
-t_dictionary *dic_cpus;
 
 pthread_mutex_t semRetardo = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t semAlgoritmo = PTHREAD_MUTEX_INITIALIZER;
