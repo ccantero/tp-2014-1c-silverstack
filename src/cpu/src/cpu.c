@@ -400,13 +400,40 @@ void silverstack_finalizar()
 	apilados en el Stack. En caso de estar finalizando el Contexto principal (el ubicado al inicio del
 	Stack), deberá finalizar la ejecución del programa devolviendo el valor -1.
 	*/
+	int nuevo_contexto;
+	int buffer;
 	if (pcb.stack_pointer == pcb.stack_segment)
 	{
 		proceso_finalizo = 1;
 	}
 	else
 	{
-		// TODO Verificar cuando se sale de contexto de funcion o procedimiento
+		// Busco el program counter del contexto anterior
+		msg_solicitud_bytes.base = pcb.stack_pointer - 4;
+		msg_solicitud_bytes.offset = 0;
+		msg_solicitud_bytes.tamanio = 4;
+		msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+		mensaje.tipo = SOLICITUDBYTES;
+		send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+		send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+		send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
+		recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+		recv(sockUmv, &buffer, 4, 0);
+		pcb.program_counter = buffer;
+		// Busco direccion del contexto anterior
+		msg_solicitud_bytes.base = pcb.stack_pointer - 8;
+		msg_solicitud_bytes.offset = 0;
+		msg_solicitud_bytes.tamanio = 4;
+		msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+		mensaje.tipo = SOLICITUDBYTES;
+		send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+		send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+		send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
+		recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+		recv(sockUmv, &buffer, 4, 0);
+		nuevo_contexto = (pcb.stack_pointer - buffer - 8) / 5;
+		pcb.context_actual = nuevo_contexto;
+		pcb.stack_pointer = buffer;
 	}
 }
 
@@ -428,9 +455,6 @@ t_valor_variable silverstack_asignarValorCompartida(t_nombre_compartida varCom, 
 
 void silverstack_irAlLabel(t_nombre_etiqueta etiqueta)
 {
-	/*
-	Devuelve el número de la primer instrucción ejecutable de etiqueta y -1 en caso de error.
-	*/
 	int salir = 0;
 	int dir_instruccion;
 	char buffer[pcb.size_etiquetas_index];
@@ -450,15 +474,39 @@ void silverstack_irAlLabel(t_nombre_etiqueta etiqueta)
 
 void silverstack_llamarSinRetorno(t_nombre_etiqueta etiqueta)
 {
-	/*
-	Preserva el contexto de ejecución actual para poder retornar luego. Modifica las estructuras
-	correspondientes para mostrar un nuevo contexto vacío. Retorna el numero de instrucción a
-	ejecutar.
-	Los parámetros serán definidos luego de esta instrucción de la misma manera que una variable
-	local, con identificadores numéricos empezando por el 0.
-	*/
+	// 1) Preservo el contexto actual
+	// 2) Preservo el program counter
+	// 3) Asigno el nuevo contexto al puntero de stack
+	// 4) Reseteo a 0 el tamanio del contexto actual
 	log_info(logger, "Comienzo primitiva silverstack_llamarSinRetorno");
-
+	int buffer;
+	int nuevo_contexto = pcb.stack_pointer + (5 * pcb.context_actual);
+	buffer = pcb.stack_pointer;
+	pcb.stack_pointer = nuevo_contexto;
+	msg_envio_bytes.base = pcb.stack_pointer;
+	msg_envio_bytes.offset = 0;
+	msg_envio_bytes.tamanio = 4;
+	mensaje.tipo = ENVIOBYTES;
+	msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+	send(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
+	send(sockUmv, &buffer, sizeof(buffer), 0);
+	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	pcb.stack_pointer += 4;
+	buffer = pcb.program_counter;
+	msg_envio_bytes.base = pcb.stack_pointer;
+	msg_envio_bytes.offset = 0;
+	msg_envio_bytes.tamanio = 4;
+	mensaje.tipo = ENVIOBYTES;
+	msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+	send(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
+	send(sockUmv, &buffer, sizeof(buffer), 0);
+	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	pcb.stack_pointer += 4;
+	pcb.context_actual = 0;
 	log_info(logger, "Fin primitiva silverstack_llamarSinRetorno");
 }
 
@@ -486,6 +534,8 @@ void silverstack_retornar(t_valor_variable valor)
 	asignando el valor de retorno en esta, previamente apilados en el Stack.
 	*/
 	log_info(logger, "Comienzo primitiva silverstack_retornar");
+
+
 
 	log_info(logger, "Fin primitiva silverstack_retornar");
 }
@@ -528,8 +578,6 @@ void depuracion(int senial)
 		log_info(logger, "Inicia depuracion de variables y memoria.");
 		config_destroy(config);
 		log_destroy(logger);
-		close(sockKernel);
-		close(sockUmv);
 		exit(0);
 		break;
 	case SIGUSR1:
