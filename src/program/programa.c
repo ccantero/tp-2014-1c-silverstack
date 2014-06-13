@@ -76,7 +76,7 @@ int main (int argc, char *argv[])
 	while (1)
 	{
 		// Recibo y me fijo si hay errores
-		if ((numBytes = recv(sockfd, &msg, sizeof(msg), 0)) == -1)
+		if ((numBytes = recv(sockfd, &msg, sizeof(t_mensaje), 0)) == -1)
 		{
 			log_error(logger,"Error recibiendo mensaje.");
 			exit(1);
@@ -88,20 +88,15 @@ int main (int argc, char *argv[])
 		}
 		if (msg.tipo == IMPRIMIRTEXTO)
 		{
-			// Recibo el tamanio del texto a imprimir
-			if ((numBytes = recv(sockfd, &msg, sizeof(t_mensaje), 0)) == -1)
-			{
-				log_error(logger, "Error recibiendo tamanio de mensaje a imprimir.");
-				exit(1);
-			}
 			//recibo texto y me fijo si tiene error
-			if ((numBytes = recv(sockfd, &buf, sizeof(msg.datosNumericos), 0)) == -1)
+			if ((numBytes = recv(sockfd, &buf, msg.datosNumericos, 0)) == -1)
 			{
 				log_error(logger,"Error recibiendo mensaje.");
 				exit(1);
 			}
+			buf[msg.datosNumericos] = '\0';
 			//imprimo texto
-			printf("%s\n", buf);
+			printf("%s", buf);
 		}
 		if (msg.tipo == SALIR)
 		{

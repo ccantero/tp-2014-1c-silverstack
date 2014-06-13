@@ -1666,31 +1666,30 @@ void imprimir(int sock_cpu,int valor)
 
 void imprimirTexto(int sock_cpu,int valor)
 {
-	log_info(logger, "Recibi solicitud para imprimir texto en consola de programa.");
-
 	t_mensaje mensaje;
 	int numbytes;
 	int sock_prog;
-	char* buffer;
+	char buffer[valor];
 	int size_msg = sizeof(t_mensaje);
 
+	/*
 	if((buffer = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
 		{
 			log_error(logger,"Error al reservar memoria para el buffer en imprimir texto");
 			return;
 		}
+	*/
 
-	mensaje.tipo = IMPRIMIRTEXTO;
-	mensaje.datosNumericos = valor;
 	//recibo buffer del cpu con la info a imprimir
 
-	if(mensaje.datosNumericos > MAXDATASIZE)
+
+	if(valor > MAXDATASIZE)
 	{
 		log_error(logger, "Archivo muy grande %d", mensaje.datosNumericos);
 		return;
 	}
 
-	if((numbytes=read(sock_cpu,buffer,mensaje.datosNumericos))<=0)
+	if((numbytes=read(sock_cpu,&buffer,mensaje.datosNumericos))<=0)
 	{
 		log_error(logger, "Error en el read en escuchar_Programa");
 		return;
@@ -1711,7 +1710,10 @@ void imprimirTexto(int sock_cpu,int valor)
 	sock_prog = get_sock_prog_by_sock_cpu(sock_cpu);
 	//mando el tamanio a imprimir
 
-	if((numbytes=write(sock_prog,&mensaje,size_msg))<=0)
+	mensaje.tipo = IMPRIMIRTEXTO;
+	mensaje.datosNumericos = valor;
+	log_info(logger, "tamanio de texto a enviar a programa: %d", mensaje.datosNumericos);
+	if((numbytes=send(sock_prog,&mensaje,size_msg,0))<=0)
 				{
 					log_error(logger, "Error enviando tamanio al programa");
 					close(sock_prog);
@@ -1719,7 +1721,7 @@ void imprimirTexto(int sock_cpu,int valor)
 				}
 	//ahora mando el texto
 
-	if((numbytes=write(sock_prog,buffer,valor))<=0)
+	if((numbytes=send(sock_prog,&buffer,valor,0))<=0)
 					{
 						log_error(logger, "Error enviando el texto al programa");
 						close(sock_prog);
