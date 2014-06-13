@@ -1666,6 +1666,8 @@ void imprimir(int sock_cpu,int valor)
 
 void imprimirTexto(int sock_cpu,int valor)
 {
+	log_info(logger, "Recibi solicitud para imprimir texto en consola de programa.");
+
 	t_mensaje mensaje;
 	int numbytes;
 	int sock_prog;
@@ -1691,6 +1693,17 @@ void imprimirTexto(int sock_cpu,int valor)
 	if((numbytes=read(sock_cpu,buffer,mensaje.datosNumericos))<=0)
 	{
 		log_error(logger, "Error en el read en escuchar_Programa");
+		return;
+	}
+
+	log_info(logger, "buffer: %s", buffer);
+
+
+	// TODO Agregado el 13/6 a las 18:44 para contestar a cpu
+	if((numbytes = write(sock_cpu, &mensaje, size_msg)) <= 0)
+	{
+		log_error(logger, "Error enviando confirmacion a cpu.");
+		close(sock_cpu);
 		return;
 	}
 

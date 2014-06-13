@@ -97,10 +97,6 @@ int main(int argc, char *argv[])
 		// Recibo el pcb del kernel
 		recv(sockKernel, &pcb, sizeof(t_pcb), 0);
 		log_info(logger,"Recibi PCB de Kernel");
-		log_info(logger, "pcb.unique_id: %d", pcb.unique_id);
-		log_info(logger, "pcb.instruction_index: %d", pcb.instruction_index);
-		log_info(logger, "pcb.code_segment: %d", pcb.code_segment);
-		log_info(logger, "pcb.stack_segment: %d", pcb.stack_segment);
 		if(pcb.program_counter == 0)
 		{
 			pcb.program_counter++;
@@ -200,6 +196,7 @@ int main(int argc, char *argv[])
 			log_info(logger,"Envie PCB al Kernel");
 		}
 	}
+	log_info(logger, "Se deja de dar servicio a sistema.");
 	// Libero memoria
 	log_destroy(logger);
 	config_destroy(config);
@@ -350,7 +347,7 @@ void silverstack_imprimir(t_valor_variable valor)
 void silverstack_imprimirTexto(char *texto)
 {
 	// 1) Envio al kernel la cadena de texto para que la reenvíe a la correspondiente consola
-	log_info(logger, "Comienzo primitiva silverstack_imprimirTexto");
+	log_info(logger, "Comienzo primitiva imprimir texto");
 	t_mensaje msg;
 	msg.id_proceso = CPU;
 	msg.tipo = IMPRIMIRTEXTO;
@@ -358,9 +355,9 @@ void silverstack_imprimirTexto(char *texto)
 	send(sockKernel, &msg, sizeof(t_mensaje), 0);
 	char buf[strlen(texto)];
 	strcpy(buf, texto);
-	send(sockKernel, buf, sizeof(buf), 0);
+	send(sockKernel, &buf, sizeof(buf), 0);
 	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
-	log_info(logger, "Fin primitiva silverstack_imprimirTexto");
+	log_info(logger, "Fin primitiva imprimir texto");
 }
 
 t_valor_variable silverstack_obtenerValorCompartida(t_nombre_compartida varCom)

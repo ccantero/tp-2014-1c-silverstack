@@ -50,10 +50,7 @@ int main (int argc, char *argv[])
 	msg.tipo = HANDSHAKE;
 	msg.id_proceso = PROGRAMA;
 	strcpy(msg.mensaje,"Hola Kernel!!");
-	//handshake
-	printf("Yo: ");
 	send(sockfd, &msg, sizeof(msg), 0);
-	printf("Esperando respuesta...\n");
 	// Respuesta handshake y compruebo errores
 	if ((numBytes = recv(sockfd, &msg, sizeof(msg), 0)) == -1)
 	{
@@ -61,7 +58,6 @@ int main (int argc, char *argv[])
 		exit(1);
 	}
 	//imprimo respuesta handshake
-	printf("Recibido: %d\n", msg.tipo);
 	struct stat stat_file;
 	//envio codigo ansisop
 	stat(nombreArchivo,&stat_file);
@@ -77,7 +73,6 @@ int main (int argc, char *argv[])
 	msg.datosNumericos = stat_file.st_size;
 	send(sockfd, &msg, sizeof(t_mensaje), 0);
 	send(sockfd, buffer, stat_file.st_size, 0);
-	printf("Esperando respuesta...\n");
 	while (1)
 	{
 		// Recibo y me fijo si hay errores
@@ -93,8 +88,14 @@ int main (int argc, char *argv[])
 		}
 		if (msg.tipo == IMPRIMIRTEXTO)
 		{
+			// Recibo el tamanio del texto a imprimir
+			if ((numBytes = recv(sockfd, &msg, sizeof(t_mensaje), 0)) == -1)
+			{
+				log_error(logger, "Error recibiendo tamanio de mensaje a imprimir.");
+				exit(1);
+			}
 			//recibo texto y me fijo si tiene error
-			if ((numBytes = recv(sockfd, buf, sizeof(msg.datosNumericos), 0)) == -1)
+			if ((numBytes = recv(sockfd, &buf, sizeof(msg.datosNumericos), 0)) == -1)
 			{
 				log_error(logger,"Error recibiendo mensaje.");
 				exit(1);
