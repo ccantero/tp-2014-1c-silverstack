@@ -33,9 +33,10 @@ AnSISOP_kernel primitivasKernel = {
 // main
 int main(int argc, char *argv[])
 {
+	signal(SIGINT, depuracion);
+	signal(SIGUSR1, depuracion);
 	// Definicion de variables
-	t_config *config;
-	int seguirEjecutando = 1; // Mediante la señal SIGUSR1 se puede dejar de ejecutar el cpu
+	seguirEjecutando = 1; // Mediante la señal SIGUSR1 se puede dejar de ejecutar el cpu
 	// Obtengo datos de archivo de configuracion y se crea el logger
 	config = config_create("../cpu.config");
 	strcpy(umvip, config_get_string_value(config, "UMV_IP"));
@@ -119,9 +120,6 @@ int main(int argc, char *argv[])
 				mensaje.tipo = SOLICITUDBYTES;
 				send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 				log_info(logger, "Se envio solicitud de busqueda de instruccion.");
-				log_info(logger, "msg_solicitud_bytes.base: %d", msg_solicitud_bytes.base);
-				log_info(logger, "msg_solicitud_bytes.offset: %d", msg_solicitud_bytes.offset);
-				log_info(logger, "msg_solicitud_bytes.tamanio: %d", msg_solicitud_bytes.tamanio);
 				send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 				send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
 				// Espero la respuesta de la UMV
@@ -197,13 +195,14 @@ int main(int argc, char *argv[])
 			mensaje.id_proceso = CPU;
 			mensaje.tipo = QUANTUMFINISH;
 			send(sockKernel, &mensaje, sizeof(t_mensaje), 0);
-			log_info(logger,"Envie  QUANTUMFINISH al Kernel");
+			log_info(logger,"Envie QUANTUMFINISH al Kernel");
 			send(sockKernel, &pcb, sizeof(t_pcb), 0);
-			log_info(logger,"Envie  PCB al Kernel");
+			log_info(logger,"Envie PCB al Kernel");
 		}
 	}
-	// Libero memoria del logger
+	// Libero memoria
 	log_destroy(logger);
+	config_destroy(config);
 	// Cierro los sockets
 	close(sockKernel);
 	close(sockUmv);
@@ -522,4 +521,23 @@ void silverstack_wait(t_nombre_semaforo identificador_semaforo)
 		proceso_bloqueado = 1;
 	}
 	log_info(logger, "Fin primitiva silverstack_wait");
+}
+
+void depuracion(int senial)
+{
+	switch(senial)
+	{
+	case SIGINT:
+		log_info(logger, "Inicia depuracion de variables y memoria.");
+		config_destroy(config);
+		log_destroy(logger);
+		close(sockKernel);
+		close(sockUmv);
+		exit(0);
+		break;
+	case SIGUSR1:
+		log_info(logger, "Se solicito por señal que el cpu deje de dar servicio.");
+		seguirEjecutando = 0;
+		break;
+	}
 }

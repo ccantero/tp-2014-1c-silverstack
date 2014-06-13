@@ -23,6 +23,7 @@
 #include <sys/socket.h>
 #include <src/silverstack.h>
 #include <semaphore.h>
+#include <signal.h>
 
 t_pcb pcb;
 int port_kernel;
@@ -41,6 +42,8 @@ t_msg_solicitud_bytes msg_solicitud_bytes;
 int proceso_bloqueado = 0;
 int proceso_finalizo = 0;
 t_log *logger;
+t_config *config;
+int seguirEjecutando;
 
 void ConectarA(int *sock, int *puerto, char *ip, struct sockaddr_in *their_addr, t_log *logger);
 t_puntero silverstack_definirVariable(t_nombre_variable var);
@@ -59,5 +62,6 @@ void silverstack_llamarConRetorno(t_nombre_etiqueta etiqueta, t_puntero donde_re
 void silverstack_retornar(t_valor_variable valor);
 void silverstack_signal(t_nombre_semaforo identificador_semaforo);
 void silverstack_wait(t_nombre_semaforo identificador_semaforo);
+void depuracion(int senial);
 
 #endif /* CPU_H_ */
