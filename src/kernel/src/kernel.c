@@ -24,13 +24,6 @@ int main(int argc, char *argv[])
 	pthread_t th_plp;
 	pthread_t th_pcp;
 
-	char* buffer;
-	if ( (buffer = (char*) malloc (sizeof(char) * MAXDATASIZE) )== NULL  )
-	{
-	    printf("ERROR, No se pudo pedir memoria\n");
-	    return -1;
-	 }
-
 	if(argc != 2)
 	{
 		printf("ERROR, la sintaxis de kernel es: ./kernel archivo_configuracion \n");
@@ -178,14 +171,9 @@ int main(int argc, char *argv[])
 
 				if(is_Connected_Program(i) == 0)
 				{
+					//TODO: Cerrar Socket Programa
+					process_remove_by_socket(i);
 					log_info(logger,"Select detecto actividad en Programa Existente");
-					if(escuchar_Programa(i, buffer) == -1)
-					{
-						close(i);
-						process_remove_by_socket(i);
-						log_info(logger,"Se removio un program de la lista de Programas");
-						FD_CLR(i, &master);
-					}
 					continue;
 				}
 

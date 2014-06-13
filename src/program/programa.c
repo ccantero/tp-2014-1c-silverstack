@@ -89,7 +89,7 @@ int main (int argc, char *argv[])
 		//me fijo si es imprimir, imprimir texto o salir
 		if(msg.tipo == IMPRIMIR)
 		{
-			printf("%d", msg.datosNumericos);
+			printf("%d\n", msg.datosNumericos);
 		}
 		if (msg.tipo == IMPRIMIRTEXTO)
 		{
@@ -100,7 +100,7 @@ int main (int argc, char *argv[])
 				exit(1);
 			}
 			//imprimo texto
-			printf("%s", buf);
+			printf("%s\n", buf);
 		}
 		if (msg.tipo == SALIR)
 		{
@@ -116,7 +116,6 @@ int main (int argc, char *argv[])
 	config_destroy(config);
 	return 0;
 }
-
 
 // Funciones
 void depuracion(int senial)

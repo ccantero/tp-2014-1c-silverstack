@@ -537,7 +537,7 @@ int escuchar_Nuevo_Programa(int sock_program)
 	struct sockaddr_in their_addr;
 	t_mensaje mensaje;
 	int size_mensaje = sizeof(t_mensaje);
-	char * buffer;
+	char* buffer;
 
 	int new_socket;
 	int numbytes;
@@ -623,7 +623,6 @@ int escuchar_Nuevo_Programa(int sock_program)
 	}
 
 	log_info(logger, "Se recibieron %d bytes desde programa", mensaje.datosNumericos);
-	log_info(logger, "File \n%s", buffer);
 
 	pcb_create(buffer,numbytes, new_socket);
 
@@ -694,7 +693,7 @@ int escuchar_Programa(int sock_program, char* buffer)
 void pcb_create(char* buffer, int tamanio_buffer, int sock_program)
 {
 	t_medatada_program* metadata;
-	t_pcb* new_pcb = (t_pcb*) malloc(sizeof(t_pcb));
+	t_pcb* new_pcb;
 
 	if((new_pcb = (t_pcb*) malloc (sizeof(t_pcb))) == NULL)
 	{
@@ -710,11 +709,15 @@ void pcb_create(char* buffer, int tamanio_buffer, int sock_program)
 	new_pcb->stack_pointer = new_pcb->stack_segment;
 	new_pcb->instruction_index = umv_send_segment(process_Id, (char*) metadata->instrucciones_serializado, metadata->instrucciones_size * sizeof(int) * 2);
 	new_pcb->instruction_size = metadata->instrucciones_size;
+	new_pcb->size_etiquetas_index = metadata->etiquetas_size;
 	if(metadata->etiquetas_size >0)
 	{
 		new_pcb->etiquetas_index = umv_send_segment(process_Id, (char*) metadata->etiquetas, metadata->etiquetas_size);
-		new_pcb->size_etiquetas_index = metadata->etiquetas_size;
 		log_info(logger,"etiquetas_size = %d", metadata->etiquetas_size);
+	}
+	else
+	{
+		new_pcb->etiquetas_index = -1;
 	}
 	new_pcb->program_counter = metadata->instruccion_inicio;
 	new_pcb->context_actual = 0;
@@ -1178,12 +1181,18 @@ void segment_destroy(t_nodo_segment *self)
 
 int conectar_umv(void)
 {
-	unsigned char buffer[MAXDATASIZE];
+	char* buffer;
 	int numbytes,sockfd;
 	struct sockaddr_in their_addr;
 	t_mensaje mensaje;
 	t_msg_handshake msj_handshake;
 	int size_msg_handshake = sizeof(t_msg_handshake);
+
+	if((buffer = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria para el buffer en conectar_umv");
+		return -1;
+	}
 
 	their_addr.sin_family=AF_INET;
 	their_addr.sin_port=htons(port_umv);
@@ -1230,6 +1239,7 @@ int conectar_umv(void)
 	if(msj_handshake.tipo  == UMV)
 	{
 		log_info(logger, "Conexion Lograda con la UMV");
+		free(buffer);
 		return sockfd;
 	}
 	else
@@ -1237,6 +1247,7 @@ int conectar_umv(void)
 		log_error(logger, "No recibi Handshake OK");
 	}
 
+	free(buffer);
 	return -1;
 }
 
@@ -1280,7 +1291,7 @@ void planificador_sjn(void)
 			{
 				sort_plp();
 				sem_wait(&mutex_new_queue);
-				element = list_get(list_pcb_new, 0); // Pareciera que no lo saca. CHAN!
+				element = list_get(list_pcb_new, 0);
 				sem_post(&mutex_new_queue);
 
 				sem_wait(&mutex_ready_queue);
@@ -1423,12 +1434,13 @@ int escuchar_Nuevo_cpu(int sock_cpu)
 		}
 
 		log_info(logger, "Nueva conexion lograda con cpu");
-
+		free(buffer);
 		return new_socket;
 	}
 	else
 	{
 		log_error(logger, "No se pudo crear nueva conexion. Error en el handshake");
+		free(buffer);
 		return -1;
 	}
 
@@ -1491,34 +1503,32 @@ int escuchar_cpu(int sock_cpu)
 void finalizo_Quantum(int sock_cpu)
 {
 	int numbytes;
-	t_pcb pcb;
+	t_pcb *pcb;
 	//	 TODO: Verificar queue_RR mandar siempre el mismo pcb al mismo CPU
 
-	char* buffer;
-
 	log_info(logger, "finalizo_Quantum");
-	if((buffer = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
+
+	if((pcb = (t_pcb*) malloc (sizeof(t_pcb))) == NULL)
 	{
-		log_error(logger,"Error al reservar memoria para el buffer en finalizo_Quantum");
+		log_error(logger,"Error al reservar memoria para el pcb en finalizo_Quantum");
 		return;
 	}
 
-	memset(buffer,'\0',MAXDATASIZE);
-	if((numbytes=read(sock_cpu,buffer,sizeof(t_pcb)))<=0)
+	if((numbytes=read(sock_cpu,pcb,sizeof(t_pcb)))<=0)
 	{
 		log_error(logger, "Error en el read en finalizo_Quantum");
 		return;
-	}
+	};
 
-	memcpy(&pcb,buffer,sizeof(t_pcb));
-
-	pcb_update(&pcb,PROCESS_EXECUTE);
+	pcb_update(pcb,PROCESS_EXECUTE);
 
 	pthread_mutex_lock(&mutex_pedidos);
-	queue_push(queue_rr,pedido_create(pcb.unique_id,PROCESS_EXECUTE,PROCESS_READY));
+	queue_push(queue_rr,pedido_create(pcb->unique_id,PROCESS_EXECUTE,PROCESS_READY));
 	pthread_mutex_unlock(&mutex_pedidos);
 
+	//pcb_destroy(pcb); // NO se libera este puntero porque se agrego a la lista
 	sem_post(&sem_pcp);
+
 }
 
 /*
@@ -1531,34 +1541,34 @@ void finalizo_Quantum(int sock_cpu)
 void process_finish(int sock_cpu)
 {
 	int numbytes;
-	t_pcb pcb;
-
-	char* buffer;
+	t_pcb* pcb;
 
 	log_info(logger, "Begin process_finish");
-	if((buffer = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
+
+	if((pcb = (t_pcb*) malloc (sizeof(t_pcb))) == NULL)
 	{
-		log_error(logger,"Error al reservar memoria para el buffer en process_finish");
+		log_error(logger,"Error al reservar memoria para el pcb en process_finish");
 		return;
 	}
 
-	memset(buffer,'\0',MAXDATASIZE);
-	if((numbytes=read(sock_cpu,buffer,sizeof(t_pcb)))<=0)
+	if((numbytes=read(sock_cpu,pcb,sizeof(t_pcb)))<=0)
 	{
 		log_error(logger, "Error en el read en process_finish");
 		return;
 	}
 
-	memcpy(&pcb,buffer,sizeof(t_pcb));
-
-	pcb_update(&pcb,PROCESS_EXECUTE);
+	log_info(logger, "Antes del pcb_update");
+	pcb_update(pcb,PROCESS_EXECUTE);
+	log_info(logger, "Despues del pcb_update");
 
 	pthread_mutex_lock(&mutex_pedidos);
-	queue_push(queue_rr,pedido_create(pcb.unique_id,PROCESS_EXECUTE,PROCESS_EXIT));
+	queue_push(queue_rr,pedido_create(pcb->unique_id,PROCESS_EXECUTE,PROCESS_EXIT));
 	pthread_mutex_unlock(&mutex_pedidos);
 
 	log_info(logger, "Finish process_finish");
+	//pcb_destroy(pcb); NO se libera este puntero porque se agrego a la lista
 	sem_post(&sem_pcp);
+
 }
 
 /*
@@ -1632,14 +1642,26 @@ void imprimir(int sock_cpu,int valor)
 	mensaje.datosNumericos = valor;
 	//obtengo el sock program
 
+	log_info(logger,"Envie mensaje imprimir a Programa");
+
+	if((numbytes=write(sock_cpu,&mensaje,size_msg))<=0)
+	{
+		log_error(logger, "Verificar casos de error");
+		// TODO: Verificar casos de error
+		close(sock_cpu);
+		cpu_remove(sock_cpu);
+		return;
+	}
+
 	sock_prog = get_sock_prog_by_sock_cpu(sock_cpu);
 
 	if((numbytes=write(sock_prog,&mensaje,size_msg))<=0)
-			{
-				log_error(logger, "Error enviando imprimir al programa");
-				close(sock_prog);
-				return ;
-			}
+	{
+		log_error(logger, "Verificar casos de error");
+		// TODO: Verificar casos de error
+		close(sock_prog);
+		return ;
+	}
 }
 
 void imprimirTexto(int sock_cpu,int valor)
@@ -1842,16 +1864,18 @@ t_process* process_create(unsigned int pid, int sock_program)
  * Author: SilverStack
 */
 
-void process_update(int pid, unsigned char previous_status, unsigned char next_status)
+void process_update(int process_id, unsigned char previous_status, unsigned char next_status)
 {
 	t_list* from;
 	t_list* to;
 	sem_t* mutex_list_previous;
 	sem_t* mutex_list_next;
-	unsigned char status = next_status;
-	int process_id = pid;
 	int flag_found = 0;
+	int i;
+	t_process* process;
+	t_pcb* pcb;
 
+	log_info(logger,"Inicia process_update");
 	switch(previous_status)
 	{
 		case PROCESS_NEW: from = list_pcb_new; mutex_list_previous = &mutex_new_queue; break;
@@ -1863,36 +1887,56 @@ void process_update(int pid, unsigned char previous_status, unsigned char next_s
 
 	switch(next_status)
 	{
-		case PROCESS_NEW: to = list_pcb_new; status = PROCESS_NEW; mutex_list_next = &mutex_block_queue; break;
-		case PROCESS_READY: to = list_pcb_ready; status = PROCESS_READY; mutex_list_next = &mutex_block_queue; break;
-		case PROCESS_EXECUTE: to = list_pcb_execute; status = PROCESS_EXECUTE; mutex_list_next = &mutex_block_queue; break;
-		case PROCESS_BLOCKED: to = list_pcb_blocked; status = PROCESS_BLOCKED; mutex_list_next = &mutex_block_queue; break;
-		case PROCESS_EXIT: to = list_pcb_exit; status = PROCESS_EXIT; mutex_list_next = &mutex_exit_queue; break;
-	}
-
-	void _change_status(t_process *s)
-	{
-		if(flag_found == 0 && s->pid == process_id)
-		{
-			s->status = status;
-			flag_found = 1;
-		}
+		case PROCESS_NEW: to = list_pcb_new; next_status = PROCESS_NEW; mutex_list_next = &mutex_block_queue; break;
+		case PROCESS_READY: to = list_pcb_ready; next_status = PROCESS_READY; mutex_list_next = &mutex_block_queue; break;
+		case PROCESS_EXECUTE: to = list_pcb_execute; next_status = PROCESS_EXECUTE; mutex_list_next = &mutex_block_queue; break;
+		case PROCESS_BLOCKED: to = list_pcb_blocked; next_status = PROCESS_BLOCKED; mutex_list_next = &mutex_block_queue; break;
+		case PROCESS_EXIT: to = list_pcb_exit; next_status = PROCESS_EXIT; mutex_list_next = &mutex_exit_queue; break;
 	}
 
 	sem_wait(&mutex_process_list);
-	list_iterate(list_process, (void*) _change_status);
+	for(i=0;i < list_size(list_process);i++)
+	{
+		process = list_get(list_process,i);
+
+		if(process->pid == process_id)
+		{
+			process->status = next_status;
+			flag_found = 1;
+			break;
+		}
+	}
 	sem_post(&mutex_process_list);
 
 	if(flag_found == 0)
-		log_error(logger, "CPU Socket %d no encontrado", socket);
+		log_error(logger, "Process ID %d no encontrado en lista de procesos", process_id);
+
+	flag_found = 0;
+
+	sem_wait(mutex_list_previous);
+	for(i=0;i < list_size(from);i++)
+	{
+		pcb = list_get(from,i);
+		if(pcb->unique_id == process_id)
+		{
+			flag_found = 1;
+			break;
+		}
+	}
+	sem_post(mutex_list_previous);
 
 	if(flag_found == 1)
 	{
-		sem_wait(mutex_list_previous);
 		sem_wait(mutex_list_next);
-		pcb_move(process_id,from, to);
-		sem_post(mutex_list_previous);
+		list_add(to,pcb);
 		sem_post(mutex_list_next);
+
+		sem_wait(mutex_list_previous);
+		list_remove(from,i);
+		sem_post(mutex_list_previous);
+
+		log_info(logger,"Termino Process Update");
+
 		return;
 	}
 
@@ -1929,8 +1973,37 @@ void pcb_move(unsigned int pid,t_list* from, t_list* to)
 	if(flag_found == 0)
 		log_error(logger, "PID %d no encontrado en pcb_move", pid);
 
-	t_pcb *pcb = list_remove(from, indice_buscado);
+	// TODO: Ya no se que probar
+	//t_pcb *pcb = list_remove(from, indice_buscado);
+	//list_add(to,pcb);
+
+	t_pcb* pcb;
+	t_pcb* old_pcb;
+
+	if((pcb = (t_pcb*) malloc (sizeof(t_pcb))) == NULL)
+	{
+		log_error(logger,"Error al reservar memoria para el pcb en process_update");
+		return;
+	}
+
+	old_pcb = list_get(from, indice_buscado);
+
+	log_info(logger,"old_pcb = %d", old_pcb->unique_id);
+
+	pcb->code_segment = old_pcb->code_segment;
+	pcb->context_actual = old_pcb->context_actual;
+	pcb->etiquetas_index = old_pcb->etiquetas_index;
+	pcb->instruction_index = old_pcb->instruction_index;
+	pcb->instruction_size = old_pcb->instruction_size;
+	pcb->peso = old_pcb->peso;
+	pcb->program_counter = old_pcb->program_counter;
+	pcb->size_etiquetas_index = old_pcb->size_etiquetas_index;
+	pcb->stack_pointer = old_pcb->stack_pointer;
+	pcb->stack_segment = old_pcb->stack_segment;
+	pcb->unique_id = old_pcb->unique_id;
+
 	list_add(to,pcb);
+	pcb_destroy(list_remove(from, indice_buscado));
 }
 
 /*
@@ -2004,7 +2077,6 @@ void retardo_io(void *ptr)
 	t_io* io_node;
 	t_io_queue_nodo* io_queue_nodo;
 	struct timeval tv;
-
 
 	void _get_io_node(t_io *s)
 	{
@@ -2102,6 +2174,7 @@ void planificador_rr(void)
 							process_update(new_pedido->process_id,PROCESS_READY, PROCESS_EXECUTE); //Mueve el pcb
 							process_execute(new_pedido->process_id, cpu->socket);
 							cpu_set_status(cpu->socket, CPU_WORKING); // Pone el CPU Working
+							//
 						}
 						else
 						{
@@ -2294,6 +2367,7 @@ void depurar(int signum)
 
 /*
  * Function: buscar_Mayor
+
  * Purpose: Returns the Max value between 3 elements
  * Created on: 11/05/2014
  * Author: SilverStack
@@ -2383,7 +2457,7 @@ void process_remove_by_socket(int socket)
 }
 
 /*
- * Function: ejecutar_proceso
+ * Function: process_execute
  * Purpose: Update CPU Socket on Proces_List
  * Created on: 11/05/2014
  * Author: SilverStack
@@ -2480,10 +2554,12 @@ void pcb_update(t_pcb* new_pcb, unsigned char previous_status)
 
 	int flag_found = 0;
 	int process_id = new_pcb->unique_id;
-	int index = 0;
-	int indice_buscado = 0;
 	t_list* pcb_from;
 	sem_t* mutex_list;
+	int i;
+	t_pcb* pcb;
+
+	log_info(logger,"Comienza el PCB Update");
 
 	switch(previous_status)
 	{
@@ -2494,33 +2570,24 @@ void pcb_update(t_pcb* new_pcb, unsigned char previous_status)
 		case PROCESS_EXIT: pcb_from = list_pcb_exit; mutex_list = &mutex_exit_queue; break;
 	}
 
-
-	void _get_node(t_pcb *s)
+	sem_wait(mutex_list);
+	for(i=0;i<list_size(pcb_from);i++)
 	{
-		if(s->unique_id == process_id && flag_found == 0)
+		pcb = list_get(pcb_from,i);
+		if(pcb->unique_id == process_id)
 		{
-			indice_buscado = index;
 			flag_found = 1;
+			break;
 		}
-		index++;
 	}
 
-	sem_wait(mutex_list);
-	list_iterate(pcb_from, (void*) _get_node);
-	sem_post(mutex_list);
-
 	if(flag_found == 0)
-		log_error(logger, "PID %d no encontrado en pcb_update", process_id);
+			log_error(logger, "PID %d no encontrado en pcb_update", process_id);
 
-	sem_wait(mutex_list);
-	t_pcb *old_pcb = list_remove(pcb_from, indice_buscado);
-	sem_post(mutex_list);
-
-	sem_wait(mutex_list);
+	list_remove(pcb_from, i);
 	list_add(pcb_from,new_pcb);
 	sem_post(mutex_list);
-
-	pcb_destroy(old_pcb);
+	log_info(logger,"Termino el PCB Update");
 
 	return;
 }
@@ -2622,7 +2689,6 @@ int get_sock_prog_by_sock_cpu(int sock_cpu)
 		return sock_prog;
 
 }
-
 
 /*
  * Function: program_exit
@@ -2758,4 +2824,56 @@ void fd_set_cpu_sockets(fd_set* descriptores)
 	sem_wait(&mutex_cpu_list);
 	list_iterate(list_cpu, (void*) _fd_set);
 	sem_post(&mutex_cpu_list);
+}
+
+void test_pcb(int process_id, unsigned char previous_status)
+{
+
+	int flag_found = 0;
+	t_list* pcb_from;
+	t_pcb* pcb;
+	char PCB_QUEUE[20];
+	int i;
+
+	switch(previous_status)
+	{
+		case PROCESS_NEW: pcb_from = list_pcb_new; strcpy(PCB_QUEUE,"list_pcb_new");break;
+		case PROCESS_READY: pcb_from = list_pcb_ready; strcpy(PCB_QUEUE,"list_pcb_ready");break;
+		case PROCESS_EXECUTE: pcb_from = list_pcb_execute; strcpy(PCB_QUEUE,"list_pcb_execute"); break;
+		case PROCESS_BLOCKED: pcb_from = list_pcb_blocked; strcpy(PCB_QUEUE,"list_pcb_blocked"); break;
+		case PROCESS_EXIT: pcb_from = list_pcb_exit; strcpy(PCB_QUEUE,"list_pcb_exit"); break;
+	}
+
+	for(i=0;i < list_size(pcb_from);i++)
+	{
+		pcb = list_get(pcb_from,i);
+		if(pcb->unique_id == process_id)
+		{
+			flag_found = 1;
+			break;
+		}
+	}
+
+	if(flag_found == 0)
+	{
+		log_error(logger, "PID %d no encontrado en test_pcb", process_id);
+		return;
+	}
+
+	log_info(logger, "---------------- PCB QUEUE = %s", PCB_QUEUE);
+	log_info(logger, "---------------- PCB QUEUE SIZE = %d", list_size(pcb_from));
+
+	log_info(logger, "---------------- PCB ->unique_id = %d", pcb->unique_id);
+	log_info(logger, "---------------- PCB ->code_segment = %d", pcb->code_segment);
+	log_info(logger, "---------------- PCB ->context_actual = %d", pcb->context_actual);
+	log_info(logger, "---------------- PCB ->etiquetas_index = %d", pcb->etiquetas_index);
+	log_info(logger, "---------------- PCB ->instruction_index = %d", pcb->instruction_index);
+	log_info(logger, "---------------- PCB ->instruction_size = %d", pcb->instruction_size);
+	log_info(logger, "---------------- PCB ->peso = %d", pcb->peso);
+	log_info(logger, "---------------- PCB ->program_counter = %d", pcb->program_counter);
+	log_info(logger, "---------------- PCB ->size_etiquetas_index = %d", pcb->size_etiquetas_index);
+	log_info(logger, "---------------- PCB ->stack_pointer = %d", pcb->stack_pointer);
+	log_info(logger, "---------------- PCB ->stack_segment = %d", pcb->stack_segment);
+
+	return;
 }

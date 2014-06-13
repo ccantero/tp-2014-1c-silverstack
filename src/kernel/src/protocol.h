@@ -248,6 +248,7 @@ void imprimir(int sock_cpu,int valor);
 int get_sock_prog_by_sock_cpu(int sock_cpu);
 void cpu_set_status(int socket, unsigned char status);
 
+
 int get_Segment_Start(int offset);					// A revisar si va o no va
 void io_destroy(t_io*); 							// A revisar si va o no va
 void semaphore_destroy(t_semaphore *self);			// A revisar si va o no va
@@ -255,5 +256,6 @@ int send_umv_stack(int process_id);					// A revisar si va o no va
 void fd_set_cpu_sockets(fd_set* descriptores);		// A revisar si va o no va
 void fd_set_program_sockets(fd_set* descriptores);	// A revisar si va o no va
 void cpu_update(int socket);						// A revisar si va o no va
+void test_pcb(int pid, unsigned char previous_status);
 
 #endif /* PROTOCOL_H_ */
