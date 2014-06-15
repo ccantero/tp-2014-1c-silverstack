@@ -199,7 +199,7 @@ int global_get_value(char* global_name);
 t_io* io_create(char *io_name, int io_retardo);
 t_semaphore* semaphore_create(char* sem_name, int value);
 int semaphore_wait(char* sem_name, int process_id);
-int semaphore_signal(char* sem_name);
+void semaphore_signal(int sock_cpu, char* sem_name);
 int escuchar_Nuevo_Programa(int sock_program);
 int escuchar_Programa(int sock_program, char* buffer);
 void pcb_create(char* buffer, int tamanio_buffer, int sock_program);

@@ -401,16 +401,21 @@ int semaphore_wait(char* sem_name, int process_id)
  * Author: SilverStack
 */
 
-int semaphore_signal(char* sem_name)
+void semaphore_signal(int sock_cpu, char* sem_name)
 {
 	int flag_found = 0;
 	char* semaphore_id;
 	t_nodo_queue_semaphore* nodo;
+	t_mensaje mensaje;
+	int size_msg = sizeof(t_mensaje);
+	int numbytes;
+
+	log_info(logger,"semaphore_signal(%s)",sem_name);
 
 	if((semaphore_id = (char*) malloc (sizeof(char) * (strlen(sem_name) + 1))) == NULL)
 	{
 		log_error(logger,"Error al reservar memoria para el identificador de nodo en semaphore_wait");
-		return -1;
+		return;
 	}
 
 	strcpy(semaphore_id,sem_name);
@@ -439,12 +444,24 @@ int semaphore_signal(char* sem_name)
 	if(flag_found == 0)
 	{
 		log_error(logger, "Semaforo %s no encontrado", sem_name);
-		return -1;
+		return;
+	}
+
+	mensaje.id_proceso = KERNEL;
+	mensaje.datosNumericos = 0;
+	mensaje.tipo = SIGNALSEM;
+
+	if((numbytes=write(sock_cpu,&mensaje,size_msg))<=0)
+	{
+		log_error(logger, "Fallo el envio de respuesta de sem_wait al cpu");
+		close(sock_cpu);
+		cpu_remove(sock_cpu);
+		return;
 	}
 
 	free(semaphore_id);
 
-	return 0;
+	return;
 }
 
 /*
@@ -740,7 +757,7 @@ void pcb_create(char* buffer, int tamanio_buffer, int sock_program)
 }
 
 /*
- * Function: create_segment
+ * Function: umv_create_segment
  * Purpose: Create Segment
  * Created on: 17/05/2014
  * Author: SilverStack
@@ -778,7 +795,7 @@ int umv_create_segment(int process_id, int tamanio)
 }
 
 /*
- * Function: change_process
+ * Function: umv_change_process
  * Purpose: Send msg to umv to change active process
  * Created on: 17/05/2014
  * Author: SilverStack
@@ -815,7 +832,7 @@ int umv_change_process(int process_id)
 }
 
 /*
- * Function: send_bytes
+ * Function: umv_send_bytes
  * Purpose: Send set of bytes to umv
  * Created on: 17/05/2014
  * Author: SilverStack
@@ -854,7 +871,7 @@ int umv_send_bytes(int base, int offset, int tamanio)
 }
 
 /*
- * Function: destroy_segment
+ * Function: umv_destroy_segment
  * Purpose: Send to UMV instrucction to destroy all related segments with process
  * Created on: 20/05/2014
  * Author: SilverStack
@@ -1483,10 +1500,11 @@ int escuchar_cpu(int sock_cpu)
 		case IMPRIMIR: imprimir(sock_cpu,mensaje.datosNumericos); break;
 		case IMPRIMIRTEXTO: imprimirTexto(sock_cpu,mensaje.datosNumericos); break;
 		case PROGRAMFINISH: process_finish(sock_cpu); break;
+		case SIGNALSEM: semaphore_signal(sock_cpu,mensaje.mensaje); break;
+		//case WAITSEM: semaphore_wait(); break;
 		/*case VARCOMREQUEST: obtener_valor_VariableCompartida(); break;
 		case ENTRADASALIDA: io(); break;
-		case SIGNALSEM: { semaphore_signal(); isBlocked(); break };
-		case WAITSEM: { semaphore_wait(); isBlocked(); break };*/
+		*/
 	};
 
 	free(buffer);
@@ -1504,7 +1522,7 @@ void finalizo_Quantum(int sock_cpu)
 {
 	int numbytes;
 	t_pcb *pcb;
-	//	 TODO: Verificar queue_RR mandar siempre el mismo pcb al mismo CPU
+
 
 	log_info(logger, "finalizo_Quantum");
 
@@ -1630,7 +1648,6 @@ void asignar_valor_VariableCompartida(int sock_cpu, char* global_name, int value
 	free(buffer);
 }
 
-
 void imprimir(int sock_cpu,int valor)
 {
 	t_mensaje mensaje;
@@ -1669,65 +1686,51 @@ void imprimirTexto(int sock_cpu,int valor)
 	t_mensaje mensaje;
 	int numbytes;
 	int sock_prog;
-	char buffer[valor];
+	char* buffer;
 	int size_msg = sizeof(t_mensaje);
 
-	/*
 	if((buffer = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
-		{
-			log_error(logger,"Error al reservar memoria para el buffer en imprimir texto");
-			return;
-		}
-	*/
-
-	//recibo buffer del cpu con la info a imprimir
-
-
-	if(valor > MAXDATASIZE)
 	{
-		log_error(logger, "Archivo muy grande %d", mensaje.datosNumericos);
+		log_error(logger,"Error al reservar memoria para el buffer en imprimir texto");
 		return;
 	}
 
-	if((numbytes=read(sock_cpu,&buffer,mensaje.datosNumericos))<=0)
+	if((numbytes=read(sock_cpu,buffer,valor))<=0)
 	{
-		log_error(logger, "Error en el read en escuchar_Programa");
+		log_error(logger, "Error en el read en imprimirTexto");
 		return;
 	}
 
-	log_info(logger, "buffer: %s", buffer);
+	sock_prog = get_sock_prog_by_sock_cpu(sock_cpu);
 
+	mensaje.id_proceso = KERNEL;
+	mensaje.tipo = IMPRIMIRTEXTO;
+	mensaje.datosNumericos = valor;
 
-	// TODO Agregado el 13/6 a las 18:44 para contestar a cpu
+	if((numbytes=send(sock_prog,&mensaje,size_msg,0))<=0)
+	{
+		log_error(logger, "Error enviando tamanio al programa");
+		close(sock_prog);
+		return;
+	}
+
+	if((numbytes=send(sock_prog,buffer,mensaje.datosNumericos,0))<=0)
+	{
+		log_error(logger, "Error enviando el texto al programa");
+		close(sock_prog);
+		return;
+	}
+
+	mensaje.id_proceso = KERNEL;
+	mensaje.tipo = IMPRIMIRTEXTO;
+	mensaje.datosNumericos = 0;
+
 	if((numbytes = write(sock_cpu, &mensaje, size_msg)) <= 0)
 	{
 		log_error(logger, "Error enviando confirmacion a cpu.");
 		close(sock_cpu);
 		return;
 	}
-
-
-	sock_prog = get_sock_prog_by_sock_cpu(sock_cpu);
-	//mando el tamanio a imprimir
-
-	mensaje.tipo = IMPRIMIRTEXTO;
-	mensaje.datosNumericos = valor;
-	log_info(logger, "tamanio de texto a enviar a programa: %d", mensaje.datosNumericos);
-	if((numbytes=send(sock_prog,&mensaje,size_msg,0))<=0)
-				{
-					log_error(logger, "Error enviando tamanio al programa");
-					close(sock_prog);
-					return;
-				}
-	//ahora mando el texto
-
-	if((numbytes=send(sock_prog,&buffer,valor,0))<=0)
-					{
-						log_error(logger, "Error enviando el texto al programa");
-						close(sock_prog);
-						return;
-					}
-
 }
 
 /*
@@ -2145,6 +2148,8 @@ void planificador_rr(void)
 	int flag_cpu_found = 0;
 	t_pedido* new_pedido;
 	int cpu_socket;
+
+	//	 TODO: Verificar queue_RR mandar siempre el mismo pcb al mismo CPU
 
 	void _get_cpu_element(t_nodo_cpu *c)
 	{
