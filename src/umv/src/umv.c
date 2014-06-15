@@ -10,6 +10,7 @@
 
 int main(int argc, char *argv[])
 {
+	// TODO agregar a dump de memoria la opcion de mostrar el contenido sin importar los segmentos
 	initscr();
 	echo();
 	scrollok(stdscr, TRUE);

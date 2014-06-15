@@ -33,6 +33,7 @@ AnSISOP_kernel primitivasKernel = {
 // main
 int main(int argc, char *argv[])
 {
+	// TODO Regenerar diccionario de variables pidiendo el segmento de stack
 	signal(SIGINT, depuracion);
 	signal(SIGUSR1, depuracion);
 	// Definicion de variables
@@ -474,6 +475,7 @@ void silverstack_irAlLabel(t_nombre_etiqueta etiqueta)
 
 void silverstack_llamarSinRetorno(t_nombre_etiqueta etiqueta)
 {
+	// TODO ir al label
 	// 1) Preservo el contexto actual
 	// 2) Preservo el program counter
 	// 3) Asigno el nuevo contexto al puntero de stack
