@@ -742,7 +742,9 @@ void consola (void* param)
    					scanw("%d", &valor_numerico3);
    					buffer = (char *)malloc(valor_numerico3 + 1);
    					valor_numerico = transformar_direccion_en_logica(valor_numerico, proc_id);
+   					pthread_mutex_lock(&semProcesoActivo);
    					respuesta = atender_solicitud_bytes(valor_numerico, valor_numerico2, valor_numerico3, 0, &buffer);
+   					pthread_mutex_unlock(&semProcesoActivo);
    					switch(respuesta)
    					{
    					case PROGRAMA_INVALIDO:
@@ -792,7 +794,9 @@ void consola (void* param)
 					scanw("%d", &valor_numerico3);
 					buffer_int = (int *)malloc(valor_numerico3 + 1);
 					valor_numerico = transformar_direccion_en_logica(valor_numerico, proc_id);
+					pthread_mutex_lock(&semProcesoActivo);
 					respuesta = atender_solicitud_bytes_int(valor_numerico, valor_numerico2, valor_numerico3, 0, &buffer_int);
+					pthread_mutex_unlock(&semProcesoActivo);
 					switch(respuesta)
 					{
 					case PROGRAMA_INVALIDO:
@@ -845,7 +849,9 @@ void consola (void* param)
    					printw(">");
    					refresh();
    					scanw("%d", &valor_numerico3);
+   					pthread_mutex_lock(&semProcesoActivo);
    					respuesta = atender_envio_bytes(valor_numerico, valor_numerico2, valor_numerico3, 0);
+   					pthread_mutex_unlock(&semProcesoActivo);
    					switch(respuesta)
    					{
    					case 0:
