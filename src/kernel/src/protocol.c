@@ -349,17 +349,23 @@ void semaphore_destroy(t_semaphore *self)
  * Author: SilverStack
 */
 
-int semaphore_wait(char* sem_name, int process_id)
+void semaphore_wait(int sock_cpu, char* sem_name)
 {
 	int flag_found = 0;
 	int flag_blocked = 0;
 	char* semaphore_id;
-	int pid = process_id;
+	t_mensaje mensaje;
+	int size_msg = sizeof(t_mensaje);
+	int numbytes;
+
+	int pid = get_process_id_by_sock_cpu(sock_cpu);
+
+	log_info(logger,"semaphore_wait(%s)",sem_name);
 
 	if((semaphore_id = (char*) malloc (sizeof(char) * (strlen(sem_name) + 1))) == NULL)
 	{
 		log_error(logger,"Error al reservar memoria para el identificador de nodo en semaphore_wait");
-		return -1;
+		return;
 	}
 
 	strcpy(semaphore_id,sem_name);
@@ -383,15 +389,33 @@ int semaphore_wait(char* sem_name, int process_id)
 	if(flag_found == 0)
 	{
 		log_error(logger, "Semaforo %s no encontrado", sem_name);
-		return -1;
+		return;
+	}
+
+	mensaje.id_proceso = KERNEL;
+	mensaje.datosNumericos = 0;
+
+	if(flag_blocked == 1)
+	{
+		mensaje.tipo = BLOCK;
+		process_set_status(pid,PROCESS_BLOCKED);
+		log_info(logger, "Process %d BLOCK", pid);
+
+	}
+	else
+		mensaje.tipo = WAITSEM;
+
+	if((numbytes=write(sock_cpu,&mensaje,size_msg))<=0)
+	{
+		log_error(logger, "Fallo el envio de respuesta de sem_wait al cpu");
+		close(sock_cpu);
+		cpu_remove(sock_cpu);
+		return;
 	}
 
 	free(semaphore_id);
 
-	if(flag_blocked == 1)
-		return 1;
-
-	return 0;
+	return;
 }
 
 /*
@@ -1332,13 +1356,11 @@ void planificador_sjn(void)
 		if(cantidad_procesos_exit > 0)
 		{
 			sem_wait(&mutex_exit_queue);
-			element = list_remove(list_pcb_exit, 0); // Pareciera que no lo saca. CHAN!
+			element = list_remove(list_pcb_exit, 0);
 			sem_post(&mutex_exit_queue);
 			program_exit(element->unique_id);
 			cantidad_procesos_sistema--;
 			log_info(logger, "Good Bye PCB %d", element->unique_id);
-			// TODO: ¿Por que no anda?
-			//pcb_destroy(element);
 		}
 		sem_post(&sem_cpu_list); // Tiene que haber un CPU conectado minimo
 	} // for(;;)
@@ -1501,7 +1523,7 @@ int escuchar_cpu(int sock_cpu)
 		case IMPRIMIRTEXTO: imprimirTexto(sock_cpu,mensaje.datosNumericos); break;
 		case PROGRAMFINISH: process_finish(sock_cpu); break;
 		case SIGNALSEM: semaphore_signal(sock_cpu,mensaje.mensaje); break;
-		//case WAITSEM: semaphore_wait(); break;
+		case WAITSEM: semaphore_wait(sock_cpu,mensaje.mensaje); break;
 		/*case VARCOMREQUEST: obtener_valor_VariableCompartida(); break;
 		case ENTRADASALIDA: io(); break;
 		*/
@@ -1523,7 +1545,6 @@ void finalizo_Quantum(int sock_cpu)
 	int numbytes;
 	t_pcb *pcb;
 
-
 	log_info(logger, "finalizo_Quantum");
 
 	if((pcb = (t_pcb*) malloc (sizeof(t_pcb))) == NULL)
@@ -1538,10 +1559,11 @@ void finalizo_Quantum(int sock_cpu)
 		return;
 	};
 
+	unsigned char status_Actual = process_get_status(pcb->unique_id);
 	pcb_update(pcb,PROCESS_EXECUTE);
 
 	pthread_mutex_lock(&mutex_pedidos);
-	queue_push(queue_rr,pedido_create(pcb->unique_id,PROCESS_EXECUTE,PROCESS_READY));
+	queue_push(queue_rr,pedido_create(pcb->unique_id,PROCESS_EXECUTE,status_Actual));
 	pthread_mutex_unlock(&mutex_pedidos);
 
 	//pcb_destroy(pcb); // NO se libera este puntero porque se agrego a la lista
@@ -1872,6 +1894,7 @@ t_process* process_create(unsigned int pid, int sock_program)
 	new_process->status = PROCESS_NEW;
 	new_process->pid = pid;
 	new_process->program_socket = sock_program;
+	new_process->current_cpu_socket = -1;
 	return new_process;
 }
 
@@ -2431,23 +2454,19 @@ void escuchar_umv(void)
 
 int is_Connected_Program(int sock_program)
 {
-	int sock = sock_program;
-	// TODO: NO anda
+	int i;
+	t_process *p;
+
+	for(i=0;i < list_size(list_process);i++)
+	{
+		p = list_get(list_process,i);
+		if(p->program_socket == sock_program)
+		{
+			return 0;
+		}
+	}
+
 	return -1;
-	int _is_Connected_Program(t_process *p)
-	{
-		log_info(logger,"p->program_socket == sock %d", p->program_socket == sock);
-		return p->program_socket == sock;
-	}
-
-	t_process *process = list_find(list_process, (void*) _is_Connected_Program);
-
-	if(process == NULL)
-	{
-		return -1;
-	}
-
-	return 0;
 }
 
 /*
@@ -2897,3 +2916,60 @@ void test_pcb(int process_id, unsigned char previous_status)
 
 	return;
 }
+
+/*
+ * Function: process_set_status
+ * Purpose: Set process status
+ * Created on: 15/06/2014
+ * Author: SilverStack
+*/
+
+void process_set_status(int process_id, unsigned char status)
+{
+	int i;
+	t_process* process;
+
+	sem_wait(&mutex_process_list);
+
+	for(i=0; i < list_size(list_process);i++)
+	{
+		process = list_get(list_process,i);
+		if(process->pid == process_id)
+		{
+			process->status = status;
+			break;
+		}
+	}
+
+	sem_post(&mutex_process_list);
+	return;
+}
+
+/*
+ * Function: process_get_status
+ * Purpose: Get process status
+ * Created on: 15/06/2014
+ * Author: SilverStack
+*/
+
+unsigned char process_get_status(int process_id)
+{
+	int i;
+	t_process* process;
+
+	sem_wait(&mutex_process_list);
+	for(i=0; i < list_size(list_process);i++)
+	{
+		process = list_get(list_process,i);
+		if(process->pid == process_id)
+		{
+			sem_post(&mutex_process_list);
+			return process->status;
+		}
+	}
+
+	log_error(logger,"No se encontro el proceso = %d", process_id);
+	sem_post(&mutex_process_list);
+	return -1;
+}
+

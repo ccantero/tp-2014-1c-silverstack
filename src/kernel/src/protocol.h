@@ -198,7 +198,7 @@ int global_update_value(char* global_name, int value);
 int global_get_value(char* global_name);
 t_io* io_create(char *io_name, int io_retardo);
 t_semaphore* semaphore_create(char* sem_name, int value);
-int semaphore_wait(char* sem_name, int process_id);
+void semaphore_wait(int sock_cpu, char* sem_name);
 void semaphore_signal(int sock_cpu, char* sem_name);
 int escuchar_Nuevo_Programa(int sock_program);
 int escuchar_Programa(int sock_program, char* buffer);
@@ -247,7 +247,8 @@ void imprimirTexto(int sock_cpu,int valor);
 void imprimir(int sock_cpu,int valor);
 int get_sock_prog_by_sock_cpu(int sock_cpu);
 void cpu_set_status(int socket, unsigned char status);
-
+unsigned char process_get_status(int process_id);
+void process_set_status(int process_id, unsigned char status);
 
 int get_Segment_Start(int offset);					// A revisar si va o no va
 void io_destroy(t_io*); 							// A revisar si va o no va
