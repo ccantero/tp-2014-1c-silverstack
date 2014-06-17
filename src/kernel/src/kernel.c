@@ -103,16 +103,22 @@ int main(int argc, char *argv[])
 
 	exit_status = 1;
 
+	int flag;
+
 	while(exit_status == 1)
 	{
 		read_fds = master;
+		flag = 0;
+
 		if (select(fdmax + 1, &read_fds, NULL, NULL, NULL) == -1)
 		{
 			log_error(logger, "Error en funcion select");
-			exit(1);
+			log_error(logger, "fdmax = %d", fdmax);
+			sleep(1);
+			flag = 1;
 		}
 
-		for (i = 0; i <= fdmax; i++)
+		for (i = 0; i <= fdmax && flag == 0; i++)
 		{
 			if (FD_ISSET(i, &read_fds))
 			{
@@ -121,7 +127,8 @@ int main(int argc, char *argv[])
 					//escuchar_umv();
 					log_error(logger,"Se cayo la UMV");
 					close(sock_umv);
-					exit_status = 1;
+					exit_status
+					= 1;
 					break;
 				}
 

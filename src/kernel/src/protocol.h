@@ -250,6 +250,7 @@ void cpu_set_status(int socket, unsigned char status);
 unsigned char process_get_status(int process_id);
 void process_set_status(int process_id, unsigned char status);
 
+
 int get_Segment_Start(int offset);					// A revisar si va o no va
 void io_destroy(t_io*); 							// A revisar si va o no va
 void semaphore_destroy(t_semaphore *self);			// A revisar si va o no va

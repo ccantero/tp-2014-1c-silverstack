@@ -783,17 +783,25 @@ void pcb_create(char* buffer, int tamanio_buffer, int sock_program)
 		return;
 	}
 
+	sem_wait(&mutex_process_list);
+	list_add(list_process,process_create(++process_Id, sock_program));
+	sem_post(&mutex_process_list);
+
 	metadata = metadatada_desde_literal(buffer);
 
-	new_pcb->unique_id = ++process_Id;
+	new_pcb->unique_id = process_Id;
+	log_info(logger,"Send code_segment - PID = %d", process_Id);
 	new_pcb->code_segment = umv_send_segment(process_Id, buffer, tamanio_buffer);
+	log_info(logger,"Send stack_segment - PID = %d", process_Id);
 	new_pcb->stack_segment = umv_send_segment(process_Id, "", stack_size);
 	new_pcb->stack_pointer = new_pcb->stack_segment;
+	log_info(logger,"Send instruction_index - PID = %d", process_Id);
 	new_pcb->instruction_index = umv_send_segment(process_Id, (char*) metadata->instrucciones_serializado, metadata->instrucciones_size * sizeof(int) * 2);
 	new_pcb->instruction_size = metadata->instrucciones_size;
 	new_pcb->size_etiquetas_index = metadata->etiquetas_size;
 	if(metadata->etiquetas_size >0)
 	{
+		log_info(logger,"Send etiquetas_index - PID = %d", process_Id);
 		new_pcb->etiquetas_index = umv_send_segment(process_Id, (char*) metadata->etiquetas, metadata->etiquetas_size);
 		log_info(logger,"etiquetas_size = %d", metadata->etiquetas_size);
 	}
@@ -807,13 +815,19 @@ void pcb_create(char* buffer, int tamanio_buffer, int sock_program)
 					3 * metadata->cantidad_de_funciones +
 					metadata->instrucciones_size;
 
-	sem_wait(&mutex_new_queue);
-	list_add(list_pcb_new, new_pcb);
-	sem_post(&mutex_new_queue);
+	if(process_get_status(process_Id) == PROCESS_NEW)
+	{
+		sem_wait(&mutex_new_queue);
+		list_add(list_pcb_new, new_pcb);
+		sem_post(&mutex_new_queue);
+	}
+	else
+	{
+		sem_wait(&mutex_exit_queue);
+		list_add(list_pcb_exit, new_pcb);
+		sem_post(&mutex_exit_queue);
+	}
 
-	sem_wait(&mutex_process_list);
-	list_add(list_process,process_create(new_pcb->unique_id, sock_program));
-	sem_post(&mutex_process_list);
 
 	sem_post(&sem_plp);
 	metadata_destruir(metadata);
@@ -1085,6 +1099,10 @@ int umv_send_segment(int pid, char* buffer, int tamanio)
 		return -1;
 	}
 
+	log_info(logger,"umv_send_bytes -> direccion_logica = %d",direccion_logica);
+	log_info(logger,"umv_send_bytes -> tamanio_code_segment = %d",tamanio_code_segment);
+
+
 	if(umv_send_bytes(direccion_logica, 0, tamanio_code_segment) != 0)
 	{
 		log_error(logger, "Error Inesperado change_process");
@@ -1118,7 +1136,16 @@ int umv_send_segment(int pid, char* buffer, int tamanio)
 		return direccion_logica; /* ALL GOOD*/
 	}
 
-	log_info(logger,"ENVIOBYTES Fallo");
+	if(mensaje.tipo == SEGMENTATION_FAULT)
+	{
+		// TODO: Abortar Creacion del PCB
+		process_set_status(pid,PROCESS_ERROR);
+		log_error(logger,"ENVIOBYTES Fallo --> SEGMENTATION_FAULT");
+		free(buffer_msg);
+		return -1;
+	}
+
+	log_error(logger,"ENVIOBYTES Fallo");
 
 	free(buffer_msg);
 	return -1;
@@ -1344,14 +1371,16 @@ void planificador_sjn(void)
 {
 	int cantidad_procesos_new = 0;
 	int cantidad_procesos_exit = 0;
+	int flag = 0;
 
 	t_pcb *element;
 	for(;;)
 	{
+		flag = 0;
 		log_info(logger,"planificador_sjn - sem_wait(&sem_plp)");
 		sem_wait(&sem_plp);
-		log_info(logger,"planificador_sjn - sem_wait(&sem_cpu_list)");
-		sem_wait(&sem_cpu_list); // Tiene que haber un CPU conectado minimo
+		//log_info(logger,"planificador_sjn - sem_wait(&sem_cpu_list)");
+		//sem_wait(&sem_cpu_list); // Tiene que haber un CPU conectado minimo
 
 		log_info(logger,"planificador_sjn - sem_wait(&mutex_new_queue)");
 		sem_wait(&mutex_new_queue);
@@ -1367,7 +1396,7 @@ void planificador_sjn(void)
 		log_info(logger,"cantidad_procesos_exit = %d", cantidad_procesos_exit);
 		log_info(logger,"cantidad_procesos_sistema = %d", cantidad_procesos_sistema);
 
-		if(cantidad_procesos_new > 0)
+		if(cantidad_procesos_new > 0 && cantidad_cpu > 0)
 		{
 			if(cantidad_procesos_sistema <= multiprogramacion)
 			{
@@ -1387,12 +1416,10 @@ void planificador_sjn(void)
 				log_info(logger, "PCB -> %d moved from New Queue to Ready Queue", element->unique_id);
 				sem_post(&sem_pcp);
 				cantidad_procesos_sistema++;
-			}
-			else
-			{
-				sem_post(&sem_plp); // Vuelvo a incrementar el semaforo porque no se movio el proceso de la cola de NEW
+				flag++;
 			}
 		}
+
 
 		if(cantidad_procesos_exit > 0)
 		{
@@ -1400,10 +1427,22 @@ void planificador_sjn(void)
 			element = list_remove(list_pcb_exit, 0);
 			sem_post(&mutex_exit_queue);
 			program_exit(element->unique_id);
-			cantidad_procesos_sistema--;
+			umv_destroy_segment(element->unique_id); //Envio a la UMV el dato para que destruya segmentos
+			if(cantidad_procesos_sistema > 0)
+				cantidad_procesos_sistema--;
 			log_info(logger, "Good Bye PCB %d", element->unique_id);
+			flag++;
 		}
-		sem_post(&sem_cpu_list); // Tiene que haber un CPU conectado minimo
+
+		if(flag == 2)
+			// Se hicieron las 2 cosas, por new y por exit
+			sem_wait(&sem_plp);
+		else if(flag == 0)
+		{
+			sem_post(&sem_plp);
+			sleep(5); // TODO: Pensar una forma de mejorar esto
+		}
+		//sem_post(&sem_cpu_list); // Tiene que haber un CPU conectado minimo
 	} // for(;;)
 }
 
@@ -2273,10 +2312,10 @@ void planificador_rr(void)
 						{
 							sem_post(&sem_pcp); // Incremento el semaforo porque no saqu2e el proceso
 							log_error(logger, "No encontre CPU AVAILABLE");
-							sleep(1);
 							pthread_mutex_lock(&mutex_pedidos);
 							queue_push(queue_rr,pedido_create(new_pedido->process_id,new_pedido->previous_status,new_pedido->new_status));
 							pthread_mutex_unlock(&mutex_pedidos);
+							sleep(5); //TODO: Pensar como mejorar
 						}
 
 						sem_post(&mutex_cpu_list);
@@ -2343,8 +2382,8 @@ void planificador_rr(void)
 						sem_wait(&mutex_cpu_list);
 						cpu_set_status(cpu_socket, CPU_AVAILABLE);
 						sem_post(&mutex_cpu_list);
-
-						umv_destroy_segment(new_pedido->process_id); //Envio a la UMV el dato para que destruya segmentos
+						// Lo deberia hacer el PLP
+						//umv_destroy_segment(new_pedido->process_id); //Envio a la UMV el dato para que destruya segmentos
 						sem_post(&sem_plp);
 						break;
 					}
@@ -3030,4 +3069,3 @@ unsigned char process_get_status(int process_id)
 	sem_post(&mutex_process_list);
 	return -1;
 }
-
