@@ -150,6 +150,7 @@ typedef struct _t_pedido {
 #define PROCESS_EXECUTE 0x42 // Process Node Status
 #define PROCESS_BLOCKED 0x43 // Process Node Status
 #define PROCESS_EXIT 0x44 // Process Node Status
+#define PROCESS_ERROR 0x45 // Process Node Status
 
 //TODO: Definir en SylverStack.h
 #define SALIR 110 // Programa
@@ -194,8 +195,8 @@ int exit_status;
 void GetInfoConfFile(char* PATH_CONFIG);
 int conectar_umv(void);
 t_global* global_create(char *global_name);
-int global_update_value(char* global_name, int value);
-int global_get_value(char* global_name);
+void global_update_value(int sock_cpu, char* global_name, int value);
+void global_get_value(int sock_cpu, char* global_name);
 t_io* io_create(char *io_name, int io_retardo);
 t_semaphore* semaphore_create(char* sem_name, int value);
 void semaphore_wait(int sock_cpu, char* sem_name);
@@ -236,7 +237,6 @@ void process_remove_by_socket(int socket);
 void planificador_rr(void);
 void process_execute(int unique_id, int cpu_socket);
 void pcb_destroy(t_pcb* self);
-void asignar_valor_VariableCompartida(int sock_cpu, char* global_name, int value);
 void umv_destroy_segment(int process_id);
 int get_process_id_by_sock_cpu(int sock_cpu);
 void program_exit(int pid);
@@ -258,5 +258,6 @@ void fd_set_cpu_sockets(fd_set* descriptores);		// A revisar si va o no va
 void fd_set_program_sockets(fd_set* descriptores);	// A revisar si va o no va
 void cpu_update(int socket);						// A revisar si va o no va
 void test_pcb(int pid, unsigned char previous_status);
+void asignar_valor_VariableCompartida(int sock_cpu, char* global_name, int value);
 
 #endif /* PROTOCOL_H_ */

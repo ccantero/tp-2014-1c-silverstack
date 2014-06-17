@@ -159,38 +159,57 @@ t_global* global_create(char *global_name)
  * Author: SilverStack
 */
 
-int global_update_value(char* global_name, int value)
+void global_update_value(int sock_cpu, char* global_name, int value)
 {
 	int flag_mod = 0;
-	int nuevo_valor = value;
-	char* global_id;
+	int numbytes, i;
+	t_mensaje mensaje;
+	int size_msg = sizeof(t_mensaje);
+	t_global* variable;
 
-	if( (global_id = (char*) malloc(sizeof(char) * (strlen(global_name) + 1))) == NULL )
+	char* varCom;
+
+	if((varCom = (char*) malloc (sizeof(char) * ( strlen(global_name) + 1 ))) == NULL)
 	{
-		log_error(logger,"Error al reservar memoria para nuevo nodo en global_create");
+		log_error(logger,"Error al reservar memoria para identificador en global_update_value");
+		return;
 	}
 
-	strcpy(global_id,global_name);
+	strcpy(varCom, "!");
+	strcat(varCom, global_name);
 
-	void _get_global(t_global *s)
+	log_info(logger, "Variable compartida -%s-", varCom);
+
+	for(i=0;i < list_size(list_globales);i++)
 	{
-		if(flag_mod == 0 && strcmp(global_id,s->identifier) == 0)
+		variable = list_get(list_globales,i);
+		if(flag_mod == 0 && strcmp(varCom,variable->identifier) == 0)
 		{
-			s->value = nuevo_valor;
+			variable->value = value;
 			flag_mod = 1;
+			break;
 		}
 	}
 
-	list_iterate(list_globales, (void*) _get_global);
-
 	if(flag_mod == 0)
 	{
-		log_error(logger, "Variable compartida %s no encontrado", global_id);
-		return 0;
+		log_error(logger, "Variable compartida -%s- no encontrado", global_name);
+		process_set_status(get_process_id_by_sock_cpu(sock_cpu),PROCESS_ERROR);
 	}
 
-	free(global_id);
-	return 1;
+	mensaje.id_proceso = KERNEL;
+	mensaje.datosNumericos = 0;
+	mensaje.tipo = ASIGNACION;
+
+	if((numbytes=write(sock_cpu,&mensaje,size_msg))<=0)
+	{
+		log_error(logger, "Fallo el envio de respuesta de global_update_value al cpu");
+		close(sock_cpu);
+		cpu_remove(sock_cpu);
+		return;
+	}
+
+	return;
 }
 
 /*
@@ -200,37 +219,59 @@ int global_update_value(char* global_name, int value)
  * Author: SilverStack
 */
 
-int global_get_value(char* global_name)
+void global_get_value(int sock_cpu, char* global_name)
 {
 	int flag_mod = 0;
-	int valor_retorno;
-	char* global_id;
+	int numbytes, i;
+	t_mensaje mensaje;
+	int size_msg = sizeof(t_mensaje);
+	t_global* variable;
+	int valor = -1000;
 
-	if( (global_id = (char*) malloc(sizeof(char) * (strlen(global_name) + 1))) == NULL )
+	char* varCom;
+
+	if((varCom = (char*) malloc (sizeof(char) * ( strlen(global_name) + 1 ))) == NULL)
 	{
-		log_error(logger,"Error al reservar memoria para nuevo nodo en global_create");
+		log_error(logger,"Error al reservar memoria para identificador en global_get_value");
+		return;
 	}
 
-	strcpy(global_id,global_name);
+	strcpy(varCom, "!");
+	strcat(varCom, global_name);
 
-	void _get_global(t_global *s)
+	log_info(logger, "Variable compartida -%s-", varCom);
+
+	for(i=0;i < list_size(list_globales);i++)
 	{
-		if(strcmp(global_id,s->identifier) == 0)
+		variable = list_get(list_globales,i);
+		if(flag_mod == 0 && strcmp(varCom,variable->identifier) == 0)
 		{
-			valor_retorno = s->value;
+			valor = variable->value;
 			flag_mod = 1;
+			break;
 		}
 	}
 
-	list_iterate(list_globales, (void*) _get_global);
+	mensaje.id_proceso = KERNEL;
+	mensaje.datosNumericos = valor;
+	mensaje.tipo = VARCOMREQUEST;
+
+	if((numbytes=write(sock_cpu,&mensaje,size_msg))<=0)
+	{
+		log_error(logger, "Fallo el envio de respuesta de global_update_value al cpu");
+		close(sock_cpu);
+		cpu_remove(sock_cpu);
+		return;
+	}
 
 	if(flag_mod == 0)
 	{
-		log_error(logger, "Variable compartida %s no encontrado", global_id);
+		log_error(logger, "Variable compartida %s no encontrado", varCom);
+		process_set_status(get_process_id_by_sock_cpu(sock_cpu),PROCESS_ERROR);
+		return;
 	}
 
-	free(global_id);
-	return valor_retorno;
+	return;
 }
 
 /*
@@ -1518,14 +1559,14 @@ int escuchar_cpu(int sock_cpu)
 	switch(mensaje.tipo)
 	{
 		case QUANTUMFINISH: finalizo_Quantum(sock_cpu); break;
-		case ASIGNACION: asignar_valor_VariableCompartida(sock_cpu, mensaje.mensaje, mensaje.datosNumericos); break;
 		case IMPRIMIR: imprimir(sock_cpu,mensaje.datosNumericos); break;
 		case IMPRIMIRTEXTO: imprimirTexto(sock_cpu,mensaje.datosNumericos); break;
 		case PROGRAMFINISH: process_finish(sock_cpu); break;
 		case SIGNALSEM: semaphore_signal(sock_cpu,mensaje.mensaje); break;
 		case WAITSEM: semaphore_wait(sock_cpu,mensaje.mensaje); break;
-		/*case VARCOMREQUEST: obtener_valor_VariableCompartida(); break;
-		case ENTRADASALIDA: io(); break;
+		case ASIGNACION: global_update_value(sock_cpu,mensaje.mensaje, mensaje.datosNumericos); break;
+		case VARCOMREQUEST: global_get_value(sock_cpu,mensaje.mensaje); break;
+		/*case ENTRADASALIDA: io(); break;
 		*/
 	};
 
@@ -1559,11 +1600,17 @@ void finalizo_Quantum(int sock_cpu)
 		return;
 	};
 
-	unsigned char status_Actual = process_get_status(pcb->unique_id);
+	unsigned char next_status;
+
+	if(process_get_status(pcb->unique_id) == PROCESS_BLOCKED)
+		next_status = PROCESS_BLOCKED;
+	else
+		next_status = PROCESS_READY;
+
 	pcb_update(pcb,PROCESS_EXECUTE);
 
 	pthread_mutex_lock(&mutex_pedidos);
-	queue_push(queue_rr,pedido_create(pcb->unique_id,PROCESS_EXECUTE,status_Actual));
+	queue_push(queue_rr,pedido_create(pcb->unique_id,PROCESS_EXECUTE,next_status));
 	pthread_mutex_unlock(&mutex_pedidos);
 
 	//pcb_destroy(pcb); // NO se libera este puntero porque se agrego a la lista
@@ -1637,7 +1684,7 @@ void asignar_valor_VariableCompartida(int sock_cpu, char* global_name, int value
 	mensaje.datosNumericos = value;
 	mensaje.tipo = ASIGNACION;
 
-	if(global_update_value(global_name,value) == 0)
+	//if(global_update_value(global_name,value) == 0)
 	{
 		mensaje.tipo = ERROR;
 	}
@@ -1848,22 +1895,26 @@ void cpu_update(int socket)
  * Author: SilverStack
 */
 
-void cpu_set_status(int socket, unsigned char status)
+void cpu_set_status(int socket_cpu, unsigned char status)
 {
 	int flag_found = 0;
-	int socket_cpu = socket;
+	int i;
 	unsigned char nuevo_status = status;
+	t_nodo_cpu* cpu;
 
-	void _change_status(t_nodo_cpu *s)
+
+	for(i=0; i < list_size(list_cpu);i++)
 	{
-		if(s->socket == socket_cpu)
+		cpu = list_get(list_cpu,i);
+		if(flag_found == 0 && cpu->socket == socket_cpu)
 		{
-			s->status = nuevo_status;
+			cpu->status = nuevo_status;
 			flag_found = 1;
+			log_info(logger,"CPU %d set to status %x", socket_cpu, status);
+			break;
 		}
-	}
 
-	list_iterate(list_cpu, (void*) _change_status);
+	}
 
 	if(flag_found == 0)
 	{
@@ -2014,11 +2065,10 @@ void pcb_move(unsigned int pid,t_list* from, t_list* to)
 	if(flag_found == 0)
 		log_error(logger, "PID %d no encontrado en pcb_move", pid);
 
-	// TODO: Ya no se que probar
-	//t_pcb *pcb = list_remove(from, indice_buscado);
-	//list_add(to,pcb);
+	t_pcb *pcb = list_remove(from, indice_buscado);
+	list_add(to,pcb);
 
-	t_pcb* pcb;
+	/*t_pcb* pcb;
 	t_pcb* old_pcb;
 
 	if((pcb = (t_pcb*) malloc (sizeof(t_pcb))) == NULL)
@@ -2045,6 +2095,7 @@ void pcb_move(unsigned int pid,t_list* from, t_list* to)
 
 	list_add(to,pcb);
 	pcb_destroy(list_remove(from, indice_buscado));
+	*/
 }
 
 /*
@@ -2192,7 +2243,7 @@ void planificador_rr(void)
 		new_pedido = queue_pop(queue_rr);
 		pthread_mutex_unlock(&mutex_pedidos);
 
-		log_info(logger,"planificador_rr - new_pedido");
+		log_info(logger,"planificador_rr - previous_status %x -> new_status %x", new_pedido->previous_status, new_pedido->new_status );
 
 		switch(new_pedido->previous_status)
 		{
@@ -2217,12 +2268,12 @@ void planificador_rr(void)
 							process_update(new_pedido->process_id,PROCESS_READY, PROCESS_EXECUTE); //Mueve el pcb
 							process_execute(new_pedido->process_id, cpu->socket);
 							cpu_set_status(cpu->socket, CPU_WORKING); // Pone el CPU Working
-							//
 						}
 						else
 						{
 							sem_post(&sem_pcp); // Incremento el semaforo porque no saqu2e el proceso
 							log_error(logger, "No encontre CPU AVAILABLE");
+							sleep(1);
 							pthread_mutex_lock(&mutex_pedidos);
 							queue_push(queue_rr,pedido_create(new_pedido->process_id,new_pedido->previous_status,new_pedido->new_status));
 							pthread_mutex_unlock(&mutex_pedidos);
@@ -2233,7 +2284,7 @@ void planificador_rr(void)
 					}
 					default:
 					{
-						log_error(logger, "No se reconoce el new_pedido->next_status");
+						log_error(logger, "No se reconoce el new_pedido->next_status %x ", new_pedido->previous_status);
 						break;
 					}
 				}
@@ -2247,6 +2298,13 @@ void planificador_rr(void)
 					{
 						log_info(logger,"PID = %d - PROCESS_EXECUTE -> PROCESS_BLOCKED", new_pedido->process_id);
 						process_update(new_pedido->process_id,PROCESS_EXECUTE,PROCESS_BLOCKED);
+						cpu_socket = get_sock_cpu_by_process_id(new_pedido->process_id);
+						if(cpu_socket == -1)
+						{
+							log_error(logger, "No se encontro el cpu_socket");
+							break;
+						}
+						cpu_set_status(cpu_socket, CPU_AVAILABLE);
 						break;
 					}
 					case PROCESS_READY:
@@ -2292,7 +2350,7 @@ void planificador_rr(void)
 					}
 					default:
 					{
-						log_error(logger, "No se reconoce el new_pedido->next_status");
+						log_error(logger, "No se reconoce el new_pedido->next_status %x", new_pedido->new_status);
 						break;
 					}
 				}
@@ -2316,7 +2374,7 @@ void planificador_rr(void)
 					}
 					default:
 					{
-						log_error(logger, "No se reconoce el new_pedido->next_status");
+						log_error(logger, "No se reconoce el new_pedido->next_status %x", new_pedido->previous_status);
 						break;
 					}
 				}
