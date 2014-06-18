@@ -48,6 +48,7 @@
 #define DESTRUIRSEGMENTOS 504
 #define ERROR 999
 #define BLOCK 998
+#define SEGMENTATION_FAULT 1001
 
 // Estructura de mensaje global para usar entre kernel, programas y cpu's
 typedef struct {
