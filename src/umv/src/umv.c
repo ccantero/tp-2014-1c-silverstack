@@ -116,6 +116,7 @@ void atender_cpu(int sock)
 	{
 	case SOLICITUDBYTES:
 		pthread_mutex_lock(&semProcesoActivo);
+		pthread_mutex_lock(&semCompactacion);
 		log_info(logger, "Recibi solicitud de bytes de cpu.");
 		recv(sock, &msg, sizeof(t_msg_cambio_proceso_activo), 0);
 		proceso_activo = msg.id_programa;
@@ -127,11 +128,13 @@ void atender_cpu(int sock)
 			mensaje.id_proceso = proceso_activo;
 			send(sock, &mensaje, sizeof(t_mensaje), 0);
 		}
+		pthread_mutex_unlock(&semCompactacion);
 		pthread_mutex_unlock(&semProcesoActivo);
 		log_info(logger, "Devolvi solicitud de bytes a cpu; respuesta. %d.", respuesta);
 		break;
 	case ENVIOBYTES:
 		pthread_mutex_lock(&semProcesoActivo);
+		pthread_mutex_lock(&semCompactacion);
 		log_info(logger, "Recibi envio de bytes de cpu.");
 		recv(sock, &msg, sizeof(t_msg_cambio_proceso_activo), 0);
 		proceso_activo = msg.id_programa;
@@ -143,6 +146,7 @@ void atender_cpu(int sock)
 			mensaje.id_proceso = proceso_activo;
 			send(sock, &mensaje, sizeof(t_mensaje), 0);
 		}
+		pthread_mutex_unlock(&semCompactacion);
 		pthread_mutex_unlock(&semProcesoActivo);
 		log_info(logger, "Devolvi el envio de bytes de cpu.");
 		break;
@@ -158,6 +162,7 @@ int atender_envio_bytes(int base, int offset, int tam, int sock)
 	}
 	else
 	{
+		printw("Ingrese datos a escribir en memoria: \n");
 		getstr(buffer);
 	}
 	int i;
@@ -211,7 +216,6 @@ int atender_envio_bytes(int base, int offset, int tam, int sock)
 	if (sock != 0)
 	{
 		msg.tipo = ENVIOBYTES;
-		log_info(logger, "Respuesta: %d", msg.tipo);
 		send(sock, &msg, sizeof(t_mensaje), 0);
 	}
 	return 0;
@@ -382,6 +386,7 @@ void atender_kernel(int sock)
 		break;
 	case ENVIOBYTES:
 		pthread_mutex_lock(&semProcesoActivo);
+		pthread_mutex_lock(&semCompactacion);
 		recv(sock, &msg, sizeof(t_msg_cambio_proceso_activo), 0);
 		proceso_activo = msg.id_programa;
 		recv(sock, &msg3, sizeof(t_msg_envio_bytes), 0);
@@ -394,6 +399,7 @@ void atender_kernel(int sock)
 			send(sock, &mensaje, sizeof(t_mensaje), 0);
 		}
 		log_info(logger, "Se recibieron %d bytes de programa %d", msg3.tamanio, msg.id_programa);
+		pthread_mutex_unlock(&semCompactacion);
 		pthread_mutex_unlock(&semProcesoActivo);
 		break;
 	}
@@ -743,7 +749,9 @@ void consola (void* param)
    					buffer = (char *)malloc(valor_numerico3 + 1);
    					valor_numerico = transformar_direccion_en_logica(valor_numerico, proc_id);
    					pthread_mutex_lock(&semProcesoActivo);
+   					pthread_mutex_lock(&semCompactacion);
    					respuesta = atender_solicitud_bytes(valor_numerico, valor_numerico2, valor_numerico3, 0, &buffer);
+   					pthread_mutex_unlock(&semCompactacion);
    					pthread_mutex_unlock(&semProcesoActivo);
    					switch(respuesta)
    					{
@@ -795,7 +803,9 @@ void consola (void* param)
 					buffer_int = (int *)malloc(valor_numerico3 + 1);
 					valor_numerico = transformar_direccion_en_logica(valor_numerico, proc_id);
 					pthread_mutex_lock(&semProcesoActivo);
+					pthread_mutex_lock(&semCompactacion);
 					respuesta = atender_solicitud_bytes_int(valor_numerico, valor_numerico2, valor_numerico3, 0, &buffer_int);
+					pthread_mutex_unlock(&semCompactacion);
 					pthread_mutex_unlock(&semProcesoActivo);
 					switch(respuesta)
 					{
@@ -849,8 +859,11 @@ void consola (void* param)
    					printw(">");
    					refresh();
    					scanw("%d", &valor_numerico3);
+   					valor_numerico = transformar_direccion_en_logica(valor_numerico, proc_id);
    					pthread_mutex_lock(&semProcesoActivo);
+   					pthread_mutex_lock(&semCompactacion);
    					respuesta = atender_envio_bytes(valor_numerico, valor_numerico2, valor_numerico3, 0);
+   					pthread_mutex_unlock(&semCompactacion);
    					pthread_mutex_unlock(&semProcesoActivo);
    					switch(respuesta)
    					{
@@ -922,14 +935,37 @@ void consola (void* param)
    			compactar_memoria();
    		   	flag_comandoOK = 1;
    		}
-   		if (flag_comandoOK == 0 && strcmp(comando, "dump") == 0)
+   		if (flag_comandoOK == 0 && strcmp(comando, "dump procesos") == 0)
    		{
+   			log_info(logger, "Se pidio dump de procesos.");
    			printw("¿Desea guardar los datos del dump en un archivo en disco? (s/n): ");
 			tecla_ingresada = getch();
    			pthread_mutex_lock(&semCompactacion);
    			dump_memoria(tecla_ingresada);
    			pthread_mutex_unlock(&semCompactacion);
    		   	flag_comandoOK = 1;
+   		}
+   		if (flag_comandoOK == 0 && strcmp(comando, "dump memoria") == 0)
+   		{
+   			printw("¿Desea guardar los datos del dump en un archivo en disco? (s/n): ");
+   			tecla_ingresada = getch();
+   			printw("\n");
+   			printw("Ingrese direccion de memoria de comienzo: \n");
+			printw(">");
+			refresh();
+			scanw("%d", &valor_numerico);
+			printw("Ingrese cantidad de bytes a leer: \n");
+			printw(">");
+			refresh();
+			scanw("%d", &valor_numerico2);
+			if (valor_numerico + valor_numerico2 <= space && valor_numerico >= 0 && valor_numerico2 >= 0)
+			{
+				pthread_mutex_lock(&semCompactacion);
+				mostrar_memoria(valor_numerico, valor_numerico2, tecla_ingresada);
+				pthread_mutex_unlock(&semCompactacion);
+			}
+			printw("\n");
+   			flag_comandoOK = 1;
    		}
    		if (flag_comandoOK == 0 && strcmp(comando, "help") == 0)
    		{
@@ -938,7 +974,8 @@ void consola (void* param)
    			printw("\tretardo\n");
    			printw("\talgoritmo\n");
    			printw("\tcompactacion\n");
-   			printw("\tdump\n");
+   			printw("\tdump memoria\n");
+   			printw("\tdump procesos\n");
    			refresh();
    			flag_comandoOK = 1;
    		}
@@ -950,10 +987,45 @@ void consola (void* param)
    			printw("\tretardo\n");
    			printw("\talgoritmo\n");
    			printw("\tcompactacion\n");
-   			printw("\tdump\n");
+   			printw("\tdump memoria\n");
+   			printw("\tdump procesos\n");
    			refresh();
    		}
    	}
+}
+
+void mostrar_memoria(int base, int tam, int opcion)
+{
+	cantidad_dumps++;
+	if (opcion == 115)
+	{
+		strcpy(nombre_archivo_dump, "dump");
+		sprintf(buff_dump, "%d", cantidad_dumps);
+		strcat(nombre_archivo_dump, buff_dump);
+		archivo_dump = fopen(nombre_archivo_dump, "w+");
+		tiempo_dump = time(NULL);
+		ptr_tiempo_dump = gmtime(&tiempo_dump);
+		tiempo_dump_archivo = asctime(ptr_tiempo_dump);
+		fprintf(archivo_dump, "%s", tiempo_dump_archivo);
+		fprintf(archivo_dump, "\n");
+	}
+	clear();
+	refresh();
+	int i = 0;
+	for (i = base; i < (base + tam); i++)
+	{
+		printw("%c", memoria[i]);
+		refresh();
+		if (opcion == 115)
+		{
+			fprintf(archivo_dump, "%c", memoria[i]);
+		}
+	}
+	if (opcion == 115)
+	{
+		fclose(archivo_dump);
+	}
+	refresh();
 }
 
 void dump_memoria(int opcion)
