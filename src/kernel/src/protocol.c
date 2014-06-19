@@ -965,6 +965,8 @@ void umv_destroy_segment(int process_id)
 	t_msg_destruir_segmentos msg_destruir_segmentos;
 	int size_msg_destruir_segmentos = sizeof(t_msg_destruir_segmentos);
 
+	log_info(logger,"umv_destroy_segment(%d)",process_id);
+
 	if((buffer_msg = (char*) malloc (sizeof(char) * MAXDATASIZE )) == NULL)
 	{
 		log_error(logger,"Error al reservar memoria destroy_segment");
@@ -1138,7 +1140,6 @@ int umv_send_segment(int pid, char* buffer, int tamanio)
 
 	if(mensaje.tipo == SEGMENTATION_FAULT)
 	{
-		// TODO: Abortar Creacion del PCB
 		process_set_status(pid,PROCESS_ERROR);
 		log_error(logger,"ENVIOBYTES Fallo --> SEGMENTATION_FAULT");
 		free(buffer_msg);
@@ -1427,7 +1428,7 @@ void planificador_sjn(void)
 			element = list_remove(list_pcb_exit, 0);
 			sem_post(&mutex_exit_queue);
 			program_exit(element->unique_id);
-			umv_destroy_segment(element->unique_id); //Envio a la UMV el dato para que destruya segmentos
+			umv_destroy_segment(element->unique_id);
 			if(cantidad_procesos_sistema > 0)
 				cantidad_procesos_sistema--;
 			log_info(logger, "Good Bye PCB %d", element->unique_id);
@@ -1438,11 +1439,10 @@ void planificador_sjn(void)
 			// Se hicieron las 2 cosas, por new y por exit
 			sem_wait(&sem_plp);
 		else if(flag == 0)
-		{
+		{	// No se realizó ninguna accion
 			sem_post(&sem_plp);
 			sleep(5); // TODO: Pensar una forma de mejorar esto
 		}
-		//sem_post(&sem_cpu_list); // Tiene que haber un CPU conectado minimo
 	} // for(;;)
 }
 
@@ -1639,10 +1639,13 @@ void finalizo_Quantum(int sock_cpu)
 		return;
 	};
 
+	unsigned char actual_status = process_get_status(pcb->unique_id);
 	unsigned char next_status;
 
-	if(process_get_status(pcb->unique_id) == PROCESS_BLOCKED)
+	if( actual_status == PROCESS_BLOCKED)
 		next_status = PROCESS_BLOCKED;
+	else if( actual_status == PROCESS_ERROR)
+		next_status = PROCESS_EXIT;
 	else
 		next_status = PROCESS_READY;
 
@@ -1739,8 +1742,6 @@ void asignar_valor_VariableCompartida(int sock_cpu, char* global_name, int value
 		return;
 	}
 
-	//TODO: No tengo que abortar. Tengo que abortar en QUANTUM_FINISH
-
 	if(mensaje.tipo == ERROR)
 	{
 		int pid = get_process_id_by_sock_cpu(sock_cpu);
@@ -1765,28 +1766,34 @@ void imprimir(int sock_cpu,int valor)
 
 	mensaje.tipo = IMPRIMIR;
 	mensaje.datosNumericos = valor;
-	//obtengo el sock program
 
-	log_info(logger,"Envie mensaje imprimir a Programa");
+
+	t_process* process = process_get(-1,-1, sock_cpu);
+
+	sock_prog = process->program_socket; //Obtengo el socket del programa
+
+	if(process->status != PROCESS_ERROR)
+	{
+		if((numbytes=write(sock_prog,&mensaje,size_msg))<=0)
+		{
+			log_error(logger, "No se pudo enviar mensaje Imprimir a Programa %d", process->pid);
+			process->status = PROCESS_ERROR;
+			process->program_socket = -1;
+			close(sock_prog);
+			return ;
+		}
+	}
 
 	if((numbytes=write(sock_cpu,&mensaje,size_msg))<=0)
 	{
-		log_error(logger, "Verificar casos de error");
-		// TODO: Verificar casos de error
-		close(sock_cpu);
-		cpu_remove(sock_cpu);
+		log_error(logger, "CPU no conectada");
+		pthread_mutex_lock(&mutex_pedidos);
+		queue_push(queue_rr,pedido_create(process->pid,PROCESS_EXECUTE,PROCESS_READY));
+		pthread_mutex_unlock(&mutex_pedidos);
 		return;
 	}
 
-	sock_prog = get_sock_prog_by_sock_cpu(sock_cpu);
-
-	if((numbytes=write(sock_prog,&mensaje,size_msg))<=0)
-	{
-		log_error(logger, "Verificar casos de error");
-		// TODO: Verificar casos de error
-		close(sock_prog);
-		return ;
-	}
+	return;
 }
 
 void imprimirTexto(int sock_cpu,int valor)
@@ -1803,30 +1810,37 @@ void imprimirTexto(int sock_cpu,int valor)
 		return;
 	}
 
+	t_process* process = process_get(-1,-1,sock_cpu);
+	sock_prog = process->program_socket;
+
 	if((numbytes=read(sock_cpu,buffer,valor))<=0)
 	{
-		log_error(logger, "Error en el read en imprimirTexto");
+		log_error(logger, "Error en el read de CPU en imprimirTexto");
+		pthread_mutex_lock(&mutex_pedidos);
+		queue_push(queue_rr,pedido_create(process->pid,PROCESS_EXECUTE,PROCESS_READY));
+		pthread_mutex_unlock(&mutex_pedidos);
 		return;
 	}
 
-	sock_prog = get_sock_prog_by_sock_cpu(sock_cpu);
-
-	mensaje.id_proceso = KERNEL;
-	mensaje.tipo = IMPRIMIRTEXTO;
-	mensaje.datosNumericos = valor;
-
-	if((numbytes=send(sock_prog,&mensaje,size_msg,0))<=0)
+	if(process->status != PROCESS_ERROR)
 	{
-		log_error(logger, "Error enviando tamanio al programa");
-		close(sock_prog);
-		return;
-	}
+		mensaje.id_proceso = KERNEL;
+		mensaje.tipo = IMPRIMIRTEXTO;
+		mensaje.datosNumericos = valor;
 
-	if((numbytes=send(sock_prog,buffer,mensaje.datosNumericos,0))<=0)
-	{
-		log_error(logger, "Error enviando el texto al programa");
-		close(sock_prog);
-		return;
+		if((numbytes=send(sock_prog,&mensaje,size_msg,0))<=0)
+		{
+			log_error(logger, "Error enviando tamanio al programa");
+			close(sock_prog);
+			return;
+		}
+
+		if((numbytes=send(sock_prog,buffer,mensaje.datosNumericos,0))<=0)
+		{
+			log_error(logger, "Error enviando el texto al programa");
+			close(sock_prog);
+			return;
+		}
 	}
 
 	mensaje.id_proceso = KERNEL;
@@ -1836,7 +1850,10 @@ void imprimirTexto(int sock_cpu,int valor)
 	if((numbytes = write(sock_cpu, &mensaje, size_msg)) <= 0)
 	{
 		log_error(logger, "Error enviando confirmacion a cpu.");
-		close(sock_cpu);
+		log_error(logger, "Error en el read de CPU en imprimirTexto");
+		pthread_mutex_lock(&mutex_pedidos);
+		queue_push(queue_rr,pedido_create(process->pid,PROCESS_EXECUTE,PROCESS_READY));
+		pthread_mutex_unlock(&mutex_pedidos);
 		return;
 	}
 }
@@ -2003,7 +2020,6 @@ void process_update(int process_id, unsigned char previous_status, unsigned char
 	sem_t* mutex_list_next;
 	int flag_found = 0;
 	int i;
-	t_process* process;
 	t_pcb* pcb;
 
 	log_info(logger,"Inicia process_update");
@@ -2025,22 +2041,7 @@ void process_update(int process_id, unsigned char previous_status, unsigned char
 		case PROCESS_EXIT: to = list_pcb_exit; next_status = PROCESS_EXIT; mutex_list_next = &mutex_exit_queue; break;
 	}
 
-	sem_wait(&mutex_process_list);
-	for(i=0;i < list_size(list_process);i++)
-	{
-		process = list_get(list_process,i);
-
-		if(process->pid == process_id)
-		{
-			process->status = next_status;
-			flag_found = 1;
-			break;
-		}
-	}
-	sem_post(&mutex_process_list);
-
-	if(flag_found == 0)
-		log_error(logger, "Process ID %d no encontrado en lista de procesos", process_id);
+	process_set_status(process_id,next_status);
 
 	flag_found = 0;
 
@@ -2382,8 +2383,6 @@ void planificador_rr(void)
 						sem_wait(&mutex_cpu_list);
 						cpu_set_status(cpu_socket, CPU_AVAILABLE);
 						sem_post(&mutex_cpu_list);
-						// Lo deberia hacer el PLP
-						//umv_destroy_segment(new_pedido->process_id); //Envio a la UMV el dato para que destruya segmentos
 						sem_post(&sem_plp);
 						break;
 					}
@@ -2526,20 +2525,6 @@ int buscar_Mayor(int a, int b, int c)
 		return mayor;
 	else
 		return c;
-}
-
-/*
- * Function: escuchar_umv
- * Purpose: Returns the Max value between 3 elements
- * Created on: 11/05/2014
- * Author: SilverStack
-*/
-
-void escuchar_umv(void)
-{
-	// TODO: Desarrollar Funcion
-	log_error(logger, "Funcion escuchar_umv() aun no desarrollada");
-	return;
 }
 
 /*
@@ -2869,12 +2854,16 @@ void program_exit(int pid)
 	process = list_remove(list_process, indice_buscado);
 	sem_post(&mutex_process_list);
 
-	index = 0;
-	indice_buscado = 0;
-
 	if(flag_process_found == 0 )
 	{
 		log_error(logger, "PID %d no encontrado en lista de procesos", process_id);
+		return;
+	}
+
+	if(process->program_socket == -1)
+	{
+		process_destroy(process);
+		free(buffer);
 		return;
 	}
 
@@ -3033,7 +3022,8 @@ void process_set_status(int process_id, unsigned char status)
 		process = list_get(list_process,i);
 		if(process->pid == process_id)
 		{
-			process->status = status;
+			if(process->status != PROCESS_ERROR)
+				process->status = status;
 			break;
 		}
 	}
@@ -3068,4 +3058,22 @@ unsigned char process_get_status(int process_id)
 	log_error(logger,"No se encontro el proceso = %d", process_id);
 	sem_post(&mutex_process_list);
 	return -1;
+}
+
+
+t_process* process_get(int pid, int sock_program, int sock_cpu)
+{
+	int i;
+	t_process* process;
+
+	for(i=0;i < list_size(list_process);i++)
+	{
+		process = list_get(list_process,i);
+		if(process->pid == pid || process->current_cpu_socket == sock_cpu || process->program_socket == sock_program )
+		{
+			return process;
+		}
+	}
+	log_error(logger,"No se encontro el proceso");
+	return NULL;
 }

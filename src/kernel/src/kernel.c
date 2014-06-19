@@ -99,36 +99,30 @@ int main(int argc, char *argv[])
 	FD_SET (sock_cpu, &master);
 
 	fdmax = buscar_Mayor(sock_program, sock_umv, sock_cpu);
-	//log_info(logger, sock_umv = %d \n", sock_umv);
 
 	exit_status = 1;
-
-	int flag;
 
 	while(exit_status == 1)
 	{
 		read_fds = master;
-		flag = 0;
+
 
 		if (select(fdmax + 1, &read_fds, NULL, NULL, NULL) == -1)
 		{
 			log_error(logger, "Error en funcion select");
 			log_error(logger, "fdmax = %d", fdmax);
-			sleep(1);
-			flag = 1;
+			exit_status = 0;
 		}
 
-		for (i = 0; i <= fdmax && flag == 0; i++)
+		for (i = 0; i <= fdmax; i++)
 		{
 			if (FD_ISSET(i, &read_fds))
 			{
 				if(i == sock_umv)
 				{
-					//escuchar_umv();
 					log_error(logger,"Se cayo la UMV");
 					close(sock_umv);
-					exit_status
-					= 1;
+					exit_status = 0;
 					break;
 				}
 
@@ -178,9 +172,10 @@ int main(int argc, char *argv[])
 
 				if(is_Connected_Program(i) == 0)
 				{
-					//TODO: Cerrar Socket Programa
-					process_remove_by_socket(i);
-					log_info(logger,"Select detecto actividad en Programa Existente");
+					// El programa se cerró.
+					//TODO: Desarrrollar funcion que busque el proceso dado un sock_program
+					FD_CLR(i, &master);
+					log_info(logger,"Se cerror el programa.");
 					continue;
 				}
 
@@ -193,11 +188,12 @@ int main(int argc, char *argv[])
 						cpu_remove(i);
 						sem_wait(&sem_cpu_list); // Hay un CPU Disponible menos
 						log_info(logger,"Se removio un cpu de la lista de CPU");
-						// TODO: ¿Abortar Programa en ejecucion?
 						continue;
 					}
 					continue;
 				}
+
+				FD_CLR(i, &master);
 			}
 		} /* for (i = 0; i <= fdmax; i++) */
 	}/* for(;;) */

@@ -16,6 +16,7 @@
 
 #define HANDSHAKE 100
 #define HANDSHAKEOK 101
+#define SALIR 110 // Programa
 #define CPU 200
 #define UMV 201
 #define KERNEL 202

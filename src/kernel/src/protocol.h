@@ -152,9 +152,6 @@ typedef struct _t_pedido {
 #define PROCESS_EXIT 0x44 // Process Node Status
 #define PROCESS_ERROR 0x45 // Process Node Status
 
-//TODO: Definir en SylverStack.h
-#define SALIR 110 // Programa
-
 t_log *logger;
 t_list *list_io;
 t_list *list_pcb_new;
@@ -231,7 +228,6 @@ int umv_send_segment(int pid, char* buffer, int tamanio);
 int servidor_Programa(void);
 int servidor_CPU(void);
 int buscar_Mayor(int a, int b, int c);
-void escuchar_umv(void);
 int is_Connected_Program(int sock_program);
 void process_remove_by_socket(int socket);
 void planificador_rr(void);
@@ -249,6 +245,7 @@ int get_sock_prog_by_sock_cpu(int sock_cpu);
 void cpu_set_status(int socket, unsigned char status);
 unsigned char process_get_status(int process_id);
 void process_set_status(int process_id, unsigned char status);
+t_process* process_get(int pid, int sock_program, int sock_cpu);
 
 
 int get_Segment_Start(int offset);					// A revisar si va o no va
