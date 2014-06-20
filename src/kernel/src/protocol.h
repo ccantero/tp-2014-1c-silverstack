@@ -172,11 +172,13 @@ int sock_umv, process_Id, cantidad_cpu, cantidad_procesos_sistema, stack_size;
 char myip[16],umv_ip[16];
 sem_t free_io_queue;
 
-sem_t mutex_new_queue;
-sem_t mutex_ready_queue;
-sem_t mutex_execute_queue;
-sem_t mutex_block_queue;
-sem_t mutex_exit_queue;
+
+pthread_mutex_t mutex_pedidos;
+pthread_mutex_t mutex_new_queue;
+pthread_mutex_t mutex_ready_queue;
+pthread_mutex_t mutex_execute_queue;
+pthread_mutex_t mutex_block_queue;
+pthread_mutex_t mutex_exit_queue;
 
 
 sem_t mutex_process_list;
@@ -185,7 +187,7 @@ sem_t sem_pcp;
 sem_t mutex_cpu_list;
 sem_t sem_cpu_list;
 
-pthread_mutex_t mutex_pedidos;
+
 
 int exit_status;
 
@@ -246,6 +248,7 @@ void cpu_set_status(int socket, unsigned char status);
 unsigned char process_get_status(int process_id);
 void process_set_status(int process_id, unsigned char status);
 t_process* process_get(int pid, int sock_program, int sock_cpu);
+t_nodo_cpu* cpu_get_next_available(int pid);
 
 
 int get_Segment_Start(int offset);					// A revisar si va o no va
