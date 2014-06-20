@@ -25,6 +25,12 @@
 #include <semaphore.h>
 #include <signal.h>
 
+typedef struct {
+	char id;
+	int valor;
+	int dir;
+} t_variable;
+
 t_pcb pcb;
 int port_kernel;
 int port_umv;
@@ -43,7 +49,9 @@ int proceso_bloqueado = 0;
 int proceso_finalizo = 0;
 t_log *logger;
 t_config *config;
+t_list *variables;
 int seguirEjecutando;
+t_variable *nueva_var;
 
 void ConectarA(int *sock, int *puerto, char *ip, struct sockaddr_in *their_addr, t_log *logger);
 t_puntero silverstack_definirVariable(t_nombre_variable var);

@@ -33,12 +33,12 @@ AnSISOP_kernel primitivasKernel = {
 // main
 int main(int argc, char *argv[])
 {
-	// TODO Regenerar diccionario de variables pidiendo el segmento de stack
 	signal(SIGINT, depuracion);
 	signal(SIGUSR1, depuracion);
 	// Definicion de variables
 	seguirEjecutando = 1; // Mediante la señal SIGUSR1 se puede dejar de ejecutar el cpu
 	// Obtengo datos de archivo de configuracion y se crea el logger
+	variables = list_create();
 	config = config_create("../cpu.config");
 	strcpy(umvip, config_get_string_value(config, "UMV_IP"));
 	strcpy(kernelip, config_get_string_value(config, "KERNEL_IP"));
@@ -89,6 +89,7 @@ int main(int argc, char *argv[])
 	int pos_en_instruccion = 0;
 	char buf[82]; // Variable auxiliar para almacenar la linea de codigo
 	char instruccion[82];
+	char buffer_stack[100];
 	int bufferaux[2];
 	recv(sockKernel, &mensaje, sizeof(t_mensaje), 0);
 	quantum = mensaje.datosNumericos;
@@ -98,6 +99,25 @@ int main(int argc, char *argv[])
 		// Recibo el pcb del kernel
 		recv(sockKernel, &pcb, sizeof(t_pcb), 0);
 		log_info(logger,"Recibi PCB de Kernel");
+		// Regenero diccionario de variables
+		msg_solicitud_bytes.base = pcb.stack_pointer;
+		msg_solicitud_bytes.offset = 0;
+		msg_solicitud_bytes.tamanio = pcb.context_actual * 5;
+		msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+		mensaje.tipo = SOLICITUDBYTES;
+		send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+		send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+		send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
+		recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+		recv(sockUmv, &buffer_stack, (pcb.context_actual * 5), 0);
+		for (i = 0; i < pcb.context_actual; i++)
+		{
+			nueva_var = (t_variable *)malloc(sizeof(t_variable));
+			nueva_var->id = buffer_stack[i * 5];
+			nueva_var->dir = pcb.stack_pointer + (i * 5);
+			memcpy(&nueva_var->valor, &buffer_stack[(i * 5) + 1], 4);
+			list_add(variables, nueva_var);
+		}
 		if(pcb.program_counter == 0)
 		{
 			pcb.program_counter++;
@@ -176,6 +196,8 @@ int main(int argc, char *argv[])
 				break;
 			}
 		}
+		// Libero el diccionario de variables
+		list_clean(variables);
 		// Aviso al kernel que termino el quantum del proceso y devuelvo pcb actualizado
 		if (proceso_finalizo == 1)
 		{
@@ -201,6 +223,7 @@ int main(int argc, char *argv[])
 	// Libero memoria
 	log_destroy(logger);
 	config_destroy(config);
+	free(variables);
 	// Cierro los sockets
 	close(sockKernel);
 	close(sockUmv);
@@ -253,6 +276,10 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 	{
 		ptr = pcb.stack_pointer + (5 * pcb.context_actual);
 		pcb.context_actual++;
+		nueva_var = (t_variable *)malloc(sizeof(t_variable));
+		nueva_var->id = var;
+		nueva_var->dir = ptr;
+		list_add(variables, nueva_var);
 	}
 	else
 	{
@@ -263,42 +290,63 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 
 t_puntero silverstack_obtenerPosicionVariable(t_nombre_variable var)
 {
-	// 1) Pedir a la UMV la posicion de la variable var
-	// 2) Calcular el desplazamiento respecto del stack
+	// 1) Busco la direccion de la variable en el diccionario de variables y la devuelvo
 	t_puntero ptr = 0;
-	char buffer[5];
-	int offset = 0;
-	// Busco la variable en el diccionario de variables en el stack
-	int no_encontre = 1;
-	while(no_encontre)
+	int i = 0;
+	for (i = 0; i < list_size(variables); i++)
 	{
-		msg_solicitud_bytes.base = pcb.stack_pointer;
-		msg_solicitud_bytes.offset = offset;
-		msg_solicitud_bytes.tamanio = 5;
-		msg_cambio_proceso_activo.id_programa = pcb.unique_id;
-		mensaje.tipo = SOLICITUDBYTES;
-		send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-		send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
-		send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
-		recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-		recv(sockUmv, &buffer, sizeof(buffer), 0);
-		if (buffer[0] == var)
+		nueva_var = list_get(variables, i);
+		if (nueva_var->id == var)
 		{
-			no_encontre = 0;
-		}
-		else
-		{
-			offset += 5;
+			break;
 		}
 	}
-	ptr = msg_solicitud_bytes.base + offset;
+	ptr = nueva_var->dir;
 	return ptr;
+
+	/*
+		while(no_encontre)
+		{
+			msg_solicitud_bytes.base = pcb.stack_pointer;
+			msg_solicitud_bytes.offset = offset;
+			msg_solicitud_bytes.tamanio = 5;
+			msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+			mensaje.tipo = SOLICITUDBYTES;
+			send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+			send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+			send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
+			recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+			recv(sockUmv, &buffer, sizeof(buffer), 0);
+			if (buffer[0] == var)
+			{
+				no_encontre = 0;
+			}
+			else
+			{
+				offset += 5;
+			}
+		}
+		*/
 }
 
 t_valor_variable silverstack_dereferenciar(t_puntero dir_var)
 {
 	// 1) Se lee el valor de la variable almacenada en dir_var
 	t_valor_variable valor = 0;
+	int i = 0;
+	for (i = 0; i < list_size(variables); i++)
+	{
+		nueva_var = list_get(variables, i);
+		if (nueva_var->dir == (int)dir_var)
+		{
+			break;
+		}
+	}
+	valor = nueva_var->valor;
+	return valor;
+
+
+	/*
 	char buffer[5];
 	msg_solicitud_bytes.base = pcb.stack_pointer;
 	msg_solicitud_bytes.offset = dir_var - pcb.stack_pointer;
@@ -311,7 +359,7 @@ t_valor_variable silverstack_dereferenciar(t_puntero dir_var)
 	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 	recv(sockUmv, &buffer, sizeof(buffer), 0);
 	memcpy(&valor, &buffer[1], 4);
-	return valor;
+	*/
 }
 
 void silverstack_asignar(t_puntero dir_var, t_valor_variable valor)
@@ -330,25 +378,32 @@ void silverstack_asignar(t_puntero dir_var, t_valor_variable valor)
 	buffer = valor;
 	send(sockUmv, &buffer, sizeof(buffer), 0);
 	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	int i = 0;
+	for (i = 0; i < list_size(variables); i++)
+	{
+		nueva_var = list_get(variables, i);
+		if (nueva_var->dir == (int)dir_var)
+		{
+			break;
+		}
+	}
+	nueva_var->valor = valor;
 }
 
 void silverstack_imprimir(t_valor_variable valor)
 {
 	// 1) Envio al kernel el valor para que lo imprima la correspondiente consola
-	log_info(logger, "Comienzo primitiva silverstack_imprimir");
 	t_mensaje msg;
 	msg.id_proceso = CPU;
 	msg.tipo = IMPRIMIR;
 	msg.datosNumericos = valor;
 	send(sockKernel, &msg, sizeof(t_mensaje), 0);
 	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
-	log_info(logger, "Fin primitiva silverstack_imprimir");
 }
 
 void silverstack_imprimirTexto(char *texto)
 {
 	// 1) Envio al kernel la cadena de texto para que la reenvíe a la correspondiente consola
-	log_info(logger, "Comienzo primitiva imprimir texto");
 	t_mensaje msg;
 	msg.id_proceso = CPU;
 	msg.tipo = IMPRIMIRTEXTO;
@@ -358,7 +413,6 @@ void silverstack_imprimirTexto(char *texto)
 	strcpy(buf, texto);
 	send(sockKernel, &buf, sizeof(buf), 0);
 	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
-	log_info(logger, "Fin primitiva imprimir texto");
 }
 
 t_valor_variable silverstack_obtenerValorCompartida(t_nombre_compartida varCom)
@@ -475,7 +529,6 @@ void silverstack_irAlLabel(t_nombre_etiqueta etiqueta)
 
 void silverstack_llamarSinRetorno(t_nombre_etiqueta etiqueta)
 {
-	// TODO ir al label
 	// 1) Preservo el contexto actual
 	// 2) Preservo el program counter
 	// 3) Asigno el nuevo contexto al puntero de stack
@@ -509,6 +562,7 @@ void silverstack_llamarSinRetorno(t_nombre_etiqueta etiqueta)
 	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 	pcb.stack_pointer += 4;
 	pcb.context_actual = 0;
+	silverstack_irAlLabel(etiqueta);
 	log_info(logger, "Fin primitiva silverstack_llamarSinRetorno");
 }
 
@@ -580,6 +634,7 @@ void depuracion(int senial)
 		log_info(logger, "Inicia depuracion de variables y memoria.");
 		config_destroy(config);
 		log_destroy(logger);
+		free(variables);
 		exit(0);
 		break;
 	case SIGUSR1:
