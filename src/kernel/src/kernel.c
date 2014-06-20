@@ -11,6 +11,7 @@
 /* Header File */
 
 #include "protocol.h"
+#include <errno.h>
 
 int main(int argc, char *argv[])
 {
@@ -49,11 +50,7 @@ int main(int argc, char *argv[])
 	cantidad_cpu = 0;
 	cantidad_procesos_sistema = 0;
 
-	sem_init(&mutex_new_queue, 0, 1);
-	sem_init(&mutex_ready_queue, 0, 1);
-	sem_init(&mutex_execute_queue, 0, 1);
-	sem_init(&mutex_block_queue, 0, 1);
-	sem_init(&mutex_exit_queue, 0, 1);
+
 
 	sem_init(&mutex_process_list, 0, 1);
 
@@ -62,12 +59,41 @@ int main(int argc, char *argv[])
 
 	sem_init(&sem_plp, 0, 0); // Empieza en cero porque tiene que bloquearse hasta que aparezca algo
 	sem_init(&sem_pcp, 0, 0); // Empieza en cero porque tiene que bloquearse hasta que aparezca algo
-	sem_init(&sem_cpu_list, 0, 0); // Empieza en cero porque tiene que bloquearse hasta que un cpu se conecte
 	sem_init(&mutex_cpu_list, 0, 1);
 
 	if (pthread_mutex_init(&mutex_pedidos, NULL) != 0)
 	{
-		printf("ERROR - No se pudo inicializar semaforo mutex_pedidos\n");
+		printf("ERROR - No se pudo inicializar mutex mutex_pedidos\n");
+		return 1;
+	}
+
+	if (pthread_mutex_init(&mutex_new_queue, NULL) != 0)
+	{
+		printf("ERROR - No se pudo inicializar mutex mutex_new_queue\n");
+		return 1;
+	}
+
+	if (pthread_mutex_init(&mutex_ready_queue, NULL) != 0)
+	{
+		printf("ERROR - No se pudo inicializar mutex mutex_ready_queue\n");
+		return 1;
+	}
+
+	if (pthread_mutex_init(&mutex_execute_queue, NULL) != 0)
+	{
+		printf("ERROR - No se pudo inicializar mutex mutex_execute_queue\n");
+		return 1;
+	}
+
+	if (pthread_mutex_init(&mutex_block_queue, NULL) != 0)
+	{
+		printf("ERROR - No se pudo inicializar mutex mutex_block_queue\n");
+		return 1;
+	}
+
+	if (pthread_mutex_init(&mutex_exit_queue, NULL) != 0)
+	{
+		printf("ERROR - No se pudo inicializar mutex mutex_exit_queue\n");
 		return 1;
 	}
 
@@ -99,36 +125,31 @@ int main(int argc, char *argv[])
 	FD_SET (sock_cpu, &master);
 
 	fdmax = buscar_Mayor(sock_program, sock_umv, sock_cpu);
-	//log_info(logger, sock_umv = %d \n", sock_umv);
 
 	exit_status = 1;
-
-	int flag;
 
 	while(exit_status == 1)
 	{
 		read_fds = master;
-		flag = 0;
+
 
 		if (select(fdmax + 1, &read_fds, NULL, NULL, NULL) == -1)
 		{
 			log_error(logger, "Error en funcion select");
-			log_error(logger, "fdmax = %d", fdmax);
-			sleep(1);
-			flag = 1;
+			log_error(logger,"errno = %d", errno);
+			log_error(logger,"strerror = %s", strerror(errno));
+			exit(1);
 		}
 
-		for (i = 0; i <= fdmax && flag == 0; i++)
+		for (i = 0; i <= fdmax; i++)
 		{
 			if (FD_ISSET(i, &read_fds))
 			{
 				if(i == sock_umv)
 				{
-					//escuchar_umv();
 					log_error(logger,"Se cayo la UMV");
 					close(sock_umv);
-					exit_status
-					= 1;
+					exit_status = 0;
 					break;
 				}
 
@@ -153,7 +174,6 @@ int main(int argc, char *argv[])
 
 					if(new_socket == -1)
 					{
-						//FD_CLR(i, &descriptoresLectura);
 						log_error(logger,"No se pudo agregar una cpu");
 						continue;
 					}
@@ -164,10 +184,11 @@ int main(int argc, char *argv[])
 					list_add(list_cpu, cpu_create(new_socket));
 					sem_post(&mutex_cpu_list);
 
-					log_info(logger,"Se agrego un cpu a la lista de CPU socket %d", new_socket);
+					log_info(logger,"[CPU] - Se agrego un cpu a la lista de CPU socket %d", new_socket);
 
 					if(cantidad_cpu < multiprogramacion)
-					{	sem_post(&sem_cpu_list); // Hay un nuevo CPU Disponible
+					{
+						sem_post(&sem_cpu_list); // Hay un nuevo CPU Disponible
 					}
 
 					if(fdmax < new_socket)
@@ -178,9 +199,11 @@ int main(int argc, char *argv[])
 
 				if(is_Connected_Program(i) == 0)
 				{
-					//TODO: Cerrar Socket Programa
-					process_remove_by_socket(i);
-					log_info(logger,"Select detecto actividad en Programa Existente");
+					// El programa se cerró.
+					//TODO: Desarrrollar funcion que busque el proceso dado un sock_program
+					FD_CLR(i, &master);
+					close(i);
+					log_info(logger,"Se cerro el programa.");
 					continue;
 				}
 
@@ -192,12 +215,14 @@ int main(int argc, char *argv[])
 						FD_CLR(i, &master);
 						cpu_remove(i);
 						sem_wait(&sem_cpu_list); // Hay un CPU Disponible menos
-						log_info(logger,"Se removio un cpu de la lista de CPU");
-						// TODO: ¿Abortar Programa en ejecucion?
+						log_info(logger,"[CPU] - Se removio un cpu de la lista de CPU");
 						continue;
 					}
 					continue;
 				}
+
+				close(i);
+				FD_CLR(i, &master);
 			}
 		} /* for (i = 0; i <= fdmax; i++) */
 	}/* for(;;) */
