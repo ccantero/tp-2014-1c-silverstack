@@ -58,27 +58,35 @@ int main(int argc, char *argv[])
 	mensaje.tipo = HANDSHAKE;
 	strcpy(mensaje.mensaje, "Hola kernel.");
 	send(sockKernel, &mensaje, sizeof(t_mensaje), 0);
-	recv(sockKernel, &mensaje, sizeof(t_mensaje), 0);
+	if (recv(sockKernel, &mensaje, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "Kernel desconectado.");
+		exit(1);
+	}
 	if (mensaje.tipo == HANDSHAKEOK)
 	{
 		log_info(logger, "Handshake con kernel satisfactorio.");
 	}
 	else
 	{
-		log_info(logger, "Handshake con kernel erroneo.");
+		log_error(logger, "Handshake con kernel erroneo.");
 		exit(1);
 	}
 	// Handshake con la UMV
 	msg_handshake.tipo = CPU;
 	send(sockUmv, &msg_handshake, sizeof(t_msg_handshake), 0);
-	recv(sockUmv, &msg_handshake, sizeof(t_msg_handshake), 0);
+	if (recv(sockUmv, &msg_handshake, sizeof(t_msg_handshake), 0) == 0)
+	{
+		log_error(logger, "UMV desconectada.");
+		exit(1);
+	}
 	if (msg_handshake.tipo == UMV)
 	{
 		log_info(logger, "Handshake con UMV satisfactorio.");
 	}
 	else
 	{
-		log_info(logger, "Handshake con UMV erroneo.");
+		log_error(logger, "Handshake con UMV erroneo.");
 		exit(1);
 	}
 	int i;
@@ -91,32 +99,51 @@ int main(int argc, char *argv[])
 	char instruccion[82];
 	char buffer_stack[100];
 	int bufferaux[2];
-	recv(sockKernel, &mensaje, sizeof(t_mensaje), 0);
+	if (recv(sockKernel, &mensaje, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "Kernel desconectado.");
+		exit(1);
+	}
 	quantum = mensaje.datosNumericos;
 	// Bucle principal del proceso
 	while(seguirEjecutando)
 	{
 		// Recibo el pcb del kernel
-		recv(sockKernel, &pcb, sizeof(t_pcb), 0);
+		if (recv(sockKernel, &pcb, sizeof(t_pcb), 0) == 0)
+		{
+			log_error(logger, "Kernel desconectado.");
+			exit(1);
+		}
 		log_info(logger,"Recibi PCB de Kernel");
 		// Regenero diccionario de variables
-		msg_solicitud_bytes.base = pcb.stack_pointer;
-		msg_solicitud_bytes.offset = 0;
-		msg_solicitud_bytes.tamanio = pcb.context_actual * 5;
-		msg_cambio_proceso_activo.id_programa = pcb.unique_id;
-		mensaje.tipo = SOLICITUDBYTES;
-		send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-		send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
-		send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
-		recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-		recv(sockUmv, &buffer_stack, (pcb.context_actual * 5), 0);
-		for (i = 0; i < pcb.context_actual; i++)
+		if (pcb.context_actual != 0)
 		{
-			nueva_var = (t_variable *)malloc(sizeof(t_variable));
-			nueva_var->id = buffer_stack[i * 5];
-			nueva_var->dir = pcb.stack_pointer + (i * 5);
-			memcpy(&nueva_var->valor, &buffer_stack[(i * 5) + 1], 4);
-			list_add(variables, nueva_var);
+			msg_solicitud_bytes.base = pcb.stack_pointer;
+			msg_solicitud_bytes.offset = 0;
+			msg_solicitud_bytes.tamanio = pcb.context_actual * 5;
+			msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+			mensaje.tipo = SOLICITUDBYTES;
+			send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+			send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+			send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
+			if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
+			{
+				log_error(logger, "UMV desconectada.");
+				exit(1);
+			}
+			if (recv(sockUmv, &buffer_stack, (pcb.context_actual * 5), 0) == 0)
+			{
+				log_error(logger, "UMV desconectada.");
+				exit(1);
+			}
+			for (i = 0; i < pcb.context_actual; i++)
+			{
+				nueva_var = (t_variable *)malloc(sizeof(t_variable));
+				nueva_var->id = buffer_stack[i * 5];
+				nueva_var->dir = pcb.stack_pointer + (i * 5);
+				memcpy(&nueva_var->valor, &buffer_stack[(i * 5) + 1], 4);
+				list_add(variables, nueva_var);
+			}
 		}
 		if(pcb.program_counter == 0)
 		{
@@ -140,8 +167,16 @@ int main(int argc, char *argv[])
 				send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 				send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
 				// Espero la respuesta de la UMV
-				recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-				recv(sockUmv, &bufferaux, 8, 0);
+				if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
+				{
+					log_error(logger, "UMV desconectada.");
+					exit(1);
+				}
+				if (recv(sockUmv, &bufferaux, 8, 0) == 0)
+				{
+					log_error(logger, "UMV desconectada.");
+					exit(1);
+				}
 				// Preparo mensaje para la UMV
 				msg_solicitud_bytes.base = pcb.code_segment;
 				msg_solicitud_bytes.offset = bufferaux[0];
@@ -153,8 +188,16 @@ int main(int argc, char *argv[])
 				send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 				send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
 				// Espero la respuesta de la UMV
-				recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-				recv(sockUmv, &buf, bufferaux[1], 0);
+				if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
+				{
+					log_error(logger, "UMV desconectada.");
+					exit(1);
+				}
+				if (recv(sockUmv, &buf, bufferaux[1], 0) == 0)
+				{
+					log_error(logger, "UMV desconectada.");
+					exit(1);
+				}
 				buf[bufferaux[1]] = '\0';
 				// Verifico limites de instruccion
 				while (salir_bucle != 1)
@@ -271,7 +314,11 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 	send(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
 	send(sockUmv, buffaux, 5, 0);
-	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "UMV desconectada.");
+		exit(1);
+	}
 	if (mensaje.tipo == ENVIOBYTES)
 	{
 		ptr = pcb.stack_pointer + (5 * pcb.context_actual);
@@ -377,7 +424,11 @@ void silverstack_asignar(t_puntero dir_var, t_valor_variable valor)
 	send(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
 	buffer = valor;
 	send(sockUmv, &buffer, sizeof(buffer), 0);
-	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "UMV desconectada.");
+		exit(1);
+	}
 	int i = 0;
 	for (i = 0; i < list_size(variables); i++)
 	{
@@ -398,7 +449,11 @@ void silverstack_imprimir(t_valor_variable valor)
 	msg.tipo = IMPRIMIR;
 	msg.datosNumericos = valor;
 	send(sockKernel, &msg, sizeof(t_mensaje), 0);
-	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
+	if (recv(sockKernel, &msg, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "Kernel desconectado.");
+		exit(1);
+	}
 }
 
 void silverstack_imprimirTexto(char *texto)
@@ -412,7 +467,11 @@ void silverstack_imprimirTexto(char *texto)
 	char buf[strlen(texto)];
 	strcpy(buf, texto);
 	send(sockKernel, &buf, sizeof(buf), 0);
-	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
+	if (recv(sockKernel, &msg, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "Kernel desconectado.");
+		exit(1);
+	}
 }
 
 t_valor_variable silverstack_obtenerValorCompartida(t_nombre_compartida varCom)
@@ -426,7 +485,11 @@ t_valor_variable silverstack_obtenerValorCompartida(t_nombre_compartida varCom)
 	msg.tipo = VARCOMREQUEST;
 	strcpy(msg.mensaje, varCom);
 	send(sockKernel, &msg, sizeof(t_mensaje), 0);
-	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
+	if (recv(sockKernel, &msg, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "Kernel desconectado.");
+		exit(1);
+	}
 	valor = msg.datosNumericos;
 	log_info(logger, "Fin primitiva silverstack_obtenerValorCompartida");
 	return valor;
@@ -442,7 +505,11 @@ void silverstack_entradaSalida(t_nombre_dispositivo dispositivo, int tiempo)
 	msg.datosNumericos = tiempo;
 	strcpy(msg.mensaje, dispositivo);
 	send(sockKernel, &msg, sizeof(t_mensaje), 0);
-	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
+	if (recv(sockKernel, &msg, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "Kernel desconectado.");
+		exit(1);
+	}
 	proceso_bloqueado = 1;
 	log_info(logger, "Fin primitiva silverstack_entradaSalida");
 }
@@ -472,8 +539,16 @@ void silverstack_finalizar()
 		send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 		send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 		send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
-		recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-		recv(sockUmv, &buffer, 4, 0);
+		if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
+		{
+			log_error(logger, "UMV desconectada.");
+			exit(1);
+		}
+		if (recv(sockUmv, &buffer, 4, 0) == 0)
+		{
+			log_error(logger, "UMV desconectada.");
+			exit(1);
+		}
 		pcb.program_counter = buffer;
 		// Busco direccion del contexto anterior
 		msg_solicitud_bytes.base = pcb.stack_pointer - 8;
@@ -484,8 +559,16 @@ void silverstack_finalizar()
 		send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 		send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 		send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
-		recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-		recv(sockUmv, &buffer, 4, 0);
+		if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
+		{
+			log_error(logger, "UMV desconectada.");
+			exit(1);
+		}
+		if (recv(sockUmv, &buffer, 4, 0) == 0)
+		{
+			log_error(logger, "UMV desconectada.");
+			exit(1);
+		}
 		nuevo_contexto = (pcb.stack_pointer - buffer - 8) / 5;
 		pcb.context_actual = nuevo_contexto;
 		pcb.stack_pointer = buffer;
@@ -503,7 +586,11 @@ t_valor_variable silverstack_asignarValorCompartida(t_nombre_compartida varCom, 
 	msg.datosNumericos = valor;
 	strcpy(msg.mensaje, varCom);
 	send(sockKernel, &msg, sizeof(t_mensaje), 0);
-	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
+	if (recv(sockKernel, &msg, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "Kernel desconectado.");
+		exit(1);
+	}
 	log_info(logger, "Fin primitiva silverstack_asignarValorCompartida");
 	return valor;
 }
@@ -521,8 +608,16 @@ void silverstack_irAlLabel(t_nombre_etiqueta etiqueta)
 	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 	send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
-	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-	recv(sockUmv, &buffer, sizeof(buffer), 0);
+	if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "UMV desconectada.");
+		exit(1);
+	}
+	if (recv(sockUmv, &buffer, sizeof(buffer), 0) == 0)
+	{
+		log_error(logger, "UMV desconectada.");
+		exit(1);
+	}
 	dir_instruccion = metadata_buscar_etiqueta(etiqueta, buffer, pcb.size_etiquetas_index);
 	pcb.program_counter = dir_instruccion;
 }
@@ -547,7 +642,11 @@ void silverstack_llamarSinRetorno(t_nombre_etiqueta etiqueta)
 	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 	send(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
 	send(sockUmv, &buffer, sizeof(buffer), 0);
-	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "UMV desconectada.");
+		exit(1);
+	}
 	pcb.stack_pointer += 4;
 	buffer = pcb.program_counter;
 	msg_envio_bytes.base = pcb.stack_pointer;
@@ -559,7 +658,11 @@ void silverstack_llamarSinRetorno(t_nombre_etiqueta etiqueta)
 	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 	send(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
 	send(sockUmv, &buffer, sizeof(buffer), 0);
-	recv(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "UMV desconectada.");
+		exit(1);
+	}
 	pcb.stack_pointer += 4;
 	pcb.context_actual = 0;
 	silverstack_irAlLabel(etiqueta);
@@ -605,7 +708,11 @@ void silverstack_signal(t_nombre_semaforo identificador_semaforo)
 	msg.tipo = SIGNALSEM;
 	strcpy(msg.mensaje, identificador_semaforo);
 	send(sockKernel, &msg, sizeof(t_mensaje), 0);
-	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
+	if (recv(sockKernel, &msg, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "Kernel desconectado.");
+		exit(1);
+	}
 	log_info(logger, "Fin primitiva silverstack_signal");
 }
 
@@ -618,7 +725,11 @@ void silverstack_wait(t_nombre_semaforo identificador_semaforo)
 	msg.tipo = WAITSEM;
 	strcpy(msg.mensaje, identificador_semaforo);
 	send(sockKernel, &msg, sizeof(t_mensaje), 0);
-	recv(sockKernel, &msg, sizeof(t_mensaje), 0);
+	if (recv(sockKernel, &msg, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "Kernel desconectado.");
+		exit(1);
+	}
 	if (msg.tipo == BLOCK)
 	{
 		proceso_bloqueado = 1;
