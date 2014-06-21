@@ -31,12 +31,12 @@ int main(int argc, char *argv[])
 	int yes = 1;
 	if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 	{
-		perror("socket");
+		log_error(logger, "Error creando socket.");
 		exit(1);
 	}
 	if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1)
 	{
-		perror("setsockopt");
+		log_error(logger, "Error en setsockopt.");
 		exit(1);
 	}
 	my_addr.sin_family = AF_INET;
@@ -45,12 +45,12 @@ int main(int argc, char *argv[])
 	memset(&(my_addr.sin_zero), '\0', 8);
 	if(bind(sockfd, (struct sockaddr *)&my_addr, sizeof(struct sockaddr)) == -1)
 	{
-		perror("bind");
+		log_error(logger, "Error en bind.");
 		exit(1);
 	}
 	if(listen(sockfd, MAXCONEXIONES) == -1)
 	{
-		perror("listen");
+		log_error(logger, "Error en listen.");
 		exit(1);
 	}
 	while(1)
@@ -58,7 +58,7 @@ int main(int argc, char *argv[])
 		sin_size = sizeof(struct sockaddr_in);
 		if((newfd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size)) == -1)
 		{
-			perror("accept");
+			log_error(logger, "Error en accept.");
 			continue;
 		}
 		pthread_create(&conexiones[cant_conexiones], NULL, (void *)conexion_nueva, (void *)&newfd);
@@ -75,7 +75,11 @@ void conexion_nueva(void *param)
 	conexion = *((int *)param);
 	int tipo_conexion;
 	t_msg_handshake msg;
-	recv(conexion, &msg, sizeof(t_msg_handshake), 0);
+	if (recv(conexion, &msg, sizeof(t_msg_handshake), 0) == 0)
+	{
+		log_error(logger, "Conexion nueva desconectada.");
+		exit(1);
+	}
 	log_info(logger, "Se recibio handshake de conexion nueva.");
 	tipo_conexion = msg.tipo;
 	msg.tipo = UMV;
@@ -106,7 +110,11 @@ void conexion_nueva(void *param)
 void atender_cpu(int sock)
 {
 	t_mensaje mensaje;
-	recv(sock, &mensaje, sizeof(t_mensaje), 0);
+	if (recv(sock, &mensaje, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "CPU desconectada.");
+		exit(1);
+	}
 	t_msg_cambio_proceso_activo msg;
 	t_msg_solicitud_bytes msg2;
 	t_msg_envio_bytes msg3;
@@ -114,12 +122,23 @@ void atender_cpu(int sock)
 	switch(mensaje.tipo)
 	{
 	case SOLICITUDBYTES:
+		pthread_mutex_lock(&semRetardo);
+		usleep(retardo);
+		pthread_mutex_unlock(&semRetardo);
 		pthread_mutex_lock(&semProcesoActivo);
 		pthread_mutex_lock(&semCompactacion);
 		log_info(logger, "Recibi solicitud de bytes de cpu.");
-		recv(sock, &msg, sizeof(t_msg_cambio_proceso_activo), 0);
+		if (recv(sock, &msg, sizeof(t_msg_cambio_proceso_activo), 0) == 0)
+		{
+			log_error(logger, "CPU desconectada.");
+			exit(1);
+		}
 		proceso_activo = msg.id_programa;
-		recv(sock, &msg2, sizeof(t_msg_solicitud_bytes), 0);
+		if (recv(sock, &msg2, sizeof(t_msg_solicitud_bytes), 0) == 0)
+		{
+			log_error(logger, "CPU desconectada.");
+			exit(1);
+		}
 		respuesta = atender_solicitud_bytes(msg2.base, msg2.offset, msg2.tamanio, sock, NULL);
 		if (respuesta != 0)
 		{
@@ -132,12 +151,23 @@ void atender_cpu(int sock)
 		log_info(logger, "Devolvi solicitud de bytes a cpu; respuesta. %d.", respuesta);
 		break;
 	case ENVIOBYTES:
+		pthread_mutex_lock(&semRetardo);
+		usleep(retardo);
+		pthread_mutex_unlock(&semRetardo);
 		pthread_mutex_lock(&semProcesoActivo);
 		pthread_mutex_lock(&semCompactacion);
 		log_info(logger, "Recibi envio de bytes de cpu.");
-		recv(sock, &msg, sizeof(t_msg_cambio_proceso_activo), 0);
+		if (recv(sock, &msg, sizeof(t_msg_cambio_proceso_activo), 0) == 0)
+		{
+			log_error(logger, "CPU desconectada.");
+			exit(1);
+		}
 		proceso_activo = msg.id_programa;
-		recv(sock, &msg3, sizeof(t_msg_envio_bytes), 0);
+		if (recv(sock, &msg3, sizeof(t_msg_envio_bytes), 0) == 0)
+		{
+			log_error(logger, "CPU desconectada.");
+			exit(1);
+		}
 		respuesta = atender_envio_bytes(msg3.base, msg3.offset, msg3.tamanio, sock);
 		if (respuesta != 0)
 		{
@@ -157,7 +187,11 @@ int atender_envio_bytes(int base, int offset, int tam, int sock)
 	char buffer[tam];
 	if (sock != 0)
 	{
-		recv(sock, &buffer, sizeof(buffer), 0);
+		if (recv(sock, &buffer, sizeof(buffer), 0) == 0)
+		{
+			log_error(logger, "Conexion desconectada.");
+			exit(1);
+		}
 	}
 	else
 	{
@@ -357,7 +391,11 @@ int atender_solicitud_bytes_int(int base, int offset, int tam, int sock, int **b
 void atender_kernel(int sock)
 {
 	t_mensaje mensaje;
-	recv(sock, &mensaje, sizeof(t_mensaje), 0);
+	if (recv(sock, &mensaje, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "Kernel desconectado.");
+		exit(1);
+	}
 	t_msg_destruir_segmentos msg;
 	t_msg_crear_segmento msg2;
 	t_msg_envio_bytes msg3;
@@ -365,8 +403,15 @@ void atender_kernel(int sock)
 	switch(mensaje.tipo)
 	{
 	case DESTRUIRSEGMENTOS:
+		pthread_mutex_lock(&semRetardo);
+		usleep(retardo);
+		pthread_mutex_unlock(&semRetardo);
 		pthread_mutex_lock(&semCompactacion);
-		recv(sock, &msg, sizeof(t_msg_destruir_segmentos), 0);
+		if (recv(sock, &msg, sizeof(t_msg_destruir_segmentos), 0) == 0)
+		{
+			log_error(logger, "Kernel desconectado.");
+			exit(1);
+		}
 		log_info(logger, "Se recibio peticion para destruir segmentos de kernel.");
 		mensaje.datosNumericos = destruir_segmentos(msg.id_programa);
 		pthread_mutex_unlock(&semCompactacion);
@@ -374,8 +419,15 @@ void atender_kernel(int sock)
 		log_info(logger, "Se eliminaron segmentos de programa %d", msg.id_programa);
 		break;
 	case CREARSEGMENTO:
+		pthread_mutex_lock(&semRetardo);
+		usleep(retardo);
+		pthread_mutex_unlock(&semRetardo);
 		pthread_mutex_lock(&semCompactacion);
-		recv(sock, &msg2, sizeof(t_msg_crear_segmento), 0);
+		if (recv(sock, &msg2, sizeof(t_msg_crear_segmento), 0) == 0)
+		{
+			log_error(logger, "Kernel desconectado.");
+			exit(1);
+		}
 		log_info(logger, "Se recibe peticion para crear segmento de kernel.");
 		mensaje.datosNumericos = crear_segmento(msg2.id_programa, msg2.tamanio);
 		pthread_mutex_unlock(&semCompactacion);
@@ -384,11 +436,22 @@ void atender_kernel(int sock)
 		log_info(logger, "Se creo segmento de programa %d", msg2.id_programa);
 		break;
 	case ENVIOBYTES:
+		pthread_mutex_lock(&semRetardo);
+		usleep(retardo);
+		pthread_mutex_unlock(&semRetardo);
 		pthread_mutex_lock(&semProcesoActivo);
 		pthread_mutex_lock(&semCompactacion);
-		recv(sock, &msg, sizeof(t_msg_cambio_proceso_activo), 0);
+		if (recv(sock, &msg, sizeof(t_msg_cambio_proceso_activo), 0) == 0)
+		{
+			log_error(logger, "Kernel desconectado.");
+			exit(1);
+		}
 		proceso_activo = msg.id_programa;
-		recv(sock, &msg3, sizeof(t_msg_envio_bytes), 0);
+		if (recv(sock, &msg3, sizeof(t_msg_envio_bytes), 0) == 0)
+		{
+			log_error(logger, "Kernel desconectado.");
+			exit(1);
+		}
 		log_info(logger, "Se recibio envio de bytes de kernel.");
 		respuesta = atender_envio_bytes(msg3.base, msg3.offset, msg3.tamanio, sock);
 		if (respuesta != 0)
@@ -424,8 +487,6 @@ int asignar_direccion_logica(int pid, int tamanio)
 				sleep(1);
 				srand(time(NULL));
 				direccion = rand() % (space + 1);
-				log_info(logger, "Direccion de rand(): %d", direccion);
-				log_info(logger, "Direccion + tamanio: %d", (direccion + tamanio));
 				if((direccion + tamanio) < space)
 				{
 					for(j = 0; j < list_size(prog->segmentos); j++)
@@ -459,9 +520,11 @@ int asignar_direccion_logica(int pid, int tamanio)
 
 int asignar_direccion_en_memoria(int tamanio)
 {
+	pthread_mutex_lock(&semAlgoritmo);
 	int dir;
 	if (obtener_cant_segmentos() == 0)
 	{
+		pthread_mutex_unlock(&semAlgoritmo);
 		return 0;
 	}
 	else
@@ -474,12 +537,14 @@ int asignar_direccion_en_memoria(int tamanio)
 			!strcmp(algoritmo, "worst-fit"))
 		{
 			// El algoritmo es worst-fit
+			pthread_mutex_unlock(&semAlgoritmo);
 			dir = asignar_direccion_wf(tamanio);
 			return dir;
 		}
 		else
 		{
 			// El algoritmo es first-fit
+			pthread_mutex_unlock(&semAlgoritmo);
 			dir = asignar_direccion_ff(tamanio);
 			return dir;
 		}
