@@ -708,58 +708,6 @@ int escuchar_Nuevo_Programa(int sock_program)
 }
 
 /*
- * Function: escuchar_Programa
- * Purpose: Listen for program
- * Created on: 01/05/2014
- * Author: SilverStack
-*/
-
-int escuchar_Programa(int sock_program, char* buffer)
-{
-	//thdr hdr;
-	t_mensaje mensaje;
-	int numbytes;
-	int size_mensaje = sizeof(t_mensaje);
-
-	log_info(logger, "Recepcion de datos desde Programa");
-	memset(buffer,'\0',MAXDATASIZE);
-	if((numbytes=read(sock_program,buffer,size_mensaje))<=0)
-	{
-		log_error(logger, "Error en el read en escuchar_Programa");
-		return -1;
-	}
-
-	memcpy(&mensaje,buffer,size_mensaje);
-
-	if(mensaje.tipo==SENDFILE && mensaje.id_proceso ==PROGRAMA)
-	{
-		/* Para tratamiento del envio de archivos o comandos*/
-		memset(buffer,'\0',MAXDATASIZE);
-
-		if(mensaje.datosNumericos > MAXDATASIZE)
-		{
-			log_error(logger, "Archivo muy grande %d", mensaje.datosNumericos);
-		}
-
-		if((numbytes=read(sock_program,buffer,mensaje.datosNumericos))<=0)
-		{
-			log_error(logger, "Error en el read en escuchar_Programa");
-			return -1;
-		}
-
-		//log_info(logger, "File \n%s", buffer);
-		//pcb_create(buffer,numbytes, sock_program);
-
-		return 0;
-	}
-	else
-	{
-		log_error(logger, "Error en el descriptor. escuchar_Programa");
-		return -1;
-	}
-}
-
-/*
  * Function: create_pcb
  * Purpose: create pcb node
  * Created on: 18/04/2014
@@ -1240,40 +1188,13 @@ void sort_plp()
 }
 
 /*
- * Function: segment_create
- * Purpose: Create segment node
- * Created on: 25/04/2014
- * Author: SilverStack
-*/
-
-t_nodo_segment* segment_create(int start, int offset)
-{
-	t_nodo_segment* new = (t_nodo_segment*) malloc( sizeof(t_nodo_segment));
-	new->start = start;
-	new->offset = offset;
-	return new;
-}
-
-/*
- * Function: segment_destroy
- * Purpose: Destroy segment node
- * Created on: 25/04/2014
- * Author: SilverStack
-*/
-
-void segment_destroy(t_nodo_segment *self)
-{
-	free(self);
-}
-
-/*
  * Function: conectar_umv
  * Purpose: Perform the sock connection with UMV
  * Created on: 02/05/2014
  * Author: SilverStack
 */
 
-int conectar_umv(void)
+int umv_connect(void)
 {
 	char* buffer;
 	int numbytes,sockfd;
@@ -1430,8 +1351,8 @@ void planificador_sjn(void)
 		else if(flag == 0)
 		{	// No se realizó ninguna accion
 			sem_post(&sem_plp);
-			log_info(logger, "[PLP] sleep(5)");
-			sleep(5); // TODO: Pensar una forma de mejorar esto
+			log_info(logger, "[PLP] sleep(1)");
+			sleep(1); // TODO: Pensar una forma de mejorar esto
 		}
 
 	} // for(;;)
@@ -1872,39 +1793,6 @@ void cpu_remove(int socket)
 }
 
 /*
- * Function: cpu_update
- * Purpose: update cpu's status
- * Created on: 04/05/2014
- * Author: SilverStack
-*/
-
-void cpu_update(int socket)
-{
-	int flag_found = 0;
-	int socket_cpu = socket;
-
-	void _change_status(t_nodo_cpu *s)
-	{
-		if(s->socket == socket_cpu)
-		{
-			s->status = CPU_AVAILABLE;
-			flag_found = 1;
-		}
-	}
-
-	sem_wait(&mutex_cpu_list);
-	list_iterate(list_cpu, (void*) _change_status);
-	sem_post(&mutex_cpu_list);
-
-	if(flag_found == 0)
-	{
-		log_error(logger, "CPU Socket %d no encontrado", socket);
-		return;
-	}
-
-}
-
-/*
  * Function: cpu_set_status
  * Purpose: update cpu's status.
  * Pre-Requisites: Must be called within semaphores
@@ -1962,6 +1850,14 @@ t_process* process_create(unsigned int pid, int sock_program)
 	new_process->pid = pid;
 	new_process->program_socket = sock_program;
 	new_process->current_cpu_socket = -1;
+
+	time_t tiempo;
+	struct tm *tmPtr;
+
+	tiempo=time(NULL);
+	tmPtr = localtime(&tiempo);
+	new_process->t_inicial = mktime(tmPtr);
+
 	return new_process;
 }
 
@@ -2218,8 +2114,7 @@ void planificador_rr(void)
 	t_nodo_cpu* cpu;
 	t_pedido* new_pedido;
 	int cpu_socket;
-
-	//	 TODO: Verificar queue_RR mandar siempre el mismo pcb al mismo CPU
+	t_process* process;
 
 	for(;;)
 	{
@@ -2254,12 +2149,12 @@ void planificador_rr(void)
 						}
 						else
 						{
-							sem_post(&sem_pcp); // Incremento el semaforo porque no saqu2e el proceso
+							sem_post(&sem_pcp); // Incremento el semaforo porque no saqué el proceso
 							log_error(logger, "[PCP] - No encontre CPU AVAILABLE");
 							pthread_mutex_lock(&mutex_pedidos);
 							queue_push(queue_rr,pedido_create(new_pedido->process_id,new_pedido->previous_status,new_pedido->new_status));
 							pthread_mutex_unlock(&mutex_pedidos);
-							sleep(1); //TODO: Pensar como mejorar
+							//sleep(1); //TODO: Pensar como mejorar
 						}
 
 						sem_post(&mutex_cpu_list);
@@ -2281,7 +2176,8 @@ void planificador_rr(void)
 					{
 						log_info(logger,"[PCP] - PID = %d - PROCESS_EXECUTE -> PROCESS_BLOCKED", new_pedido->process_id);
 						process_update(new_pedido->process_id,PROCESS_EXECUTE,PROCESS_BLOCKED);
-						cpu_socket = get_sock_cpu_by_process_id(new_pedido->process_id);
+						process = process_get(new_pedido->process_id,-1,-1);
+						cpu_socket = process->current_cpu_socket;
 						if(cpu_socket == -1)
 						{
 							log_error(logger, "[PCP] - No se encontro el cpu_socket");
@@ -2294,7 +2190,8 @@ void planificador_rr(void)
 					{
 						log_info(logger,"[PCP] - PID = %d - PROCESS_EXECUTE -> PROCESS_READY", new_pedido->process_id);
 						process_update(new_pedido->process_id,PROCESS_EXECUTE,PROCESS_READY);
-						cpu_socket = get_sock_cpu_by_process_id(new_pedido->process_id);
+						process = process_get(new_pedido->process_id,-1,-1);
+						cpu_socket = process->current_cpu_socket;
 						if(cpu_socket == -1)
 						{
 							log_error(logger, "[PCP] - No se encontro el cpu_socket");
@@ -2317,7 +2214,8 @@ void planificador_rr(void)
 					{
 						log_info(logger,"[PCP] - PID = %d - PROCESS_EXECUTE -> PROCESS_EXIT", new_pedido->process_id);
 						process_update(new_pedido->process_id,PROCESS_EXECUTE,PROCESS_EXIT);
-						cpu_socket = get_sock_cpu_by_process_id(new_pedido->process_id);
+						process = process_get(new_pedido->process_id,-1,-1);
+						cpu_socket = process->current_cpu_socket;
 						if(cpu_socket == -1)
 						{
 							log_error(logger, "[PCP] - No se encontro el cpu_socket");
@@ -2495,32 +2393,6 @@ int is_Connected_Program(int sock_program)
 }
 
 /*
- * Function: process_remove_by_socket
- * Purpose: Remove a Process from list_process
- * Created on: 11/05/2014
- * Author: SilverStack
-*/
-
-void process_remove_by_socket(int socket)
-{
-	int sock_prog = socket;
-
-	bool _is_process(t_process *p) {
-		return p->program_socket == sock_prog;
-	}
-
-	sem_wait(&mutex_process_list);
-	t_process *aux = list_remove_by_condition(list_process, (void*) _is_process);
-	sem_post(&mutex_process_list);
-
-	log_info(logger, "Se removio el programa %d de la lista de procesos", aux->pid);
-
-	process_destroy(aux);
-
-	return;
-}
-
-/*
  * Function: process_execute
  * Purpose: Update CPU Socket on Proces_List
  * Created on: 11/05/2014
@@ -2537,8 +2409,6 @@ void process_execute(int unique_id, int socket)
 	int index = 0;
 	int indice_buscado = 0;
 	t_pcb* pcb;
-
-
 
 	void _get_process_element(t_process *p)
 	{
@@ -2653,41 +2523,6 @@ void pcb_update(t_pcb* new_pcb, unsigned char previous_status)
 }
 
 /*
- * Function: get_sock_cpu_by_process_id
- * Purpose: Returns the cpu_socket
- * Created on: 24/05/2014
- * Author: SilverStack
-*/
-
-int get_sock_cpu_by_process_id(int pid)
-{
-	int flag_process_found = 0;
-	int process_id = pid;
-	int cpu_socket = -1;
-
-	void _get_process_element(t_process *p)
-	{
-		if(flag_process_found == 0 && p->pid == process_id )
-		{
-			flag_process_found = 1;
-			cpu_socket = p->current_cpu_socket;
-		}
-	}
-
-	sem_wait(&mutex_process_list);
-	list_iterate(list_process, (void*) _get_process_element);
-	sem_post(&mutex_process_list);
-
-	if(flag_process_found == 0)
-	{
-		log_error(logger, "PID %d no encontrado en get_sock_cpu_by_process_id", process_id);
-		return -1;
-	}
-
-	return cpu_socket;
-}
-
-/*
  * Function: get_process_id_by_sock_cpu
  * Purpose: Returns the Process ID
  * Created on: 20/05/2014
@@ -2766,6 +2601,10 @@ void program_exit(int pid)
 	int index = 0;
 	int indice_buscado = 0;
 	t_process* process;
+	time_t tiempo;
+	struct tm *tmPtr;
+	struct tm *timeElapsed;
+
 
 	if((buffer = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
 	{
@@ -2800,6 +2639,15 @@ void program_exit(int pid)
 
 	if(process->program_socket == -1)
 	{
+
+		tiempo=time(NULL);
+		tmPtr = localtime(&tiempo);
+		process->t_final = mktime(tmPtr);
+
+		timeElapsed = timeConvert(difftime(process->t_final,process->t_inicial));
+
+		log_info(logger,"[TIME] [PID = %d] %d Hours %d Minutes %d Seconds ",process->pid,timeElapsed->tm_hour, timeElapsed->tm_min, timeElapsed->tm_sec);
+
 		process_destroy(process);
 		free(buffer);
 		return;
@@ -2815,6 +2663,15 @@ void program_exit(int pid)
 	{
 		log_error(logger, "Error en el write en program_exit");
 		// close(process->program_socket); No cierro el socket. Eso lo hace el select
+
+		tiempo=time(NULL);
+		tmPtr = localtime(&tiempo);
+		process->t_final = mktime(tmPtr);
+
+		timeElapsed = timeConvert(difftime(process->t_final,process->t_inicial));
+
+		log_info(logger,"[TIME] [PID = %d] %d Hours %d Minutes %d Seconds ",process->pid,timeElapsed->tm_hour, timeElapsed->tm_min, timeElapsed->tm_sec);
+
 		process_destroy(process);
 		free(buffer);
 		return;
@@ -2822,6 +2679,17 @@ void program_exit(int pid)
 
 	//close(process->program_socket); No cierro el socket. Eso lo hace el select
 	free(buffer);
+
+	tiempo=time(NULL);
+	tmPtr = localtime(&tiempo);
+	process->t_final = mktime(tmPtr);
+
+	double seconds = difftime(process->t_final,process->t_inicial);
+
+	log_info(logger,"seconds = %d",seconds);
+	timeElapsed = timeConvert(seconds);
+
+	log_info(logger,"[TIME] [PID = %d] %d Hours %d Minutes %d Seconds ",process->pid, timeElapsed->tm_hour, timeElapsed->tm_min, timeElapsed->tm_sec);
 	process_destroy(process);
 
 	return;
@@ -3010,14 +2878,17 @@ t_process* process_get(int pid, int sock_program, int sock_cpu)
 	int i;
 	t_process* process;
 
+	sem_wait(&mutex_process_list);
 	for(i=0;i < list_size(list_process);i++)
 	{
 		process = list_get(list_process,i);
 		if(process->pid == pid || process->current_cpu_socket == sock_cpu || process->program_socket == sock_program )
 		{
+			sem_post(&mutex_process_list);
 			return process;
 		}
 	}
+	sem_post(&mutex_process_list);
 	log_error(logger,"No se encontro el proceso");
 	return NULL;
 }
@@ -3036,6 +2907,7 @@ t_nodo_cpu* cpu_get_next_available(int pid)
 	t_process* process;
 	int sock_cpu = -1;
 	int i;
+	int flag_cpu_found = 0;
 
 	process = process_get(pid,-1,-1);
 
@@ -3045,17 +2917,81 @@ t_nodo_cpu* cpu_get_next_available(int pid)
 		return NULL;
 	}
 
+	log_info(logger,"cpu_get_next_available(%d)",pid);
 	sock_cpu = process->current_cpu_socket;
+	log_info(logger,"process->current_cpu_socket = %d",sock_cpu);
 
 	for(i=0;i < list_size(list_cpu); i++)
 	{
 		cpu = list_get(list_cpu,i);
 		if(cpu->status == CPU_AVAILABLE)
+		{
 			cpu_available = cpu;
+			flag_cpu_found = 1;
+		}
 
 		if(cpu->socket == sock_cpu)
 			break;
 	}
 
-	return cpu_available;
+	if(flag_cpu_found == 1)
+	{
+		log_info(logger,"return cpu_available->socket = %d",cpu_available->socket);
+		return cpu_available;
+	}
+
+	return NULL;
+}
+
+
+void calcularTiempo(void)
+{
+	time_t tiempo, inicial, final;
+	struct tm *tmPtrIni;
+	struct tm *tmPtrFin;
+	struct tm *timeElapsed;
+
+	tiempo=time(NULL);
+	tmPtrIni = localtime(&tiempo);
+	inicial = mktime(tmPtrIni);
+
+	log_info(logger,"%d:%d:%d ",tmPtrIni->tm_hour, tmPtrIni->tm_min, tmPtrIni->tm_sec);
+	sleep(5);
+	tiempo=time(NULL);
+	tmPtrFin = localtime(&tiempo);
+	final = mktime(tmPtrFin);
+	log_info(logger,"%d:%d:%d ",tmPtrFin->tm_hour, tmPtrFin->tm_min, tmPtrFin->tm_sec);
+
+	double difference = difftime(final,inicial);
+	timeElapsed = timeConvert(difference);
+	log_info(logger,"%d Hours %d Minutes %d Seconds ",timeElapsed->tm_hour, timeElapsed->tm_min, timeElapsed->tm_sec);
+	return;
+}
+
+struct tm* timeConvert(double seconds)
+{
+	struct tm *tmPtr;
+	time_t tiempo;
+	double segundos = seconds;
+
+	tiempo=time(NULL);
+	tmPtr = localtime(&tiempo);
+
+	tmPtr->tm_hour = 0;
+	tmPtr->tm_min = 0;
+	tmPtr->tm_sec = 0;
+
+	for(;segundos > 60;  segundos = segundos - 60)
+	{
+		tmPtr->tm_min = tmPtr->tm_min + 1;
+		if(tmPtr->tm_min == 60)
+		{
+			tmPtr->tm_hour = tmPtr->tm_hour + 1;
+			tmPtr->tm_min = 0;
+		}
+	}
+	tmPtr->tm_sec = segundos;
+
+	return tmPtr;
+
 }

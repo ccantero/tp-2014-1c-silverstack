@@ -109,6 +109,8 @@ typedef struct _t_process {
 	int program_socket;
 	int current_cpu_socket;
 	unsigned char status;
+	time_t t_inicial;
+	time_t t_final;
 } t_process;
 
 typedef struct _t_io_queue_nodo {
@@ -192,7 +194,7 @@ sem_t sem_cpu_list;
 int exit_status;
 
 void GetInfoConfFile(char* PATH_CONFIG);
-int conectar_umv(void);
+int umv_connect(void);
 t_global* global_create(char *global_name);
 void global_update_value(int sock_cpu, char* global_name, int value);
 void global_get_value(int sock_cpu, char* global_name);
@@ -201,7 +203,6 @@ t_semaphore* semaphore_create(char* sem_name, int value);
 void semaphore_wait(int sock_cpu, char* sem_name);
 void semaphore_signal(int sock_cpu, char* sem_name);
 int escuchar_Nuevo_Programa(int sock_program);
-int escuchar_Programa(int sock_program, char* buffer);
 void pcb_create(char* buffer, int tamanio_buffer, int sock_program);
 int umv_create_segment(int process_id, int tamanio);
 int umv_change_process(int process_id);
@@ -210,8 +211,6 @@ void finalizo_Quantum(int sock_cpu);
 void pcb_update(t_pcb* pcb,unsigned char actual_state);
 void sort_plp(void);
 void planificador_sjn(void);
-t_nodo_segment* segment_create(int start, int offset);
-void segment_destroy(t_nodo_segment *self);
 int is_Connected_CPU(int socket);
 int escuchar_Nuevo_cpu(int sock_cpu);
 int escuchar_cpu(int sock_cpu);
@@ -231,7 +230,6 @@ int servidor_Programa(void);
 int servidor_CPU(void);
 int buscar_Mayor(int a, int b, int c);
 int is_Connected_Program(int sock_program);
-void process_remove_by_socket(int socket);
 void planificador_rr(void);
 void process_execute(int unique_id, int cpu_socket);
 void pcb_destroy(t_pcb* self);
@@ -239,7 +237,6 @@ void umv_destroy_segment(int process_id);
 int get_process_id_by_sock_cpu(int sock_cpu);
 void program_exit(int pid);
 t_pedido* pedido_create(int pid, unsigned char previous_status, unsigned char next_status);
-int get_sock_cpu_by_process_id(int pid);
 void process_finish(int sock_cpu);
 void imprimirTexto(int sock_cpu,int valor);
 void imprimir(int sock_cpu,int valor);
@@ -257,8 +254,9 @@ void semaphore_destroy(t_semaphore *self);			// A revisar si va o no va
 int send_umv_stack(int process_id);					// A revisar si va o no va
 void fd_set_cpu_sockets(fd_set* descriptores);		// A revisar si va o no va
 void fd_set_program_sockets(fd_set* descriptores);	// A revisar si va o no va
-void cpu_update(int socket);						// A revisar si va o no va
 void test_pcb(int pid, unsigned char previous_status);
 void asignar_valor_VariableCompartida(int sock_cpu, char* global_name, int value);
+void calcularTiempo(void);
+struct tm* timeConvert(double seconds);
 
 #endif /* PROTOCOL_H_ */

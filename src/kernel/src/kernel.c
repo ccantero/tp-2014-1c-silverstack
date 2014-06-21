@@ -32,6 +32,7 @@ int main(int argc, char *argv[])
 	}
 
 	logger = log_create("Log.txt", "Kernel",false, LOG_LEVEL_INFO);
+
 	list_io = list_create();
 	list_segment = list_create();
 	list_semaphores = list_create();
@@ -104,7 +105,7 @@ int main(int argc, char *argv[])
 	pthread_create(&th_plp,NULL,(void*)planificador_sjn,NULL);
 	pthread_create(&th_pcp,NULL,(void*)planificador_rr,NULL);
 
-	sock_umv = conectar_umv();
+	sock_umv = umv_connect();
 	sock_cpu = servidor_CPU();
 	sock_program = servidor_Programa();
 
@@ -200,7 +201,6 @@ int main(int argc, char *argv[])
 				if(is_Connected_Program(i) == 0)
 				{
 					// El programa se cerró.
-					//TODO: Desarrrollar funcion que busque el proceso dado un sock_program
 					FD_CLR(i, &master);
 					close(i);
 					log_info(logger,"Se cerro el programa.");
