@@ -362,7 +362,7 @@ int atender_solicitud_bytes_int(int base, int offset, int tam, int sock, int **b
 			else
 			{
 				// La posicion de memoria es válida
-				memcpy(buf, &memoria[seg->dirFisica + offset], sizeof(buf));
+				memcpy(&buf, &memoria[seg->dirFisica + offset], sizeof(buf));
 			}
 		}
 		else
@@ -810,7 +810,7 @@ void consola (void* param)
    					printw(">");
    					refresh();
    					scanw("%d", &valor_numerico3);
-   					buffer = (char *)malloc(valor_numerico3 + 1);
+   					buffer = (char *)malloc(valor_numerico3);
    					valor_numerico = transformar_direccion_en_logica(valor_numerico, proc_id);
    					pthread_mutex_lock(&semProcesoActivo);
    					pthread_mutex_lock(&semCompactacion);
@@ -864,7 +864,7 @@ void consola (void* param)
 					printw(">");
 					refresh();
 					scanw("%d", &valor_numerico3);
-					buffer_int = (int *)malloc(valor_numerico3 + 1);
+					buffer_int = (int *)malloc(valor_numerico3);
 					valor_numerico = transformar_direccion_en_logica(valor_numerico, proc_id);
 					pthread_mutex_lock(&semProcesoActivo);
 					pthread_mutex_lock(&semCompactacion);
