@@ -770,9 +770,7 @@ void depuracion(int senial)
 	{
 	case SIGINT:
 		log_info(logger, "Inicia depuracion de variables y memoria.");
-		config_destroy(config);
 		log_destroy(logger);
-		free(variables);
 		exit(0);
 		break;
 	case SIGUSR1:

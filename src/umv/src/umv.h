@@ -24,6 +24,7 @@
 #include <src/silverstack.h>
 #include <ncurses.h>
 #include <time.h>
+#include <signal.h>
 
 #define MAXCONEXIONES 25
 #define PATH_CONFIG "../conf"
@@ -95,5 +96,6 @@ int obtener_direccion_segmento(int arranque);
 int obtener_direccion_mas_offset_segmento(int arranque);
 void mostrar_memoria(int base, int tam, int opcion);
 int atender_solicitud_bytes_int(int base, int offset, int tam, int sock, int **buffer);
+void depuracion(int senial);
 
 #endif /* UMV_H_ */

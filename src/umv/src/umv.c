@@ -10,6 +10,7 @@
 
 int main(int argc, char *argv[])
 {
+	signal(SIGINT, depuracion);
 	initscr();
 	echo();
 	scrollok(stdscr, TRUE);
@@ -32,11 +33,13 @@ int main(int argc, char *argv[])
 	if((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1)
 	{
 		log_error(logger, "Error creando socket.");
+		endwin();
 		exit(1);
 	}
 	if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1)
 	{
 		log_error(logger, "Error en setsockopt.");
+		endwin();
 		exit(1);
 	}
 	my_addr.sin_family = AF_INET;
@@ -46,11 +49,13 @@ int main(int argc, char *argv[])
 	if(bind(sockfd, (struct sockaddr *)&my_addr, sizeof(struct sockaddr)) == -1)
 	{
 		log_error(logger, "Error en bind.");
+		endwin();
 		exit(1);
 	}
 	if(listen(sockfd, MAXCONEXIONES) == -1)
 	{
 		log_error(logger, "Error en listen.");
+		endwin();
 		exit(1);
 	}
 	while(1)
@@ -65,6 +70,7 @@ int main(int argc, char *argv[])
 		cant_conexiones++;
 	}
 	pthread_join(th1, NULL);
+	endwin();
 	return 0;
 }
 
@@ -78,6 +84,7 @@ void conexion_nueva(void *param)
 	if (recv(conexion, &msg, sizeof(t_msg_handshake), 0) == 0)
 	{
 		log_error(logger, "Conexion nueva desconectada.");
+		endwin();
 		exit(1);
 	}
 	log_info(logger, "Se recibio handshake de conexion nueva.");
@@ -110,10 +117,11 @@ void conexion_nueva(void *param)
 void atender_cpu(int sock)
 {
 	t_mensaje mensaje;
+	int retorno;
 	if (recv(sock, &mensaje, sizeof(t_mensaje), 0) == 0)
 	{
 		log_error(logger, "CPU desconectada.");
-		exit(1);
+		pthread_exit(&retorno);
 	}
 	t_msg_cambio_proceso_activo msg;
 	t_msg_solicitud_bytes msg2;
@@ -131,13 +139,13 @@ void atender_cpu(int sock)
 		if (recv(sock, &msg, sizeof(t_msg_cambio_proceso_activo), 0) == 0)
 		{
 			log_error(logger, "CPU desconectada.");
-			exit(1);
+			pthread_exit(&retorno);
 		}
 		proceso_activo = msg.id_programa;
 		if (recv(sock, &msg2, sizeof(t_msg_solicitud_bytes), 0) == 0)
 		{
 			log_error(logger, "CPU desconectada.");
-			exit(1);
+			pthread_exit(&retorno);
 		}
 		respuesta = atender_solicitud_bytes(msg2.base, msg2.offset, msg2.tamanio, sock, NULL);
 		if (respuesta != 0)
@@ -160,13 +168,13 @@ void atender_cpu(int sock)
 		if (recv(sock, &msg, sizeof(t_msg_cambio_proceso_activo), 0) == 0)
 		{
 			log_error(logger, "CPU desconectada.");
-			exit(1);
+			pthread_exit(&retorno);
 		}
 		proceso_activo = msg.id_programa;
 		if (recv(sock, &msg3, sizeof(t_msg_envio_bytes), 0) == 0)
 		{
 			log_error(logger, "CPU desconectada.");
-			exit(1);
+			pthread_exit(&retorno);
 		}
 		respuesta = atender_envio_bytes(msg3.base, msg3.offset, msg3.tamanio, sock);
 		if (respuesta != 0)
@@ -190,7 +198,6 @@ int atender_envio_bytes(int base, int offset, int tam, int sock)
 		if (recv(sock, &buffer, sizeof(buffer), 0) == 0)
 		{
 			log_error(logger, "Conexion desconectada.");
-			exit(1);
 		}
 	}
 	else
@@ -394,7 +401,7 @@ void atender_kernel(int sock)
 	if (recv(sock, &mensaje, sizeof(t_mensaje), 0) == 0)
 	{
 		log_error(logger, "Kernel desconectado.");
-		exit(1);
+		depuracion(SIGINT);
 	}
 	t_msg_destruir_segmentos msg;
 	t_msg_crear_segmento msg2;
@@ -410,7 +417,7 @@ void atender_kernel(int sock)
 		if (recv(sock, &msg, sizeof(t_msg_destruir_segmentos), 0) == 0)
 		{
 			log_error(logger, "Kernel desconectado.");
-			exit(1);
+			depuracion(SIGINT);
 		}
 		log_info(logger, "Se recibio peticion para destruir segmentos de kernel.");
 		mensaje.datosNumericos = destruir_segmentos(msg.id_programa);
@@ -426,7 +433,7 @@ void atender_kernel(int sock)
 		if (recv(sock, &msg2, sizeof(t_msg_crear_segmento), 0) == 0)
 		{
 			log_error(logger, "Kernel desconectado.");
-			exit(1);
+			depuracion(SIGINT);
 		}
 		log_info(logger, "Se recibe peticion para crear segmento de kernel.");
 		mensaje.datosNumericos = crear_segmento(msg2.id_programa, msg2.tamanio);
@@ -444,13 +451,13 @@ void atender_kernel(int sock)
 		if (recv(sock, &msg, sizeof(t_msg_cambio_proceso_activo), 0) == 0)
 		{
 			log_error(logger, "Kernel desconectado.");
-			exit(1);
+			depuracion(SIGINT);
 		}
 		proceso_activo = msg.id_programa;
 		if (recv(sock, &msg3, sizeof(t_msg_envio_bytes), 0) == 0)
 		{
 			log_error(logger, "Kernel desconectado.");
-			exit(1);
+			depuracion(SIGINT);
 		}
 		log_info(logger, "Se recibio envio de bytes de kernel.");
 		respuesta = atender_envio_bytes(msg3.base, msg3.offset, msg3.tamanio, sock);
@@ -1499,4 +1506,18 @@ void GetInfoConfFile(void)
 	space = config_get_int_value(config, "DISK_SPACE");
 	retardo = config_get_int_value(config, "RETARDO");
 	return;
+}
+
+void depuracion(int senial)
+{
+	int i;
+	t_info_programa *prog;
+	switch(senial)
+	{
+	case SIGINT:
+		endwin();
+		log_destroy(logger);
+		exit(0);
+		break;
+	}
 }
