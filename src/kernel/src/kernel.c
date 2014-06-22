@@ -51,8 +51,6 @@ int main(int argc, char *argv[])
 	cantidad_cpu = 0;
 	cantidad_procesos_sistema = 0;
 
-
-
 	sem_init(&mutex_process_list, 0, 1);
 
 	sem_init(&free_io_queue, 0, 1);

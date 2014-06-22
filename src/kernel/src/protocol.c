@@ -163,36 +163,51 @@ void global_update_value(int sock_cpu, char* global_name, int value)
 {
 	int flag_mod = 0;
 	int numbytes, i;
+	int flag_process_found = 0;
 	t_mensaje mensaje;
 	int size_msg = sizeof(t_mensaje);
 	t_global* variable;
-
 	char* varCom;
+	t_process* process;
 
-	if((varCom = (char*) malloc (sizeof(char) * ( strlen(global_name) + 1 ))) == NULL)
+	for(i=0;i< list_size(list_process);i++)
 	{
-		log_error(logger,"Error al reservar memoria para identificador en global_update_value");
-		return;
-	}
-
-	strcpy(varCom, "!");
-	strcat(varCom, global_name);
-
-	for(i=0;i < list_size(list_globales);i++)
-	{
-		variable = list_get(list_globales,i);
-		if(flag_mod == 0 && strcmp(varCom,variable->identifier) == 0)
+		process = list_get(list_process,i);
+		if(process->current_cpu_socket == sock_cpu && process->status == PROCESS_EXECUTE)
 		{
-			variable->value = value;
-			flag_mod = 1;
+			flag_process_found = 1;
 			break;
 		}
 	}
 
-	if(flag_mod == 0)
+	if(flag_process_found == 1)
 	{
-		log_error(logger, "Variable compartida -%s- no encontrado", global_name);
-		process_set_status(get_process_id_by_sock_cpu(sock_cpu),PROCESS_ERROR);
+		if((varCom = (char*) malloc (sizeof(char) * ( strlen(global_name) + 1 ))) == NULL)
+		{
+			log_error(logger,"Error al reservar memoria para identificador en global_update_value");
+			return;
+		}
+
+		strcpy(varCom, "!");
+		strcat(varCom, global_name);
+
+		for(i=0;i < list_size(list_globales);i++)
+		{
+			variable = list_get(list_globales,i);
+			if(flag_mod == 0 && strcmp(varCom,variable->identifier) == 0)
+			{
+				variable->value = value;
+				flag_mod = 1;
+				break;
+			}
+		}
+
+		if(flag_mod == 0)
+		{
+			log_error(logger, "Variable compartida -%s- no encontrada", global_name);
+			process->status = PROCESS_ERROR;
+			process->error_status = ERROR_WRONG_VARCOM;
+		}
 	}
 
 	mensaje.id_proceso = KERNEL;
@@ -202,9 +217,10 @@ void global_update_value(int sock_cpu, char* global_name, int value)
 	if((numbytes=write(sock_cpu,&mensaje,size_msg))<=0)
 	{
 		log_error(logger, "Fallo el envio de respuesta de global_update_value al cpu");
-		// Esto lo hace el select
-		//close(sock_cpu);
-		//cpu_remove(sock_cpu);
+		pthread_mutex_lock(&mutex_pedidos);
+		queue_push(queue_rr,pedido_create(process->pid,PROCESS_EXECUTE,PROCESS_READY));
+		pthread_mutex_unlock(&mutex_pedidos);
+		sem_post(&sem_pcp);
 		return;
 	}
 
@@ -222,33 +238,45 @@ void global_get_value(int sock_cpu, char* global_name)
 {
 	int flag_mod = 0;
 	int numbytes, i;
+	int flag_process_found = 0;
 	t_mensaje mensaje;
 	int size_msg = sizeof(t_mensaje);
 	t_global* variable;
 	int valor = -1000;
-
 	char* varCom;
+	t_process* process;
 
-	if((varCom = (char*) malloc (sizeof(char) * ( strlen(global_name) + 1 ))) == NULL)
+	for(i=0;i< list_size(list_process);i++)
 	{
-		log_error(logger,"Error al reservar memoria para identificador en global_get_value");
-		return;
-	}
-
-	strcpy(varCom, "!");
-	strcat(varCom, global_name);
-
-	for(i=0;i < list_size(list_globales);i++)
-	{
-		variable = list_get(list_globales,i);
-		if(flag_mod == 0 && strcmp(varCom,variable->identifier) == 0)
+		process = list_get(list_process,i);
+		if(process->current_cpu_socket == sock_cpu && process->status == PROCESS_EXECUTE)
 		{
-			valor = variable->value;
-			flag_mod = 1;
+			flag_process_found = 1;
 			break;
 		}
 	}
 
+	if(flag_process_found == 1)
+	{
+		if((varCom = (char*) malloc (sizeof(char) * ( strlen(global_name) + 1 ))) == NULL)
+		{
+			log_error(logger,"Error al reservar memoria para identificador en global_get_value");
+		}
+
+		strcpy(varCom, "!");
+		strcat(varCom, global_name);
+
+		for(i=0;i < list_size(list_globales);i++)
+		{
+			variable = list_get(list_globales,i);
+			if(flag_mod == 0 && strcmp(varCom,variable->identifier) == 0)
+			{
+				valor = variable->value;
+				flag_mod = 1;
+				break;
+			}
+		}
+	}
 	mensaje.id_proceso = KERNEL;
 	mensaje.datosNumericos = valor;
 	mensaje.tipo = VARCOMREQUEST;
@@ -256,6 +284,10 @@ void global_get_value(int sock_cpu, char* global_name)
 	if((numbytes=write(sock_cpu,&mensaje,size_msg))<=0)
 	{
 		log_error(logger, "Fallo el envio de respuesta de global_update_value al cpu");
+		pthread_mutex_lock(&mutex_pedidos);
+		queue_push(queue_rr,pedido_create(process->pid,PROCESS_EXECUTE,PROCESS_READY));
+		pthread_mutex_unlock(&mutex_pedidos);
+		sem_post(&sem_pcp);
 		// Esto lo hace el select
 		//close(sock_cpu);
 		//cpu_remove(sock_cpu);
@@ -265,7 +297,8 @@ void global_get_value(int sock_cpu, char* global_name)
 	if(flag_mod == 0)
 	{
 		log_error(logger, "Variable compartida %s no encontrado", varCom);
-		process_set_status(get_process_id_by_sock_cpu(sock_cpu),PROCESS_ERROR);
+		process->status = PROCESS_ERROR;
+		process->error_status = ERROR_WRONG_VARCOM;
 		return;
 	}
 
@@ -497,6 +530,7 @@ void semaphore_signal(int sock_cpu, char* sem_name)
 					pthread_mutex_lock(&mutex_pedidos);
 					queue_push(queue_rr,pedido_create(nodo->process_id,PROCESS_BLOCKED,PROCESS_READY));
 					pthread_mutex_unlock(&mutex_pedidos);
+					sem_post(&sem_pcp);
 				}
 			}
 			flag_found = 1;
@@ -1513,13 +1547,49 @@ int escuchar_cpu(int sock_cpu)
 		case WAITSEM: semaphore_wait(sock_cpu,mensaje.mensaje); break;
 		case ASIGNACION: global_update_value(sock_cpu,mensaje.mensaje, mensaje.datosNumericos); break;
 		case VARCOMREQUEST: global_get_value(sock_cpu,mensaje.mensaje); break;
-		/*case ENTRADASALIDA: io(); break;
-		*/
+		case SEGMENTATION_FAULT: process_segmentation_fault(sock_cpu); break;
+		//case ENTRADASALIDA: io(); break;
+		default: log_error(logger,"mensaje.tipo = %d no identificado",mensaje.tipo);
 	};
 
 	free(buffer);
 	return 0;
 }
+
+/*
+ * Function: finalizo_Quantum
+ * Purpose: Receives an update PCB from CPU. Update and move to correct queue.
+ * Created on: 20/05/2014
+ * Author: SilverStack
+*/
+
+void process_segmentation_fault(int sock_cpu)
+{
+	int i;
+	int flag_process_found = 0;
+	t_process* process;
+
+	for(i=0;i< list_size(list_process);i++)
+	{
+		process = list_get(list_process,i);
+		if(process->current_cpu_socket == sock_cpu && process->status == PROCESS_EXECUTE)
+		{
+			flag_process_found = 1;
+			break;
+		}
+	}
+
+	if(flag_process_found == 1)
+	{
+		process->status = PROCESS_ERROR;
+		process->error_status = SEGMENTATION_FAULT;
+		return;
+	}
+
+	log_error(logger,"No se encontro Proceso con PID = %d en process_segmentation_fault()", process->pid);
+	return;
+}
+
 
 /*
  * Function: finalizo_Quantum
@@ -1638,7 +1708,6 @@ void imprimir(int sock_cpu,int valor)
 				process->status = PROCESS_ERROR;
 				process->program_socket = -1;
 				//close(sock_prog); No cierro el socket del programa porque eso lo hace el select
-				return ;
 			}
 		}
 	}
@@ -1654,6 +1723,7 @@ void imprimir(int sock_cpu,int valor)
 		pthread_mutex_lock(&mutex_pedidos);
 		queue_push(queue_rr,pedido_create(process->pid,PROCESS_EXECUTE,PROCESS_READY));
 		pthread_mutex_unlock(&mutex_pedidos);
+		sem_post(&sem_pcp);
 		return;
 	}
 
@@ -1698,6 +1768,7 @@ void imprimirTexto(int sock_cpu,int valor)
 			pthread_mutex_lock(&mutex_pedidos);
 			queue_push(queue_rr,pedido_create(process->pid,PROCESS_EXECUTE,PROCESS_READY));
 			pthread_mutex_unlock(&mutex_pedidos);
+			sem_post(&sem_pcp);
 			return;
 		}
 
@@ -1709,14 +1780,18 @@ void imprimirTexto(int sock_cpu,int valor)
 
 			if((numbytes=send(sock_prog,&mensaje,size_msg,0))<=0)
 			{
-				log_error(logger, "Error enviando tamanio al programa");
+				log_error(logger, "Error enviando tamanio al programa en imprimirTexto");
+				process->status = PROCESS_ERROR;
+				process->program_socket = -1;
 				//close(sock_prog); //No cierro el socket del programa porque eso lo hace el select
 				return;
 			}
 
 			if((numbytes=send(sock_prog,buffer,mensaje.datosNumericos,0))<=0)
 			{
-				log_error(logger, "Error enviando el texto al programa");
+				log_error(logger, "Error enviando el texto al programa en imprimirTexto");
+				process->status = PROCESS_ERROR;
+				process->program_socket = -1;
 				//close(sock_prog); //No cierro el socket del programa porque eso lo hace el select
 				return;
 			}
@@ -1734,6 +1809,7 @@ void imprimirTexto(int sock_cpu,int valor)
 		pthread_mutex_lock(&mutex_pedidos);
 		queue_push(queue_rr,pedido_create(process->pid,PROCESS_EXECUTE,PROCESS_READY));
 		pthread_mutex_unlock(&mutex_pedidos);
+		sem_post(&sem_pcp);
 		return;
 	}
 }
@@ -2017,6 +2093,7 @@ void io_wait(unsigned int pid, char* io_name, int amount)
 			pthread_mutex_lock(&mutex_pedidos);
 			queue_push(queue_rr,pedido_create(pid,PROCESS_EXECUTE,PROCESS_BLOCKED));
 			pthread_mutex_unlock(&mutex_pedidos);
+			sem_post(&sem_pcp);
 			log_info(logger,"Se Agrega a la io_queue %s el proceso %d con retardo %d", s->name, process_id, s->retardo * retardo);
 			flag_found = 1;
 		}
@@ -2097,6 +2174,7 @@ void retardo_io(void *ptr)
 		pthread_mutex_lock(&mutex_pedidos);
 		queue_push(queue_rr,pedido_create(io_queue_nodo->pcb,PROCESS_BLOCKED,PROCESS_READY));
 		pthread_mutex_unlock(&mutex_pedidos);
+		sem_post(&sem_pcp);
 		log_info(logger,"[retardo_io] Finalizo el retardo = %d",name_io);
 		free(io_queue_nodo);
 	}
@@ -2149,11 +2227,11 @@ void planificador_rr(void)
 						}
 						else
 						{
-							sem_post(&sem_pcp); // Incremento el semaforo porque no saqué el proceso
 							log_error(logger, "[PCP] - No encontre CPU AVAILABLE");
 							pthread_mutex_lock(&mutex_pedidos);
 							queue_push(queue_rr,pedido_create(new_pedido->process_id,new_pedido->previous_status,new_pedido->new_status));
 							pthread_mutex_unlock(&mutex_pedidos);
+							sem_post(&sem_pcp); // Incremento el semaforo porque no saqué el proceso
 							//sleep(1); //TODO: Pensar como mejorar
 						}
 
@@ -2210,7 +2288,6 @@ void planificador_rr(void)
 						break;
 					}
 					case PROCESS_EXIT:
-
 					{
 						log_info(logger,"[PCP] - PID = %d - PROCESS_EXECUTE -> PROCESS_EXIT", new_pedido->process_id);
 						process_update(new_pedido->process_id,PROCESS_EXECUTE,PROCESS_EXIT);
@@ -2456,6 +2533,7 @@ void process_execute(int unique_id, int socket)
 		pthread_mutex_lock(&mutex_pedidos);
 		queue_push(queue_rr,pedido_create(process_id,PROCESS_EXECUTE,PROCESS_EXIT));
 		pthread_mutex_unlock(&mutex_pedidos);
+		sem_post(&sem_pcp);
 		return;
 	}
 
@@ -2605,7 +2683,6 @@ void program_exit(int pid)
 	struct tm *tmPtr;
 	struct tm *timeElapsed;
 
-
 	if((buffer = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
 	{
 		log_error(logger,"Error al reservar memoria para el buffer en program_exit");
@@ -2639,7 +2716,6 @@ void program_exit(int pid)
 
 	if(process->program_socket == -1)
 	{
-
 		tiempo=time(NULL);
 		tmPtr = localtime(&tiempo);
 		process->t_final = mktime(tmPtr);
@@ -2656,6 +2732,18 @@ void program_exit(int pid)
 	mensaje.id_proceso = KERNEL;
 	mensaje.datosNumericos = 0;
 	mensaje.tipo = SALIR;
+	strcpy(mensaje.mensaje,"OK");
+
+	if(process->status == PROCESS_ERROR)
+	{
+		switch(process->error_status)
+		{
+			case ERROR_WRONG_VARCOM: strcpy(mensaje.mensaje,"VARCOM NO EXIST"); break;
+			case SEGMENTATION_FAULT: strcpy(mensaje.mensaje,"SEGMENT FAULT"); break;
+			default: strcpy(mensaje.mensaje,"NOT KNOWN ERROR");
+		}
+	}
+
 	memset(buffer,'\0',MAXDATASIZE);
 	memcpy(buffer,&mensaje,SIZE_MSG);
 
@@ -2685,8 +2773,6 @@ void program_exit(int pid)
 	process->t_final = mktime(tmPtr);
 
 	double seconds = difftime(process->t_final,process->t_inicial);
-
-	log_info(logger,"seconds = %d",seconds);
 	timeElapsed = timeConvert(seconds);
 
 	log_info(logger,"[TIME] [PID = %d] %d Hours %d Minutes %d Seconds ",process->pid, timeElapsed->tm_hour, timeElapsed->tm_min, timeElapsed->tm_sec);
@@ -2917,9 +3003,7 @@ t_nodo_cpu* cpu_get_next_available(int pid)
 		return NULL;
 	}
 
-	log_info(logger,"cpu_get_next_available(%d)",pid);
 	sock_cpu = process->current_cpu_socket;
-	log_info(logger,"process->current_cpu_socket = %d",sock_cpu);
 
 	for(i=0;i < list_size(list_cpu); i++)
 	{
@@ -2936,7 +3020,6 @@ t_nodo_cpu* cpu_get_next_available(int pid)
 
 	if(flag_cpu_found == 1)
 	{
-		log_info(logger,"return cpu_available->socket = %d",cpu_available->socket);
 		return cpu_available;
 	}
 

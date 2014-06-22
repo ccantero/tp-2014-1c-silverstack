@@ -100,6 +100,8 @@ int main (int argc, char *argv[])
 		}
 		if (msg.tipo == SALIR)
 		{
+			printf("Finalizo Ejecucion de Programa\n");
+			printf("%s\n", msg.mensaje);
 			exit(1);
 		}
 	}

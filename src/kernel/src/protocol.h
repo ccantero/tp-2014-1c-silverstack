@@ -109,6 +109,7 @@ typedef struct _t_process {
 	int program_socket;
 	int current_cpu_socket;
 	unsigned char status;
+	int error_status;
 	time_t t_inicial;
 	time_t t_final;
 } t_process;
@@ -153,6 +154,8 @@ typedef struct _t_pedido {
 #define PROCESS_BLOCKED 0x43 // Process Node Status
 #define PROCESS_EXIT 0x44 // Process Node Status
 #define PROCESS_ERROR 0x45 // Process Node Status
+
+#define ERROR_WRONG_VARCOM 2001
 
 t_log *logger;
 t_list *list_io;
@@ -246,6 +249,7 @@ unsigned char process_get_status(int process_id);
 void process_set_status(int process_id, unsigned char status);
 t_process* process_get(int pid, int sock_program, int sock_cpu);
 t_nodo_cpu* cpu_get_next_available(int pid);
+void process_segmentation_fault(int sock_cpu);
 
 
 int get_Segment_Start(int offset);					// A revisar si va o no va
