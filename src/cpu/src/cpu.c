@@ -329,7 +329,7 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 	if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
 	{
 		log_error(logger, "UMV desconectada.");
-		exit(1);
+		depuracion(SIGINT);
 	}
 	if (mensaje.tipo == ENVIOBYTES)
 	{
@@ -443,7 +443,7 @@ void silverstack_asignar(t_puntero dir_var, t_valor_variable valor)
 	if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
 	{
 		log_error(logger, "UMV desconectada.");
-		exit(1);
+		depuracion(SIGINT);
 	}
 	if (mensaje.tipo == ENVIOBYTES)
 	{
@@ -477,7 +477,7 @@ void silverstack_imprimir(t_valor_variable valor)
 	if (recv(sockKernel, &msg, sizeof(t_mensaje), 0) == 0)
 	{
 		log_error(logger, "Kernel desconectado.");
-		exit(1);
+		depuracion(SIGINT);
 	}
 }
 
@@ -495,7 +495,7 @@ void silverstack_imprimirTexto(char *texto)
 	if (recv(sockKernel, &msg, sizeof(t_mensaje), 0) == 0)
 	{
 		log_error(logger, "Kernel desconectado.");
-		exit(1);
+		depuracion(SIGINT);
 	}
 }
 
@@ -513,7 +513,7 @@ t_valor_variable silverstack_obtenerValorCompartida(t_nombre_compartida varCom)
 	if (recv(sockKernel, &msg, sizeof(t_mensaje), 0) == 0)
 	{
 		log_error(logger, "Kernel desconectado.");
-		exit(1);
+		depuracion(SIGINT);
 	}
 	valor = msg.datosNumericos;
 	log_info(logger, "Fin primitiva silverstack_obtenerValorCompartida");
@@ -533,7 +533,7 @@ void silverstack_entradaSalida(t_nombre_dispositivo dispositivo, int tiempo)
 	if (recv(sockKernel, &msg, sizeof(t_mensaje), 0) == 0)
 	{
 		log_error(logger, "Kernel desconectado.");
-		exit(1);
+		depuracion(SIGINT);
 	}
 	proceso_bloqueado = 1;
 	log_info(logger, "Fin primitiva silverstack_entradaSalida");
@@ -561,12 +561,12 @@ void silverstack_finalizar()
 		if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
 		{
 			log_error(logger, "UMV desconectada.");
-			exit(1);
+			depuracion(SIGINT);
 		}
 		if (recv(sockUmv, &buffer, 4, 0) == 0)
 		{
 			log_error(logger, "UMV desconectada.");
-			exit(1);
+			depuracion(SIGINT);
 		}
 		pcb.program_counter = buffer;
 		// Busco direccion del contexto anterior
@@ -581,12 +581,12 @@ void silverstack_finalizar()
 		if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
 		{
 			log_error(logger, "UMV desconectada.");
-			exit(1);
+			depuracion(SIGINT);
 		}
 		if (recv(sockUmv, &buffer, 4, 0) == 0)
 		{
 			log_error(logger, "UMV desconectada.");
-			exit(1);
+			depuracion(SIGINT);
 		}
 		nuevo_contexto = (pcb.stack_pointer - buffer - 8) / 5;
 		pcb.context_actual = nuevo_contexto;
@@ -608,7 +608,7 @@ t_valor_variable silverstack_asignarValorCompartida(t_nombre_compartida varCom, 
 	if (recv(sockKernel, &msg, sizeof(t_mensaje), 0) == 0)
 	{
 		log_error(logger, "Kernel desconectado.");
-		exit(1);
+		depuracion(SIGINT);
 	}
 	log_info(logger, "Fin primitiva silverstack_asignarValorCompartida");
 	return valor;
@@ -630,12 +630,12 @@ void silverstack_irAlLabel(t_nombre_etiqueta etiqueta)
 	if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
 	{
 		log_error(logger, "UMV desconectada.");
-		exit(1);
+		depuracion(SIGINT);
 	}
 	if (recv(sockUmv, &buffer, sizeof(buffer), 0) == 0)
 	{
 		log_error(logger, "UMV desconectada.");
-		exit(1);
+		depuracion(SIGINT);
 	}
 	dir_instruccion = metadata_buscar_etiqueta(etiqueta, buffer, pcb.size_etiquetas_index);
 	pcb.program_counter = dir_instruccion;
@@ -664,7 +664,7 @@ void silverstack_llamarSinRetorno(t_nombre_etiqueta etiqueta)
 	if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
 	{
 		log_error(logger, "UMV desconectada.");
-		exit(1);
+		depuracion(SIGINT);
 	}
 	if (mensaje.tipo == ENVIOBYTES)
 	{
@@ -682,7 +682,7 @@ void silverstack_llamarSinRetorno(t_nombre_etiqueta etiqueta)
 		if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
 		{
 			log_error(logger, "UMV desconectada.");
-			exit(1);
+			depuracion(SIGINT);
 		}
 		pcb.stack_pointer += 4;
 		pcb.context_actual = 0;
@@ -738,7 +738,7 @@ void silverstack_signal(t_nombre_semaforo identificador_semaforo)
 	if (recv(sockKernel, &msg, sizeof(t_mensaje), 0) == 0)
 	{
 		log_error(logger, "Kernel desconectado.");
-		exit(1);
+		depuracion(SIGINT);
 	}
 	log_info(logger, "Fin primitiva silverstack_signal");
 }
@@ -755,7 +755,7 @@ void silverstack_wait(t_nombre_semaforo identificador_semaforo)
 	if (recv(sockKernel, &msg, sizeof(t_mensaje), 0) == 0)
 	{
 		log_error(logger, "Kernel desconectado.");
-		exit(1);
+		depuracion(SIGINT);
 	}
 	if (msg.tipo == BLOCK)
 	{
