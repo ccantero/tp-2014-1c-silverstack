@@ -61,7 +61,7 @@ int main(int argc, char *argv[])
 	if (recv(sockKernel, &mensaje, sizeof(t_mensaje), 0) == 0)
 	{
 		log_error(logger, "Kernel desconectado.");
-		exit(1);
+		depuracion(SIGINT);
 	}
 	if (mensaje.tipo == HANDSHAKEOK)
 	{
@@ -70,7 +70,7 @@ int main(int argc, char *argv[])
 	else
 	{
 		log_error(logger, "Handshake con kernel erroneo.");
-		exit(1);
+		depuracion(SIGINT);
 	}
 	// Handshake con la UMV
 	msg_handshake.tipo = CPU;
@@ -78,7 +78,7 @@ int main(int argc, char *argv[])
 	if (recv(sockUmv, &msg_handshake, sizeof(t_msg_handshake), 0) == 0)
 	{
 		log_error(logger, "UMV desconectada.");
-		exit(1);
+		depuracion(SIGINT);
 	}
 	if (msg_handshake.tipo == UMV)
 	{
@@ -87,7 +87,7 @@ int main(int argc, char *argv[])
 	else
 	{
 		log_error(logger, "Handshake con UMV erroneo.");
-		exit(1);
+		depuracion(SIGINT);
 	}
 	t_mensaje msg_aux;
 	int i;
@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
 	if (recv(sockKernel, &mensaje, sizeof(t_mensaje), 0) == 0)
 	{
 		log_error(logger, "Kernel desconectado.");
-		exit(1);
+		depuracion(SIGINT);
 	}
 	quantum = mensaje.datosNumericos;
 	// Bucle principal del proceso
@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
 		if (recv(sockKernel, &pcb, sizeof(t_pcb), 0) == 0)
 		{
 			log_error(logger, "Kernel desconectado.");
-			exit(1);
+			depuracion(SIGINT);
 		}
 		log_info(logger,"Recibi PCB de Kernel");
 		// Regenero diccionario de variables
@@ -130,14 +130,14 @@ int main(int argc, char *argv[])
 			if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
 			{
 				log_error(logger, "UMV desconectada.");
-				exit(1);
+				depuracion(SIGINT);
 			}
 			if (mensaje.tipo == ENVIOBYTES)
 			{
 				if (recv(sockUmv, &buffer_stack, (pcb.context_actual * 5), 0) == 0)
 				{
 					log_error(logger, "UMV desconectada.");
-					exit(1);
+					depuracion(SIGINT);
 				}
 				for (i = 0; i < pcb.context_actual; i++)
 				{
@@ -180,12 +180,12 @@ int main(int argc, char *argv[])
 				if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
 				{
 					log_error(logger, "UMV desconectada.");
-					exit(1);
+					depuracion(SIGINT);
 				}
 				if (recv(sockUmv, &bufferaux, 8, 0) == 0)
 				{
 					log_error(logger, "UMV desconectada.");
-					exit(1);
+					depuracion(SIGINT);
 				}
 				// Preparo mensaje para la UMV
 				msg_solicitud_bytes.base = pcb.code_segment;
@@ -201,12 +201,12 @@ int main(int argc, char *argv[])
 				if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
 				{
 					log_error(logger, "UMV desconectada.");
-					exit(1);
+					depuracion(SIGINT);
 				}
 				if (recv(sockUmv, &buf, bufferaux[1], 0) == 0)
 				{
 					log_error(logger, "UMV desconectada.");
-					exit(1);
+					depuracion(SIGINT);
 				}
 				buf[bufferaux[1]] = '\0';
 				// Verifico limites de instruccion
@@ -270,6 +270,7 @@ int main(int argc, char *argv[])
 			log_info(logger,"Envie QUANTUMFINISH al Kernel");
 			send(sockKernel, &pcb, sizeof(t_pcb), 0);
 			log_info(logger,"Envie PCB al Kernel");
+			proceso_bloqueado = 0;
 		}
 	}
 	log_info(logger, "Se deja de dar servicio a sistema.");
