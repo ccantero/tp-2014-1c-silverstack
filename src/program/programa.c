@@ -82,28 +82,28 @@ int main (int argc, char *argv[])
 			log_error(logger,"Error recibiendo mensaje.");
 			exit(1);
 		}
-		//me fijo si es imprimir, imprimir texto o salir
-		if(msg.tipo == IMPRIMIR)
+		switch(msg.tipo)
 		{
-			printf("%d\n", msg.datosNumericos);
-		}
-		if (msg.tipo == IMPRIMIRTEXTO)
-		{
-			//recibo texto y me fijo si tiene error
-			if ((numBytes = recv(sockfd, &buf, msg.datosNumericos, 0)) <= 0)
+			case IMPRIMIR: printf("%d\n", msg.datosNumericos);break;
+			case IMPRIMIRTEXTO:
 			{
-				log_error(logger,"Error recibiendo mensaje.");
+				//recibo texto y me fijo si tiene error
+				if ((numBytes = recv(sockfd, &buf, msg.datosNumericos, 0)) <= 0)
+				{
+					log_error(logger,"Error recibiendo mensaje.");
+					exit(1);
+				}
+				buf[msg.datosNumericos + 1] = '\0';
+				//imprimo texto
+				printf("%s", buf);
+				break;
+			}
+			case SALIR:
+			{
+				printf("Finalizo Ejecucion de Programa\n");
+				printf("%s\n", msg.mensaje);
 				exit(1);
 			}
-			buf[msg.datosNumericos + 1] = '\0';
-			//imprimo texto
-			printf("%s", buf);
-		}
-		if (msg.tipo == SALIR)
-		{
-			printf("Finalizo Ejecucion de Programa\n");
-			printf("%s\n", msg.mensaje);
-			exit(1);
 		}
 	}
 	//cierro archivo

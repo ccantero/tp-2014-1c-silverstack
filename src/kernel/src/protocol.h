@@ -154,6 +154,7 @@ typedef struct _t_pedido {
 #define PROCESS_BLOCKED 0x43 // Process Node Status
 #define PROCESS_EXIT 0x44 // Process Node Status
 #define PROCESS_ERROR 0x45 // Process Node Status
+#define SALIR 110
 
 #define ERROR_WRONG_VARCOM 2001
 
@@ -214,6 +215,7 @@ void finalizo_Quantum(int sock_cpu);
 void pcb_update(t_pcb* pcb,unsigned char actual_state);
 void sort_plp(void);
 void planificador_sjn(void);
+void mostrar_procesos(void);
 int is_Connected_CPU(int socket);
 int escuchar_Nuevo_cpu(int sock_cpu);
 int escuchar_cpu(int sock_cpu);
