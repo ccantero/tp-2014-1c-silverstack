@@ -173,7 +173,6 @@ int main(int argc, char *argv[])
 				msg_cambio_proceso_activo.id_programa = pcb.unique_id;
 				mensaje.tipo = SOLICITUDBYTES;
 				send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-				log_info(logger, "Se envio solicitud de busqueda de instruccion.");
 				send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 				send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
 				// Espero la respuesta de la UMV
@@ -193,7 +192,6 @@ int main(int argc, char *argv[])
 				msg_solicitud_bytes.tamanio = bufferaux[1];
 				msg_cambio_proceso_activo.id_programa = pcb.unique_id;
 				mensaje.tipo = SOLICITUDBYTES;
-				log_info(logger, "Se envio solicitud de instruccion.");
 				send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
 				send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
 				send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
@@ -686,6 +684,7 @@ void silverstack_llamarSinRetorno(t_nombre_etiqueta etiqueta)
 		}
 		pcb.stack_pointer += 4;
 		pcb.context_actual = 0;
+		list_clean(variables);
 		silverstack_irAlLabel(etiqueta);
 	}
 	else
