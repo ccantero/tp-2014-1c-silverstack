@@ -44,7 +44,7 @@ int main (int argc, char *argv[])
 	if (connect(sockfd, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)) == -1)
 	{
 		log_error(logger,"Error conectando el socket");
-		return 0;
+		exit(1);
 	}
 	t_mensaje msg;
 	msg.tipo = HANDSHAKE;
@@ -52,7 +52,7 @@ int main (int argc, char *argv[])
 	strcpy(msg.mensaje,"Hola Kernel!!");
 	send(sockfd, &msg, sizeof(msg), 0);
 	// Respuesta handshake y compruebo errores
-	if ((numBytes = recv(sockfd, &msg, sizeof(msg), 0)) == -1)
+	if ((numBytes = recv(sockfd, &msg, sizeof(msg), 0)) <= 0)
 	{
 		log_error(logger,"Error recibiendo mensaje.");
 		exit(1);
@@ -66,6 +66,7 @@ int main (int argc, char *argv[])
 	if (file==NULL)
 	{
 		log_error(logger,"Error de apertura de archivo");
+		exit(1);
 	}
 	fread(buffer, stat_file.st_size,1, file);
 	msg.tipo = SENDFILE;
@@ -76,7 +77,7 @@ int main (int argc, char *argv[])
 	while (1)
 	{
 		// Recibo y me fijo si hay errores
-		if ((numBytes = recv(sockfd, &msg, sizeof(t_mensaje), 0)) == -1)
+		if ((numBytes = recv(sockfd, &msg, sizeof(t_mensaje), 0)) <= 0)
 		{
 			log_error(logger,"Error recibiendo mensaje.");
 			exit(1);
@@ -89,12 +90,12 @@ int main (int argc, char *argv[])
 		if (msg.tipo == IMPRIMIRTEXTO)
 		{
 			//recibo texto y me fijo si tiene error
-			if ((numBytes = recv(sockfd, &buf, msg.datosNumericos, 0)) == -1)
+			if ((numBytes = recv(sockfd, &buf, msg.datosNumericos, 0)) <= 0)
 			{
 				log_error(logger,"Error recibiendo mensaje.");
 				exit(1);
 			}
-			buf[msg.datosNumericos] = '\0';
+			buf[msg.datosNumericos + 1] = '\0';
 			//imprimo texto
 			printf("%s", buf);
 		}
