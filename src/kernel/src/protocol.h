@@ -154,9 +154,9 @@ typedef struct _t_pedido {
 #define PROCESS_BLOCKED 0x43 // Process Node Status
 #define PROCESS_EXIT 0x44 // Process Node Status
 #define PROCESS_ERROR 0x45 // Process Node Status
-#define SALIR 110
 
 #define ERROR_WRONG_VARCOM 2001
+#define ERROR_WRONG_IO 2002
 
 t_log *logger;
 t_list *list_io;
@@ -178,7 +178,6 @@ int sock_umv, process_Id, cantidad_cpu, cantidad_procesos_sistema, stack_size;
 char myip[16],umv_ip[16];
 sem_t free_io_queue;
 
-
 pthread_mutex_t mutex_pedidos;
 pthread_mutex_t mutex_new_queue;
 pthread_mutex_t mutex_ready_queue;
@@ -192,8 +191,6 @@ sem_t sem_plp;
 sem_t sem_pcp;
 sem_t mutex_cpu_list;
 sem_t sem_cpu_list;
-
-
 
 int exit_status;
 
@@ -225,7 +222,7 @@ t_process* process_create(unsigned int pid, int socket);
 void process_update(int pid, unsigned char previous_status, unsigned char next_status);
 void process_destroy(t_process *p);
 void pcb_move(unsigned int pid,t_list* from, t_list* to);
-void io_wait(unsigned int pid, char* io_name, int amount);
+void io_wait(int sock_cpu, char* io_name, int amount);
 t_io_queue_nodo* io_queue_create(unsigned int process_id, int retardo);
 void retardo_io(void *ptr);
 void found_cpus_available(void);

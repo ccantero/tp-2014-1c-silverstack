@@ -170,6 +170,7 @@ void global_update_value(int sock_cpu, char* global_name, int value)
 	char* varCom;
 	t_process* process;
 
+	sem_wait(&mutex_process_list);
 	for(i=0;i< list_size(list_process);i++)
 	{
 		process = list_get(list_process,i);
@@ -221,9 +222,11 @@ void global_update_value(int sock_cpu, char* global_name, int value)
 		queue_push(queue_rr,pedido_create(process->pid,PROCESS_EXECUTE,PROCESS_READY));
 		pthread_mutex_unlock(&mutex_pedidos);
 		sem_post(&sem_pcp);
+		sem_post(&mutex_process_list);
 		return;
 	}
 
+	sem_post(&mutex_process_list);
 	return;
 }
 
@@ -246,6 +249,7 @@ void global_get_value(int sock_cpu, char* global_name)
 	char* varCom;
 	t_process* process;
 
+	sem_wait(&mutex_process_list);
 	for(i=0;i< list_size(list_process);i++)
 	{
 		process = list_get(list_process,i);
@@ -255,6 +259,7 @@ void global_get_value(int sock_cpu, char* global_name)
 			break;
 		}
 	}
+
 
 	if(flag_process_found == 1)
 	{
@@ -291,6 +296,7 @@ void global_get_value(int sock_cpu, char* global_name)
 		// Esto lo hace el select
 		//close(sock_cpu);
 		//cpu_remove(sock_cpu);
+		sem_post(&mutex_process_list);
 		return;
 	}
 
@@ -299,9 +305,11 @@ void global_get_value(int sock_cpu, char* global_name)
 		log_error(logger, "Variable compartida %s no encontrado", varCom);
 		process->status = PROCESS_ERROR;
 		process->error_status = ERROR_WRONG_VARCOM;
+		sem_post(&mutex_process_list);
 		return;
 	}
 
+	sem_post(&mutex_process_list);
 	return;
 }
 
@@ -429,6 +437,8 @@ void semaphore_wait(int sock_cpu, char* sem_name)
 	t_mensaje mensaje;
 	int size_msg = sizeof(t_mensaje);
 	int numbytes;
+
+	// TODO: Buscar solo procesos en PROCESS_EXECUTE
 
 	int pid = get_process_id_by_sock_cpu(sock_cpu);
 
@@ -1388,7 +1398,6 @@ void planificador_sjn(void)
 			log_info(logger, "[PLP] sleep(1)");
 			sleep(1); // TODO: Pensar una forma de mejorar esto
 		}
-		mostrar_procesos();
 	} // for(;;)
 }
 
@@ -1620,7 +1629,7 @@ int escuchar_cpu(int sock_cpu)
 		case ASIGNACION: global_update_value(sock_cpu,mensaje.mensaje, mensaje.datosNumericos); break;
 		case VARCOMREQUEST: global_get_value(sock_cpu,mensaje.mensaje); break;
 		case SEGMENTATION_FAULT: process_segmentation_fault(sock_cpu); break;
-		//case ENTRADASALIDA: io(); break;
+		case ENTRADASALIDA: io_wait(sock_cpu,mensaje.mensaje,mensaje.datosNumericos); break;
 		default: log_error(logger,"mensaje.tipo = %d no identificado",mensaje.tipo);
 	};
 
@@ -1755,9 +1764,9 @@ void imprimir(int sock_cpu,int valor)
 	mensaje.tipo = IMPRIMIR;
 	mensaje.datosNumericos = valor;
 
-
 	t_process* process;
 
+	sem_wait(&mutex_process_list);
 	for(i=0;i< list_size(list_process);i++)
 	{
 		process = list_get(list_process,i);
@@ -1786,6 +1795,7 @@ void imprimir(int sock_cpu,int valor)
 	else
 	{
 		log_error(logger,"No se encontro el proceso asociado al sock cpu = %d",sock_cpu);
+		sem_post(&mutex_process_list);
 		return;
 	}
 
@@ -1796,9 +1806,11 @@ void imprimir(int sock_cpu,int valor)
 		queue_push(queue_rr,pedido_create(process->pid,PROCESS_EXECUTE,PROCESS_READY));
 		pthread_mutex_unlock(&mutex_pedidos);
 		sem_post(&sem_pcp);
+		sem_post(&mutex_process_list);
 		return;
 	}
 
+	sem_post(&mutex_process_list);
 	return;
 }
 
@@ -1820,6 +1832,7 @@ void imprimirTexto(int sock_cpu,int valor)
 
 	t_process* process;
 
+	sem_wait(&mutex_process_list);
 	for(i=0;i< list_size(list_process);i++)
 	{
 		process = list_get(list_process,i);
@@ -1840,6 +1853,7 @@ void imprimirTexto(int sock_cpu,int valor)
 			pthread_mutex_lock(&mutex_pedidos);
 			queue_push(queue_rr,pedido_create(process->pid,PROCESS_EXECUTE,PROCESS_READY));
 			pthread_mutex_unlock(&mutex_pedidos);
+			sem_post(&mutex_process_list);
 			sem_post(&sem_pcp);
 			return;
 		}
@@ -1856,6 +1870,7 @@ void imprimirTexto(int sock_cpu,int valor)
 				process->status = PROCESS_ERROR;
 				process->program_socket = -1;
 				//close(sock_prog); //No cierro el socket del programa porque eso lo hace el select
+				sem_post(&mutex_process_list);
 				return;
 			}
 
@@ -1865,6 +1880,7 @@ void imprimirTexto(int sock_cpu,int valor)
 				process->status = PROCESS_ERROR;
 				process->program_socket = -1;
 				//close(sock_prog); //No cierro el socket del programa porque eso lo hace el select
+				sem_post(&mutex_process_list);
 				return;
 			}
 		}
@@ -1881,9 +1897,12 @@ void imprimirTexto(int sock_cpu,int valor)
 		pthread_mutex_lock(&mutex_pedidos);
 		queue_push(queue_rr,pedido_create(process->pid,PROCESS_EXECUTE,PROCESS_READY));
 		pthread_mutex_unlock(&mutex_pedidos);
+		sem_post(&mutex_process_list);
 		sem_post(&sem_pcp);
 		return;
 	}
+
+	sem_post(&mutex_process_list);
 }
 
 /*
@@ -2146,40 +2165,82 @@ void pcb_move(unsigned int pid,t_list* from, t_list* to)
  * Author: SilverStack
 */
 
-void io_wait(unsigned int pid, char* io_name, int amount)
+void io_wait(int sock_cpu, char* io_name, int amount)
 {
-	int flag_found = 0;
-	int process_id = pid;
-	int retardo = amount;
-	char* io_id = (char*) malloc(sizeof(char) * (strlen(io_name) + 1));
+	int flag_process_found = 0;
+	int flag_io_found = 0;
+	int numbytes;
 	t_io* io_node;
+	int i;
+	t_process* process;
+	t_mensaje mensaje;
+	int size_msg = sizeof(t_mensaje);
 
-	strcpy(io_id,io_name);
-
-	void _get_io_node(t_io *s)
+	sem_wait(&mutex_process_list);
+	for(i=0;i< list_size(list_process);i++)
 	{
-		if(strcmp(s->name, io_id) == 0)
+		process = list_get(list_process,i);
+		if(process->current_cpu_socket == sock_cpu && process->status == PROCESS_EXECUTE)
 		{
-			io_node = s;
-			queue_push(s->io_queue, io_queue_create(process_id,s->retardo * retardo));
-			pthread_mutex_lock(&mutex_pedidos);
-			queue_push(queue_rr,pedido_create(pid,PROCESS_EXECUTE,PROCESS_BLOCKED));
-			pthread_mutex_unlock(&mutex_pedidos);
-			sem_post(&sem_pcp);
-			log_info(logger,"Se Agrega a la io_queue %s el proceso %d con retardo %d", s->name, process_id, s->retardo * retardo);
-			flag_found = 1;
+			flag_process_found = 1;
+			break;
 		}
 	}
 
-	sem_wait(&free_io_queue); // Bloqueo el mutex de lista IO
-	list_iterate(list_io, (void*) _get_io_node);
-	sem_post(&(io_node->io_sem)); // Libero el semaforo de la queue IO que corresponde
-	sem_post(&free_io_queue); // Libero el mutex de lista IO
+	if(flag_process_found == 1)
+	{
+		sem_wait(&free_io_queue); // Bloqueo el mutex de lista IO
 
-	if(flag_found == 0)
-		log_error(logger, "No se encontro elemento de IO %s", io_id);
+		for(i=0;i < list_size(list_io);i++)
+		{
+			io_node = list_get(list_io,i);
+			if(strcmp(io_node->name, io_name) == 0)
+			{
+				queue_push((io_node->io_queue), io_queue_create(process->pid,io_node->retardo * amount));
 
-	free(io_id);
+				log_info(logger,"Se Agrega a la io_queue %s el proceso %d con io->retardo = %d y retardo = %d", io_node->name, process->pid, io_node->retardo, amount);
+				sem_post(&(io_node->io_sem)); // Libero el semaforo de la queue IO que corresponde
+				flag_io_found = 1;
+				break;
+			}
+		}
+
+		sem_post(&free_io_queue); // Libero el mutex de lista IO
+		process->status = PROCESS_BLOCKED;
+
+		if(flag_io_found == 0)
+		{
+			log_error(logger, "No se encontro elemento de IO %s", io_name);
+			process->status = PROCESS_ERROR;
+			process->error_status = ERROR_WRONG_IO;
+			pthread_mutex_lock(&mutex_pedidos);
+			queue_push(queue_rr,pedido_create(process->pid,PROCESS_EXECUTE,PROCESS_EXIT));
+			pthread_mutex_unlock(&mutex_pedidos);
+			sem_post(&mutex_process_list);
+			sem_post(&sem_pcp);
+		}
+	}
+	else
+	{
+		log_error(logger, "No se encontro proceso asociado al CPU %d", sock_cpu);
+	}
+
+	mensaje.id_proceso = KERNEL;
+	mensaje.tipo = ENTRADASALIDA;
+	mensaje.datosNumericos = 0;
+
+	if((numbytes=write(sock_cpu,&mensaje,size_msg))<=0)
+	{
+		log_error(logger, "CPU no conectada");
+		pthread_mutex_lock(&mutex_pedidos);
+		queue_push(queue_rr,pedido_create(process->pid,PROCESS_EXECUTE,PROCESS_READY));
+		pthread_mutex_unlock(&mutex_pedidos);
+		sem_post(&mutex_process_list);
+		sem_post(&sem_pcp);
+		return;
+	}
+
+	sem_post(&mutex_process_list);
 }
 
 /*
@@ -2212,6 +2273,12 @@ void retardo_io(void *ptr)
 	t_io_queue_nodo* io_queue_nodo;
 	struct timeval tv;
 
+	time_t tiempo, inicial, final;
+	struct tm *tmPtrIni;
+	struct tm *tmPtrFin;
+	struct tm *timeElapsed;
+	double difference;
+
 	void _get_io_node(t_io *s)
 	{
 		if(strcmp(s->name, name_io) == 0)
@@ -2229,26 +2296,42 @@ void retardo_io(void *ptr)
 	{
 		sem_wait(&(io_node->io_sem));	// Down Semaphore_Local
 		sem_wait(&free_io_queue);		// Down Semaphore_Free_Io_Queue
+
 			/* START CRITICAL REGION */
-			log_info(logger,"[retardo_io] Start Critical Section IO = %s",name_io);
 			io_queue_nodo = queue_pop(io_node->io_queue);
-			log_info(logger,"[retardo_io] Finish Critical Section IO = %s",name_io);
 			/* END CRITICAL REGION */
 		sem_post(&free_io_queue); // Up Semaphore
-		log_info(logger,"[retardo_io] Dormir = %d",io_queue_nodo->retardo);
 		tv.tv_sec = 0;
 		tv.tv_usec = io_queue_nodo->retardo * 1000;
+
+		tiempo=time(NULL);
+		tmPtrIni = localtime(&tiempo);
+		inicial = mktime(tmPtrIni);
+
 		if (select(0, NULL, NULL, NULL, &tv) == -1)
 		{
 			log_error(logger, "Error en funcion select en retardo_io");;
 			return;
 		}
+
+		tiempo=time(NULL);
+		tmPtrFin = localtime(&tiempo);
+		final = mktime(tmPtrFin);
+
+		difference = difftime(final,inicial);
+		timeElapsed = timeConvert(difference);
+
+		log_info(logger,"[PID = %d] was blocked %d Hours %d Minutes %d Seconds ",	io_queue_nodo->pcb,
+																					timeElapsed->tm_hour,
+																					timeElapsed->tm_min,
+																					timeElapsed->tm_sec);
+
 		pthread_mutex_lock(&mutex_pedidos);
 		queue_push(queue_rr,pedido_create(io_queue_nodo->pcb,PROCESS_BLOCKED,PROCESS_READY));
 		pthread_mutex_unlock(&mutex_pedidos);
+		process_set_status(io_queue_nodo->pcb,PROCESS_READY);
+
 		sem_post(&sem_pcp);
-		log_info(logger,"[retardo_io] Finalizo el retardo = %d",name_io);
-		free(io_queue_nodo);
 	}
 }
 
@@ -2812,6 +2895,7 @@ void program_exit(int pid)
 		{
 			case ERROR_WRONG_VARCOM: strcpy(mensaje.mensaje,"VARCOM NO EXIST"); break;
 			case SEGMENTATION_FAULT: strcpy(mensaje.mensaje,"SEGMENT FAULT"); break;
+			case ERROR_WRONG_IO: strcpy(mensaje.mensaje,"IO NOT FOUND"); break;
 			default: strcpy(mensaje.mensaje,"NOT KNOWN ERROR");
 		}
 	}
