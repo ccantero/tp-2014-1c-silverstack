@@ -502,7 +502,6 @@ t_valor_variable silverstack_obtenerValorCompartida(t_nombre_compartida varCom)
 {
 	// 1) Solicito al kernel el valor de la variable varCom
 	// 2) Devuelvo el valor recibido
-	log_info(logger, "Comienzo primitiva silverstack_obtenerValorCompartida");
 	t_valor_variable valor = 0;
 	t_mensaje msg;
 	msg.id_proceso = CPU;
@@ -515,14 +514,12 @@ t_valor_variable silverstack_obtenerValorCompartida(t_nombre_compartida varCom)
 		depuracion(SIGINT);
 	}
 	valor = msg.datosNumericos;
-	log_info(logger, "Fin primitiva silverstack_obtenerValorCompartida");
 	return valor;
 }
 
 void silverstack_entradaSalida(t_nombre_dispositivo dispositivo, int tiempo)
 {
 	// 1) Envio al kernel el tiempo de entrada/salida de dispositivo
-	log_info(logger, "Comienzo primitiva silverstack_entradaSalida");
 	t_mensaje msg;
 	msg.id_proceso = CPU;
 	msg.tipo = ENTRADASALIDA;
@@ -535,7 +532,6 @@ void silverstack_entradaSalida(t_nombre_dispositivo dispositivo, int tiempo)
 		depuracion(SIGINT);
 	}
 	proceso_bloqueado = 1;
-	log_info(logger, "Fin primitiva silverstack_entradaSalida");
 }
 
 void silverstack_finalizar()
@@ -597,7 +593,6 @@ t_valor_variable silverstack_asignarValorCompartida(t_nombre_compartida varCom, 
 {
 	// 1) Envio al kernel el valor de la variable compartida a asignar
 	// 2) Devuelvo el valor asignado
-	log_info(logger, "Comienzo primitiva silverstack_asignarValorCompartida");
 	t_mensaje msg;
 	msg.id_proceso = CPU;
 	msg.tipo = ASIGNACION;
@@ -609,7 +604,6 @@ t_valor_variable silverstack_asignarValorCompartida(t_nombre_compartida varCom, 
 		log_error(logger, "Kernel desconectado.");
 		depuracion(SIGINT);
 	}
-	log_info(logger, "Fin primitiva silverstack_asignarValorCompartida");
 	return valor;
 }
 
@@ -712,8 +706,6 @@ void silverstack_llamarConRetorno(t_nombre_etiqueta etiqueta, t_puntero donde_re
 	// 3) Preservo donde retornar el valor
 	// 4) Asigno el nuevo contexto al puntero de stack
 	// 5) Reseteo a 0 el tamanio del contexto actual
-	log_info(logger, "Comienzo primitiva silverstack_llamarConRetorno");
-	log_info(logger, "llamarConrRetorno(etiqueta, %d)", donde_retornar);
 	int buffer;
 	t_mensaje msg_aux;
 	int nuevo_contexto = pcb.stack_pointer + (5 * pcb.context_actual);
@@ -796,13 +788,10 @@ void silverstack_llamarConRetorno(t_nombre_etiqueta etiqueta, t_puntero donde_re
 		send(sockKernel, &msg_aux, sizeof(t_mensaje), 0);
 		proceso_finalizo = 1;
 	}
-	log_info(logger, "Fin primitiva silverstack_llamarConRetorno");
 }
 
 void silverstack_retornar(t_valor_variable valor)
 {
-	log_info(logger, "Comienzo primitiva silverstack_retornar");
-	log_info(logger, "retornar(%d)", valor);
 	int buffer;
 	int nuevo_contexto;
 	int donde_retornar;
@@ -885,13 +874,11 @@ void silverstack_retornar(t_valor_variable valor)
 	pcb.context_actual = nuevo_contexto;
 	pcb.stack_pointer = buffer;
 	list_clean(variables);
-	log_info(logger, "Fin primitiva silverstack_retornar");
 }
 
 void silverstack_signal(t_nombre_semaforo identificador_semaforo)
 {
 	// 1) Envio al kernel el semaforo para que ejecute signal en él
-	log_info(logger, "Comienzo primitiva silverstack_signal");
 	t_mensaje msg;
 	msg.id_proceso = CPU;
 	msg.tipo = SIGNALSEM;
@@ -902,13 +889,11 @@ void silverstack_signal(t_nombre_semaforo identificador_semaforo)
 		log_error(logger, "Kernel desconectado.");
 		depuracion(SIGINT);
 	}
-	log_info(logger, "Fin primitiva silverstack_signal");
 }
 
 void silverstack_wait(t_nombre_semaforo identificador_semaforo)
 {
 	// 1) Envio al kernel el semaforo para que se ejecute wait en él
-	log_info(logger, "Comienzo primitiva silverstack_wait");
 	t_mensaje msg;
 	msg.id_proceso = CPU;
 	msg.tipo = WAITSEM;
@@ -923,7 +908,6 @@ void silverstack_wait(t_nombre_semaforo identificador_semaforo)
 	{
 		proceso_bloqueado = 1;
 	}
-	log_info(logger, "Fin primitiva silverstack_wait");
 }
 
 void depuracion(int senial)
