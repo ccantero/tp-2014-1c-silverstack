@@ -1388,10 +1388,82 @@ void planificador_sjn(void)
 			log_info(logger, "[PLP] sleep(1)");
 			sleep(1); // TODO: Pensar una forma de mejorar esto
 		}
-
+		mostrar_procesos();
 	} // for(;;)
 }
 
+void mostrar_procesos()
+{
+	int i,k;
+	int tamanio = 0;
+	t_process *process;
+	t_pcb *element;
+
+	sem_wait(&mutex_process_list);
+	for(i=0;i < list_size(list_process);i++)
+	{
+		process = list_get(list_process,i);
+		for (k=0;k < list_size(list_pcb_new);k++)
+		{
+			element = list_get(list_pcb_new,k);
+			if (process->pid == element->unique_id)
+			{
+				tamanio = element->peso;
+				break;
+			}
+		}
+		if(tamanio == 0)
+		{
+			for (k=0;k < list_size(list_pcb_ready);k++)
+			{
+				element = list_get(list_pcb_ready,k);
+				if (process->pid == element->unique_id)
+				{
+					tamanio = element->peso;
+					break;
+				}
+			}
+			if(tamanio == 0)
+			{
+				for (k=0;k < list_size(list_pcb_execute);k++)
+				{
+					element = list_get(list_pcb_execute,k);
+					if (process->pid == element->unique_id)
+					{
+						tamanio = element->peso;
+						break;
+					}
+				}
+				if(tamanio == 0)
+				{
+					for (k=0;k < list_size(list_pcb_blocked);k++)
+					{
+						element = list_get(list_pcb_blocked,k);
+						if (process->pid == element->unique_id)
+						{
+							tamanio = element->peso;
+							break;
+						}
+					}
+				}
+				if(tamanio == 0)
+				{
+					for (k=0;k < list_size(list_pcb_exit);k++)
+					{
+						element = list_get(list_pcb_exit,k);
+						if (process->pid == element->unique_id)
+						{
+							tamanio = element->peso;
+							break;
+						}
+					}
+				}
+			}
+		}
+		printf("el proceso: %d se encuentra en el estado: %d y tiene un peso de: %d /n",process->pid,process->status,tamanio);
+	}
+	sem_post(&mutex_process_list);
+}
 /*
  * Function: is_Connected_CPU
  * Purpose: Finds if the CPU is already connected
