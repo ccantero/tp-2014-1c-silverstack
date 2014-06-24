@@ -340,7 +340,6 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 	}
 	else
 	{
-		// TODO Probar con Kernel esto
 		msg_aux.tipo = mensaje.tipo;
 		send(sockKernel, &msg_aux, sizeof(t_mensaje), 0);
 		proceso_finalizo = 1;
@@ -682,10 +681,19 @@ void silverstack_llamarSinRetorno(t_nombre_etiqueta etiqueta)
 			log_error(logger, "UMV desconectada.");
 			depuracion(SIGINT);
 		}
-		pcb.stack_pointer += 4;
-		pcb.context_actual = 0;
-		list_clean(variables);
-		silverstack_irAlLabel(etiqueta);
+		if (mensaje.tipo == ENVIOBYTES)
+		{
+			pcb.stack_pointer += 4;
+			pcb.context_actual = 0;
+			list_clean(variables);
+			silverstack_irAlLabel(etiqueta);
+		}
+		else
+		{
+			msg_aux.tipo = mensaje.tipo;
+			send(sockKernel, &msg_aux, sizeof(t_mensaje), 0);
+			proceso_finalizo = 1;
+		}
 	}
 	else
 	{
@@ -697,17 +705,94 @@ void silverstack_llamarSinRetorno(t_nombre_etiqueta etiqueta)
 
 void silverstack_llamarConRetorno(t_nombre_etiqueta etiqueta, t_puntero donde_retornar)
 {
-	/*
-	Preserva el contexto de ejecución actual para poder retornar luego al mismo, junto con la
-	posicion de la variable entregada por donde_retornar . Modifica las estructuras
-	correspondientes para mostrar un nuevo contexto vacío. Retorna el número de instrucción a
-	ejecutar.
-	Los parámetros serán definidos luego de esta instrucción de la misma manera que una variable
-	local, con identificadores numéricos empezando por el 0.
-	No se pretende que se pueda retornar a una variable global. Sí a un parámetro o variable local
-	*/
+	// 1) Preservo el contexto actual
+	// 2) Preservo el program counter
+	// 3) Preservo donde retornar el valor
+	// 4) Asigno el nuevo contexto al puntero de stack
+	// 5) Reseteo a 0 el tamanio del contexto actual
 	log_info(logger, "Comienzo primitiva silverstack_llamarConRetorno");
-
+	int buffer;
+	t_mensaje msg_aux;
+	int nuevo_contexto = pcb.stack_pointer + (5 * pcb.context_actual);
+	buffer = pcb.stack_pointer;
+	pcb.stack_pointer = nuevo_contexto;
+	msg_envio_bytes.base = pcb.stack_segment;
+	msg_envio_bytes.offset = pcb.stack_pointer - pcb.stack_segment;
+	msg_envio_bytes.tamanio = 4;
+	mensaje.tipo = ENVIOBYTES;
+	msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+	send(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
+	send(sockUmv, &buffer, sizeof(buffer), 0);
+	if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "UMV desconectada.");
+		depuracion(SIGINT);
+	}
+	if (mensaje.tipo == ENVIOBYTES)
+	{
+		pcb.stack_pointer += 4;
+		buffer = pcb.program_counter;
+		msg_envio_bytes.base = pcb.stack_segment;
+		msg_envio_bytes.offset = pcb.stack_pointer - pcb.stack_segment;
+		msg_envio_bytes.tamanio = 4;
+		mensaje.tipo = ENVIOBYTES;
+		msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+		send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+		send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+		send(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
+		send(sockUmv, &buffer, sizeof(buffer), 0);
+		if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
+		{
+			log_error(logger, "UMV desconectada.");
+			depuracion(SIGINT);
+		}
+		if (mensaje.tipo == ENVIOBYTES)
+		{
+			pcb.stack_pointer += 4;
+			buffer = donde_retornar;
+			msg_envio_bytes.base = pcb.stack_segment;
+			msg_envio_bytes.offset = pcb.stack_pointer - pcb.stack_segment;
+			msg_envio_bytes.tamanio = 4;
+			mensaje.tipo = ENVIOBYTES;
+			msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+			send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+			send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+			send(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
+			send(sockUmv, &buffer, sizeof(buffer), 0);
+			if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
+			{
+				log_error(logger, "UMV desconectada.");
+				depuracion(SIGINT);
+			}
+			if (mensaje.tipo == ENVIOBYTES)
+			{
+				pcb.stack_pointer += 4;
+				pcb.context_actual = 0;
+				list_clean(variables);
+				silverstack_irAlLabel(etiqueta);
+			}
+			else
+			{
+				msg_aux.tipo = mensaje.tipo;
+				send(sockKernel, &msg_aux, sizeof(t_mensaje), 0);
+				proceso_finalizo = 1;
+			}
+		}
+		else
+		{
+			msg_aux.tipo = mensaje.tipo;
+			send(sockKernel, &msg_aux, sizeof(t_mensaje), 0);
+			proceso_finalizo = 1;
+		}
+	}
+	else
+	{
+		msg_aux.tipo = mensaje.tipo;
+		send(sockKernel, &msg_aux, sizeof(t_mensaje), 0);
+		proceso_finalizo = 1;
+	}
 	log_info(logger, "Fin primitiva silverstack_llamarConRetorno");
 }
 
@@ -719,9 +804,87 @@ void silverstack_retornar(t_valor_variable valor)
 	asignando el valor de retorno en esta, previamente apilados en el Stack.
 	*/
 	log_info(logger, "Comienzo primitiva silverstack_retornar");
-
-
-
+	int buffer;
+	int nuevo_contexto;
+	int donde_retornar;
+	// Busco donde retornar
+	msg_solicitud_bytes.base = pcb.stack_segment;
+	msg_solicitud_bytes.offset = (pcb.stack_pointer - pcb.stack_segment) - 4;
+	msg_solicitud_bytes.tamanio = 4;
+	msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+	mensaje.tipo = SOLICITUDBYTES;
+	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+	send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
+	if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "UMV desconectada.");
+		depuracion(SIGINT);
+	}
+	if (recv(sockUmv, &buffer, 4, 0) == 0)
+	{
+		log_error(logger, "UMV desconectada.");
+		depuracion(SIGINT);
+	}
+	donde_retornar = buffer;
+	// Retorno el valor donde debo
+	buffer = valor;
+	msg_envio_bytes.base = pcb.stack_segment;
+	msg_envio_bytes.offset = donde_retornar - pcb.stack_segment;
+	msg_envio_bytes.tamanio = 4;
+	mensaje.tipo = ENVIOBYTES;
+	msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+	send(sockUmv, &msg_envio_bytes, sizeof(t_msg_envio_bytes), 0);
+	send(sockUmv, &buffer, sizeof(buffer), 0);
+	if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "UMV desconectada.");
+		depuracion(SIGINT);
+	}
+	// Busco el program counter del contexto anterior
+	msg_solicitud_bytes.base = pcb.stack_segment;
+	msg_solicitud_bytes.offset = (pcb.stack_pointer - pcb.stack_segment) - 8;
+	msg_solicitud_bytes.tamanio = 4;
+	msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+	mensaje.tipo = SOLICITUDBYTES;
+	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+	send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
+	if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "UMV desconectada.");
+		depuracion(SIGINT);
+	}
+	if (recv(sockUmv, &buffer, 4, 0) == 0)
+	{
+		log_error(logger, "UMV desconectada.");
+		depuracion(SIGINT);
+	}
+	pcb.program_counter = buffer;
+	// Busco direccion del contexto anterior
+	msg_solicitud_bytes.base = pcb.stack_segment;
+	msg_solicitud_bytes.offset = (pcb.stack_pointer - pcb.stack_segment) - 12;
+	msg_solicitud_bytes.tamanio = 4;
+	msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+	mensaje.tipo = SOLICITUDBYTES;
+	send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+	send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+	send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
+	if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "UMV desconectada.");
+		depuracion(SIGINT);
+	}
+	if (recv(sockUmv, &buffer, 4, 0) == 0)
+	{
+		log_error(logger, "UMV desconectada.");
+		depuracion(SIGINT);
+	}
+	nuevo_contexto = (pcb.stack_pointer - buffer - 8) / 5;
+	pcb.context_actual = nuevo_contexto;
+	pcb.stack_pointer = buffer;
 	log_info(logger, "Fin primitiva silverstack_retornar");
 }
 
