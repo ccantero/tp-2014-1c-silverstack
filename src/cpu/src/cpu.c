@@ -344,6 +344,8 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 		send(sockKernel, &msg_aux, sizeof(t_mensaje), 0);
 		proceso_finalizo = 1;
 	}
+	log_info(logger, "variable %c", var);
+	log_info(logger, "direccion %d", ptr);
 	return ptr;
 }
 
@@ -711,6 +713,7 @@ void silverstack_llamarConRetorno(t_nombre_etiqueta etiqueta, t_puntero donde_re
 	// 4) Asigno el nuevo contexto al puntero de stack
 	// 5) Reseteo a 0 el tamanio del contexto actual
 	log_info(logger, "Comienzo primitiva silverstack_llamarConRetorno");
+	log_info(logger, "llamarConrRetorno(etiqueta, %d)", donde_retornar);
 	int buffer;
 	t_mensaje msg_aux;
 	int nuevo_contexto = pcb.stack_pointer + (5 * pcb.context_actual);
@@ -798,12 +801,8 @@ void silverstack_llamarConRetorno(t_nombre_etiqueta etiqueta, t_puntero donde_re
 
 void silverstack_retornar(t_valor_variable valor)
 {
-	/*
-	Modifica el Contexto de Ejecución Actual por el Contexto anterior al que se está ejecutando,
-	recuperando el Cursor de Contexto Actual, el Program Counter y la direccion donde retornar,
-	asignando el valor de retorno en esta, previamente apilados en el Stack.
-	*/
 	log_info(logger, "Comienzo primitiva silverstack_retornar");
+	log_info(logger, "retornar(%d)", valor);
 	int buffer;
 	int nuevo_contexto;
 	int donde_retornar;
@@ -827,10 +826,10 @@ void silverstack_retornar(t_valor_variable valor)
 		depuracion(SIGINT);
 	}
 	donde_retornar = buffer;
-	// Retorno el valor donde debo
+	// Asigno el valor de retorno donde debo
 	buffer = valor;
 	msg_envio_bytes.base = pcb.stack_segment;
-	msg_envio_bytes.offset = donde_retornar - pcb.stack_segment;
+	msg_envio_bytes.offset = donde_retornar - pcb.stack_segment + 1;
 	msg_envio_bytes.tamanio = 4;
 	mensaje.tipo = ENVIOBYTES;
 	msg_cambio_proceso_activo.id_programa = pcb.unique_id;
@@ -885,6 +884,7 @@ void silverstack_retornar(t_valor_variable valor)
 	nuevo_contexto = (pcb.stack_pointer - buffer - 8) / 5;
 	pcb.context_actual = nuevo_contexto;
 	pcb.stack_pointer = buffer;
+	list_clean(variables);
 	log_info(logger, "Fin primitiva silverstack_retornar");
 }
 

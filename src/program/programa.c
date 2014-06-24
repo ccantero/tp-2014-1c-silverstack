@@ -93,7 +93,7 @@ int main (int argc, char *argv[])
 					log_error(logger,"Error recibiendo mensaje.");
 					exit(1);
 				}
-				buf[msg.datosNumericos + 1] = '\0';
+				buf[msg.datosNumericos] = '\0';
 				//imprimo texto
 				printf("%s", buf);
 				break;
