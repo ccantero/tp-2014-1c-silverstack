@@ -157,7 +157,6 @@ typedef struct _t_pedido {
 
 #define ERROR_WRONG_VARCOM 2001
 #define ERROR_WRONG_IO 2002
-
 t_log *logger;
 t_list *list_io;
 t_list *list_pcb_new;
@@ -185,7 +184,8 @@ pthread_mutex_t mutex_execute_queue;
 pthread_mutex_t mutex_block_queue;
 pthread_mutex_t mutex_exit_queue;
 
-
+sem_t sem_consola;
+sem_t sem_consola_ready;
 sem_t mutex_process_list;
 sem_t sem_plp;
 sem_t sem_pcp;
@@ -212,6 +212,7 @@ void finalizo_Quantum(int sock_cpu);
 void pcb_update(t_pcb* pcb,unsigned char actual_state);
 void sort_plp(void);
 void planificador_sjn(void);
+void mostrar_consola(void);
 void mostrar_procesos(void);
 int is_Connected_CPU(int socket);
 int escuchar_Nuevo_cpu(int sock_cpu);

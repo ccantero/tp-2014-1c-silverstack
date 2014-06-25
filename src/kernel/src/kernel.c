@@ -24,6 +24,7 @@ int main(int argc, char *argv[])
 
 	pthread_t th_plp;
 	pthread_t th_pcp;
+	pthread_t th_consola;
 
 	if(argc != 2)
 	{
@@ -59,6 +60,9 @@ int main(int argc, char *argv[])
 	sem_init(&sem_plp, 0, 0); // Empieza en cero porque tiene que bloquearse hasta que aparezca algo
 	sem_init(&sem_pcp, 0, 0); // Empieza en cero porque tiene que bloquearse hasta que aparezca algo
 	sem_init(&mutex_cpu_list, 0, 1);
+
+	sem_init(&sem_consola,0,0); //arranca en 0 hasta que haya algun proceso para mostrar
+	sem_init(&sem_consola_ready,0,1); //arranca en 1 ya que tiene que entrar al process update
 
 	if (pthread_mutex_init(&mutex_pedidos, NULL) != 0)
 	{
@@ -102,6 +106,7 @@ int main(int argc, char *argv[])
 
 	pthread_create(&th_plp,NULL,(void*)planificador_sjn,NULL);
 	pthread_create(&th_pcp,NULL,(void*)planificador_rr,NULL);
+	pthread_create(&th_consola,NULL,(void*)mostrar_consola,NULL);
 
 	sock_umv = umv_connect();
 	sock_cpu = servidor_CPU();

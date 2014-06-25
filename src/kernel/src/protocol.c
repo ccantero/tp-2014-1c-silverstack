@@ -1400,78 +1400,54 @@ void planificador_sjn(void)
 		}
 	} // for(;;)
 }
-
-void mostrar_procesos()
+void mostrar_consola(void)
 {
-	int i,k;
+	for(;;)
+	{
+		log_info(logger, "consola esperando para mostrar");
+		sem_wait(&sem_consola);
+		log_info(logger, "consola mostrando");
+		//system ( "clear" );//borro para que no se junte toda la info
+		mostrar_procesos();
+		sem_post(&sem_consola_ready);
+	}
+}
+void mostrar_procesos(void)
+{
+	int k;
 	int tamanio = 0;
-	t_process *process;
 	t_pcb *element;
 
-	sem_wait(&mutex_process_list);
-	for(i=0;i < list_size(list_process);i++)
-	{
-		process = list_get(list_process,i);
-		for (k=0;k < list_size(list_pcb_new);k++)
-		{
-			element = list_get(list_pcb_new,k);
-			if (process->pid == element->unique_id)
+	for (k=0;k < list_size(list_pcb_new);k++)
 			{
+				element = list_get(list_pcb_new,k);
 				tamanio = element->peso;
-				break;
+				printf("el proceso: %d se encuentra en el estado: NEW y tiene un peso de: %d \n",element->unique_id,tamanio);
 			}
-		}
-		if(tamanio == 0)
-		{
-			for (k=0;k < list_size(list_pcb_ready);k++)
-			{
-				element = list_get(list_pcb_ready,k);
-				if (process->pid == element->unique_id)
+	for (k=0;k < list_size(list_pcb_ready);k++)
 				{
+					element = list_get(list_pcb_ready,k);
 					tamanio = element->peso;
-					break;
+					printf("el proceso: %d se encuentra en el estado: READY y tiene un peso de: %d \n",element->unique_id,tamanio);
 				}
-			}
-			if(tamanio == 0)
-			{
-				for (k=0;k < list_size(list_pcb_execute);k++)
+	for (k=0;k < list_size(list_pcb_execute);k++)
 				{
 					element = list_get(list_pcb_execute,k);
-					if (process->pid == element->unique_id)
-					{
-						tamanio = element->peso;
-						break;
-					}
+					tamanio = element->peso;
+					printf("el proceso: %d se encuentra en el estado: EXECUTE y tiene un peso de: %d \n",element->unique_id,tamanio);
 				}
-				if(tamanio == 0)
+	for (k=0;k < list_size(list_pcb_blocked);k++)
 				{
-					for (k=0;k < list_size(list_pcb_blocked);k++)
-					{
-						element = list_get(list_pcb_blocked,k);
-						if (process->pid == element->unique_id)
-						{
-							tamanio = element->peso;
-							break;
-						}
-					}
+					element = list_get(list_pcb_blocked,k);
+					tamanio = element->peso;
+					printf("el proceso: %d se encuentra en el estado: BLOCKED y tiene un peso de: %d \n",element->unique_id,tamanio);
 				}
-				if(tamanio == 0)
+	for (k=0;k < list_size(list_pcb_exit);k++)
 				{
-					for (k=0;k < list_size(list_pcb_exit);k++)
-					{
-						element = list_get(list_pcb_exit,k);
-						if (process->pid == element->unique_id)
-						{
-							tamanio = element->peso;
-							break;
-						}
-					}
+					element = list_get(list_pcb_exit,k);
+					tamanio = element->peso;
+					printf("el proceso: %d se encuentra en el estado: EXIT y tiene un peso de: %d \n",element->unique_id,tamanio);
 				}
-			}
-		}
-		printf("el proceso: %d se encuentra en el estado: %d y tiene un peso de: %d /n",process->pid,process->status,tamanio);
-	}
-	sem_post(&mutex_process_list);
 }
 /*
  * Function: is_Connected_CPU
@@ -2044,6 +2020,7 @@ void process_update(int process_id, unsigned char previous_status, unsigned char
 	int flag_found = 0;
 	int i;
 	t_pcb* pcb;
+	sem_wait(&sem_consola_ready);
 
 	switch(previous_status)
 	{
@@ -2064,6 +2041,7 @@ void process_update(int process_id, unsigned char previous_status, unsigned char
 	}
 
 	process_set_status(process_id,next_status);
+	sem_post(&sem_consola);
 
 	flag_found = 0;
 
