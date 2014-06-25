@@ -22,6 +22,7 @@ int main(int argc, char *argv[])
 	int cant_conexiones = 0;
 	pthread_create(&th1, NULL, (void *)consola, NULL);
 	memoria = malloc(space);
+	memoria_libre = space;
 	list_programas = list_create();
 
 	int sockfd;
@@ -1009,7 +1010,9 @@ void consola (void* param)
    		if (flag_comandoOK == 0 && strcmp(comando, "compactacion") == 0)
    		{
    			log_info(logger, "Se pidio compactar memoria por consola.");
+   			pthread_mutex_lock(&semCompactacion);
    			compactar_memoria();
+   			pthread_mutex_unlock(&semCompactacion);
    		   	flag_comandoOK = 1;
    		}
    		if (flag_comandoOK == 0 && strcmp(comando, "dump procesos") == 0)
@@ -1475,9 +1478,23 @@ int crear_segmento(int idproc, int tamanio)
 	t_info_segmento *seg;
 	int i;
 	int encontre_programa = 0;
-	int hay_espacio_valido = asignar_direccion_en_memoria(tamanio);
-	if (hay_espacio_valido != -1)
+	int hay_espacio_en_memoria;
+	int respuesta;
+	if (tamanio <= memoria_libre)
 	{
+		hay_espacio_en_memoria = 1;
+	}
+	else
+	{
+		hay_espacio_en_memoria = 0;
+	}
+	if (hay_espacio_en_memoria == 1)
+	{
+		respuesta = asignar_direccion_en_memoria(tamanio);
+		if (respuesta == -1)
+		{
+			compactar_memoria();
+		}
 		for (i = 0; i < tamanio_lista; i++)
 		{
 			prog = list_get(list_programas, i);
@@ -1495,6 +1512,7 @@ int crear_segmento(int idproc, int tamanio)
 			seg->dirFisica = asignar_direccion_en_memoria(tamanio);
 			seg->dirLogica = asignar_direccion_logica(idproc, tamanio);
 			list_add(prog->segmentos, seg);
+			memoria_libre -= tamanio;
 			return seg->dirLogica;
 		}
 		else
@@ -1509,6 +1527,7 @@ int crear_segmento(int idproc, int tamanio)
 			seg->dirLogica = asignar_direccion_logica(idproc, tamanio);
 			list_add(prog->segmentos, seg);
 			list_add(list_programas, prog);
+			memoria_libre -= tamanio;
 			return seg->dirLogica;
 		}
 	}
@@ -1542,6 +1561,7 @@ int destruir_segmentos(int idproc)
 		for (i = list_size(prog->segmentos) - 1; i >= 0; i--)
 		{
 			segm = list_get(prog->segmentos, i);
+			memoria_libre += segm->tamanio;
 			list_remove(prog->segmentos, i);
 		}
 		list_destroy(prog->segmentos);
@@ -1582,7 +1602,6 @@ void cambiar_retardo(int valor)
 
 void compactar_memoria()
 {
-	pthread_mutex_lock(&semCompactacion);
 	int primer_direccion = space;
 	int primer_programa;
 	int i;
@@ -1641,7 +1660,6 @@ void compactar_memoria()
 		printw("Todavia no hay segmentos a compactar.\n");
 		refresh();
 	}
-	pthread_mutex_unlock(&semCompactacion);
 }
 
 int obtener_cant_segmentos()

@@ -62,6 +62,7 @@ char *myip;
 int port;
 int proceso_activo;
 int retardo;
+int memoria_libre;
 
 FILE *archivo_dump;
 char nombre_archivo_dump[25];
