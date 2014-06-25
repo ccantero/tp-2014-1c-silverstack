@@ -729,6 +729,7 @@ void consola (void* param)
 	int cant_num_leidos;
 	int *buffer_int;
 	int tecla_ingresada;
+	int tecla_ingresada2;
 	// Bucle principal esperando peticiones del usuario
 	for(;;)
 	{
@@ -836,7 +837,12 @@ void consola (void* param)
    						break;
    					default:
    						printw("Posicion de memoria solicitada: %d\n", respuesta);
-   						printw("Contenido: %s\n", buffer);
+   						printw("Contenido: ");
+   						for (i = 0; i < valor_numerico3; i++)
+   						{
+   							printw("%c", buffer[i]);
+   						}
+   						printw("\n");
    						refresh();
    						free(buffer);
    						break;
@@ -1009,12 +1015,40 @@ void consola (void* param)
    		if (flag_comandoOK == 0 && strcmp(comando, "dump procesos") == 0)
    		{
    			log_info(logger, "Se pidio dump de procesos.");
+   			printw("¿Desea mostrar la informacion de todos los procesos? (s/n): ");
+   			tecla_ingresada = getch();
+   			printw("\n");
+   			refresh();
    			printw("¿Desea guardar los datos del dump en un archivo en disco? (s/n): ");
-			tecla_ingresada = getch();
-   			pthread_mutex_lock(&semCompactacion);
-   			dump_memoria(tecla_ingresada);
-   			pthread_mutex_unlock(&semCompactacion);
-   		   	flag_comandoOK = 1;
+			tecla_ingresada2 = getch();
+			printw("\n");
+			refresh();
+   			if (tecla_ingresada != 115)
+   			{
+   				printw("Ingrese el id del proceso que desea mostrar informacion: ");
+   				refresh();
+   				scanw("%d", &proc_id);
+   				respuesta = verificar_proc_id(proc_id);
+   				if (respuesta == 0)
+   				{
+   					printw("El proceso ingresado no existe en memoria.\n");
+   					printw("Ingrese un proceso que exista en memoria.\n");
+   					refresh();
+   				}
+   				else
+   				{
+   					pthread_mutex_lock(&semCompactacion);
+   					dump_proceso(proc_id, tecla_ingresada2);
+   					pthread_mutex_unlock(&semCompactacion);
+   				}
+   			}
+   			else
+   			{
+   				pthread_mutex_lock(&semCompactacion);
+   				dump_memoria(tecla_ingresada2);
+   				pthread_mutex_unlock(&semCompactacion);
+   			}
+   			flag_comandoOK = 1;
    		}
    		if (flag_comandoOK == 0 && strcmp(comando, "dump memoria") == 0)
    		{
@@ -1063,6 +1097,137 @@ void consola (void* param)
    			refresh();
    		}
    	}
+}
+
+void dump_proceso(int proc, int opcion)
+{
+	int cant_espacios;
+	char buffer_aux[50];
+	int cont_aux;
+	cantidad_dumps++;
+	if (opcion == 115)
+	{
+		strcpy(nombre_archivo_dump, "dump");
+		sprintf(buff_dump, "%d", cantidad_dumps);
+		strcat(nombre_archivo_dump, buff_dump);
+		archivo_dump = fopen(nombre_archivo_dump, "w+");
+		tiempo_dump = time(NULL);
+		ptr_tiempo_dump = gmtime(&tiempo_dump);
+		tiempo_dump_archivo = asctime(ptr_tiempo_dump);
+		fprintf(archivo_dump, "%s", tiempo_dump_archivo);
+		fprintf(archivo_dump, "\n");
+	}
+	clear();
+	refresh();
+	int x = 0;
+	int y = 0;
+	move(y, x);
+	printw("Id Proceso\n");
+	x += 15;
+	if (opcion == 115)
+	{
+		fprintf(archivo_dump, "Id Proceso");
+		fprintf(archivo_dump, "     ");
+	}
+	move(y, x);
+	printw("Dir. Fisica Segmento\n");
+	x += 25;
+	if (opcion == 115)
+	{
+		fprintf(archivo_dump, "Dir. Fisica Segmento");
+		fprintf(archivo_dump, "     ");
+	}
+	move(y, x);
+	printw("Dir. Logica Segmento\n");
+	x += 30;
+	if (opcion == 115)
+	{
+		fprintf(archivo_dump, "Dir. Logica Segmento");
+		fprintf(archivo_dump, "          ");
+	}
+	move(y, x);
+	printw("Tam. Segm.\n");
+	if (opcion == 115)
+	{
+		fprintf(archivo_dump, "Tam. Segm.");
+		fprintf(archivo_dump, "\n");
+	}
+	refresh();
+	t_info_programa *prog;
+	t_info_segmento *seg;
+	int i;
+	int j;
+	x = 0;
+	y = 1;
+	for (i = 0; i < list_size(list_programas); i++)
+	{
+		prog = list_get(list_programas, i);
+		if (prog->programa == proc)
+		{
+			break;
+		}
+	}
+	for (j = 0; j < list_size(prog->segmentos); j++)
+	{
+		seg = list_get(prog->segmentos, j);
+		move(y, x);
+		printw("%d", seg->id);
+		x += 15;
+		if (opcion == 115)
+		{
+			fprintf(archivo_dump, "%d", seg->id);
+			sprintf(buffer_aux, "%d", seg->id);
+			cant_espacios = 5 + 10 - strlen(buffer_aux);
+			for (cont_aux = 0; cont_aux < cant_espacios; cont_aux++)
+			{
+				buffer_aux[cont_aux] = ' ';
+			}
+			buffer_aux[cont_aux] = '\0';
+			fprintf(archivo_dump, "%s", buffer_aux);
+		}
+		move(y, x);
+		printw("%d", seg->dirFisica);
+		x += 25;
+		if (opcion == 115)
+		{
+			fprintf(archivo_dump, "%d", seg->dirFisica);
+			sprintf(buffer_aux, "%d", seg->dirFisica);
+			cant_espacios = 5 + 20 - strlen(buffer_aux);
+			for (cont_aux = 0; cont_aux < cant_espacios; cont_aux++)
+			{
+				buffer_aux[cont_aux] = ' ';
+			}
+			buffer_aux[cont_aux] = '\0';
+			fprintf(archivo_dump, "%s", buffer_aux);
+		}
+		move(y, x);
+		printw("%d", seg->dirLogica);
+		x += 30;
+		if (opcion == 115)
+		{
+			fprintf(archivo_dump, "%d", seg->dirLogica);
+			sprintf(buffer_aux, "%d", seg->dirLogica);
+			cant_espacios = 5 + 25 - strlen(buffer_aux);
+			for (cont_aux = 0; cont_aux < cant_espacios; cont_aux++)
+			{
+				buffer_aux[cont_aux] = ' ';
+			}
+			buffer_aux[cont_aux] = '\0';
+			fprintf(archivo_dump, "%s", buffer_aux);
+		}
+		move(y, x);
+		printw("%d", seg->tamanio);
+		if (opcion == 115)
+		{
+			fprintf(archivo_dump, "%d", seg->tamanio);
+			fprintf(archivo_dump, "\n");
+		}
+		y++;
+		x = 0;
+		refresh();
+	}
+	printw("\n");
+	refresh();
 }
 
 void mostrar_memoria(int base, int tam, int opcion)
@@ -1147,10 +1312,10 @@ void dump_memoria(int opcion)
 		fprintf(archivo_dump, "          ");
 	}
 	move(y, x);
-	printw("Tamanio Segmento\n");
+	printw("Tam. Segm.\n");
 	if (opcion == 115)
 	{
-		fprintf(archivo_dump, "Tamanio Segmento");
+		fprintf(archivo_dump, "Tam. Segm.");
 		fprintf(archivo_dump, "\n");
 	}
 	refresh();

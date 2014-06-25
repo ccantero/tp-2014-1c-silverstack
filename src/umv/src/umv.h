@@ -97,5 +97,6 @@ int obtener_direccion_mas_offset_segmento(int arranque);
 void mostrar_memoria(int base, int tam, int opcion);
 int atender_solicitud_bytes_int(int base, int offset, int tam, int sock, int **buffer);
 void depuracion(int senial);
+void dump_proceso(int proc, int opcion);
 
 #endif /* UMV_H_ */
