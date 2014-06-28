@@ -89,16 +89,20 @@ int main(int argc, char *argv[])
 		log_error(logger, "Handshake con UMV erroneo.");
 		depuracion(SIGINT);
 	}
+
+
+
+
+
 	t_mensaje msg_aux;
 	int i;
-	int quantum;
+	int quantum, retardo;
 	int salir_bucle = 0;
 	int inicio_instruccion = 0;
 	int cantidad_letras_instruccion = 0;
 	int pos_en_instruccion = 0;
 	char buf[82]; // Variable auxiliar para almacenar la linea de codigo
 	char instruccion[82];
-	char buffer_stack[100];
 	int bufferaux[2];
 	if (recv(sockKernel, &mensaje, sizeof(t_mensaje), 0) == 0)
 	{
@@ -106,6 +110,18 @@ int main(int argc, char *argv[])
 		depuracion(SIGINT);
 	}
 	quantum = mensaje.datosNumericos;
+	if (recv(sockKernel, &mensaje, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "Kernel desconectado.");
+		depuracion(SIGINT);
+	}
+	retardo = mensaje.datosNumericos;
+	if (recv(sockKernel, &mensaje, sizeof(t_mensaje), 0) == 0)
+	{
+		log_error(logger, "Kernel desconectado.");
+		depuracion(SIGINT);
+	}
+	stack = mensaje.datosNumericos;
 	// Bucle principal del proceso
 	while(seguirEjecutando)
 	{
@@ -117,44 +133,7 @@ int main(int argc, char *argv[])
 		}
 		log_info(logger,"Recibi PCB de Kernel");
 		// Regenero diccionario de variables
-		if (pcb.context_actual != 0)
-		{
-			msg_solicitud_bytes.base = pcb.stack_segment;
-			msg_solicitud_bytes.offset = pcb.stack_pointer - pcb.stack_segment;
-			msg_solicitud_bytes.tamanio = pcb.context_actual * 5;
-			msg_cambio_proceso_activo.id_programa = pcb.unique_id;
-			mensaje.tipo = SOLICITUDBYTES;
-			send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
-			send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
-			send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
-			if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
-			{
-				log_error(logger, "UMV desconectada.");
-				depuracion(SIGINT);
-			}
-			if (mensaje.tipo == ENVIOBYTES)
-			{
-				if (recv(sockUmv, &buffer_stack, (pcb.context_actual * 5), 0) == 0)
-				{
-					log_error(logger, "UMV desconectada.");
-					depuracion(SIGINT);
-				}
-				for (i = 0; i < pcb.context_actual; i++)
-				{
-					nueva_var = (t_variable *)malloc(sizeof(t_variable));
-					nueva_var->id = buffer_stack[i * 5];
-					nueva_var->dir = pcb.stack_pointer + (i * 5);
-					memcpy(&nueva_var->valor, &buffer_stack[(i * 5) + 1], 4);
-					list_add(variables, nueva_var);
-				}
-			}
-			else
-			{
-				msg_aux.tipo = mensaje.tipo;
-				send(sockKernel, &msg_aux, sizeof(t_mensaje), 0);
-				proceso_finalizo = 1;
-			}
-		}
+		regenerarDiccionario();
 		if(pcb.program_counter == 0)
 		{
 			pcb.program_counter++;
@@ -237,6 +216,7 @@ int main(int argc, char *argv[])
 				instruccion[cantidad_letras_instruccion] = '\0';
 				// Analizo la instruccion y ejecuto primitivas necesarias
 				log_info(logger, "Me llego la instruccion: %s.", instruccion);
+				usleep(retardo);
 				analizadorLinea(strdup(instruccion), &primitivas, &primitivasKernel);
 				log_info(logger, "Se termino de procesar la instruccion: %s.", instruccion);
 				// Actualizo el pcb
@@ -282,6 +262,54 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
+void regenerarDiccionario()
+{
+	// Regenero diccionario de variables
+	t_mensaje msg_aux;
+	char buffer_stack[stack];
+	int i;
+
+	list_clean(variables);
+
+	if (pcb.context_actual != 0)
+	{
+		msg_solicitud_bytes.base = pcb.stack_segment;
+		msg_solicitud_bytes.offset = pcb.stack_pointer - pcb.stack_segment;
+		msg_solicitud_bytes.tamanio = pcb.context_actual * 5;
+		msg_cambio_proceso_activo.id_programa = pcb.unique_id;
+		mensaje.tipo = SOLICITUDBYTES;
+		send(sockUmv, &mensaje, sizeof(t_mensaje), 0);
+		send(sockUmv, &msg_cambio_proceso_activo, sizeof(t_msg_cambio_proceso_activo), 0);
+		send(sockUmv, &msg_solicitud_bytes, sizeof(t_msg_solicitud_bytes), 0);
+		if (recv(sockUmv, &mensaje, sizeof(t_mensaje), 0) == 0)
+		{
+			log_error(logger, "UMV desconectada.");
+			depuracion(SIGINT);
+		}
+		if (mensaje.tipo == ENVIOBYTES)
+		{
+			if (recv(sockUmv, &buffer_stack, (pcb.context_actual * 5), 0) == 0)
+			{
+				log_error(logger, "UMV desconectada.");
+				depuracion(SIGINT);
+			}
+			for (i = 0; i < pcb.context_actual; i++)
+			{
+				nueva_var = (t_variable *)malloc(sizeof(t_variable));
+				nueva_var->id = buffer_stack[i * 5];
+				nueva_var->dir = pcb.stack_pointer + (i * 5);
+				memcpy(&nueva_var->valor, &buffer_stack[(i * 5) + 1], 4);
+				list_add(variables, nueva_var);
+			}
+		}
+		else
+		{
+			msg_aux.tipo = mensaje.tipo;
+			send(sockKernel, &msg_aux, sizeof(t_mensaje), 0);
+			proceso_finalizo = 1;
+		}
+	}
+}
 
 // Definicion de funciones
 void ConectarA(int *sock, int *puerto, char *ip, struct sockaddr_in *their_addr, t_log *logger)
@@ -586,6 +614,7 @@ void silverstack_finalizar()
 		nuevo_contexto = (pcb.stack_pointer - buffer - 8) / 5;
 		pcb.context_actual = nuevo_contexto;
 		pcb.stack_pointer = buffer;
+		regenerarDiccionario();
 	}
 }
 
@@ -873,7 +902,7 @@ void silverstack_retornar(t_valor_variable valor)
 	nuevo_contexto = (pcb.stack_pointer - buffer - 8) / 5;
 	pcb.context_actual = nuevo_contexto;
 	pcb.stack_pointer = buffer;
-	list_clean(variables);
+	regenerarDiccionario();
 }
 
 void silverstack_signal(t_nombre_semaforo identificador_semaforo)

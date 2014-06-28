@@ -52,6 +52,7 @@ t_config *config;
 t_list *variables;
 int seguirEjecutando;
 t_variable *nueva_var;
+int stack;
 
 void ConectarA(int *sock, int *puerto, char *ip, struct sockaddr_in *their_addr, t_log *logger);
 t_puntero silverstack_definirVariable(t_nombre_variable var);
@@ -71,5 +72,6 @@ void silverstack_retornar(t_valor_variable valor);
 void silverstack_signal(t_nombre_semaforo identificador_semaforo);
 void silverstack_wait(t_nombre_semaforo identificador_semaforo);
 void depuracion(int senial);
+void regenerarDiccionario();
 
 #endif /* CPU_H_ */

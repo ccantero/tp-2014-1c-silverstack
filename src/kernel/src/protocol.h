@@ -157,6 +157,8 @@ typedef struct _t_pedido {
 
 #define ERROR_WRONG_VARCOM 2001
 #define ERROR_WRONG_IO 2002
+#define ERROR_PROGRAM_ABORT 2003
+
 t_log *logger;
 t_list *list_io;
 t_list *list_pcb_new;
@@ -183,14 +185,16 @@ pthread_mutex_t mutex_ready_queue;
 pthread_mutex_t mutex_execute_queue;
 pthread_mutex_t mutex_block_queue;
 pthread_mutex_t mutex_exit_queue;
+pthread_mutex_t mutex_semaphores_list;
 
 sem_t sem_consola;
 sem_t sem_consola_ready;
-sem_t mutex_process_list;
 sem_t sem_plp;
 sem_t sem_pcp;
 sem_t mutex_cpu_list;
 sem_t sem_cpu_list;
+//TODO: Hacer mutex_process_list como pthread_mutex_t
+sem_t mutex_process_list;
 
 int exit_status;
 
@@ -250,7 +254,7 @@ void process_set_status(int process_id, unsigned char status);
 t_process* process_get(int pid, int sock_program, int sock_cpu);
 t_nodo_cpu* cpu_get_next_available(int pid);
 void process_segmentation_fault(int sock_cpu);
-
+void program_error(int sock_program);
 
 int get_Segment_Start(int offset);					// A revisar si va o no va
 void io_destroy(t_io*); 							// A revisar si va o no va

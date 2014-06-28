@@ -16,7 +16,7 @@
 int main(int argc, char *argv[])
 {
 	int i,fdmax; /* for aux */
-
+	//TODO: Si no existe variable compartida no morir
 	int sock_program = 0, sock_cpu = 0;
 	int new_socket;
 	fd_set read_fds;

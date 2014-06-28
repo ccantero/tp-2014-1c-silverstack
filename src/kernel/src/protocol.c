@@ -1553,6 +1553,28 @@ int escuchar_Nuevo_cpu(int sock_cpu)
 			return -1;
 		}
 
+		memset(buffer,'\0',MAXDATASIZE);
+		mensaje.datosNumericos = retardo;
+		memcpy(buffer,&mensaje,size_msg);
+
+		if((numbytes=write(new_socket,buffer,size_msg))<=0)
+		{
+			log_error(logger, "Error en el write del retardo en escuchar_Nuevo_CPU");
+			close(new_socket);
+			return -1;
+		}
+
+		memset(buffer,'\0',MAXDATASIZE);
+		mensaje.datosNumericos = stack_size;
+		memcpy(buffer,&mensaje,size_msg);
+
+		if((numbytes=write(new_socket,buffer,size_msg))<=0)
+		{
+			log_error(logger, "Error en el write del retardo en escuchar_Nuevo_CPU");
+			close(new_socket);
+			return -1;
+		}
+
 		free(buffer);
 		return new_socket;
 	}
@@ -2287,6 +2309,7 @@ void retardo_io(void *ptr)
 		tmPtrIni = localtime(&tiempo);
 		inicial = mktime(tmPtrIni);
 
+		// TODO: Preguntar si usar usleep o no
 		if (select(0, NULL, NULL, NULL, &tv) == -1)
 		{
 			log_error(logger, "Error en funcion select en retardo_io");;
