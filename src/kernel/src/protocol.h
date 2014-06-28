@@ -26,84 +26,6 @@
 #include <parser/metadata_program.h>
 #include <src/silverstack.h>
 
-/*Definidio en silverstack.h
-
-typedef struct {
-	int tipo;
-	int id_proceso;
-	int datosNumericos;
-	char mensaje[16];
-} t_mensaje;
-
-typedef struct _hdr
-{
-	char desc_id[16];
-	unsigned char pay_desc;
-	int pay_len;
-}thdr;
-
-typedef struct _io {
-	char* name;
-	int retardo;
-	t_queue *io_queue;
-	sem_t io_sem;
-	pthread_t* th_io;
-}t_io;
-
-typedef struct _t_semaphore {
-	char* identifier;
-	int	value;
-	t_queue* queue;
-} t_semaphore;
-
-typedef struct _instruction_index {
-	t_size size;
-	t_intructions* index;
-} t_instruction_index;
-
-typedef struct _etiquetas_index {
-	t_size size;
-	char* etiquetas;
-} t_etiquetas_index;
-
-typedef struct _t_segment {
-	unsigned char code_identifier;
-	int start;
-	size_t offset;
-} t_segment;
-
-typedef struct _t_nodo_segment {
-	int start;
-	size_t offset;
-}t_nodo_segment;
-
-typedef struct _t_global {
-	char* identifier;
-	int	value;
-} t_global;
-
-typedef struct _t_nodo_cpu {
-	int	socket;
-	unsigned char status;
-}t_nodo_cpu;
-
-typedef struct _pcb {
-	unsigned int unique_id; // Identificador Único
-	t_segment code_segment; // Código Ansisop del programa
-	t_segment stack_segment; // Segmento de stack
-	int stack_pointer; // Puntero al inicio del contexto de ejecución actual
-	t_instruction_index instruction_index; // Índice de código
-	t_etiquetas_index etiquetas_index; // Índice de etiquetas
-	int program_counter; // Número de la próxima instrucción
-	int context_actual;
-	int peso;
-}t_pcb;
-
-
-
- Finaliza Sylverstack.h
-*/
-
 typedef struct _t_process {
 	unsigned int pid;
 	int program_socket;
@@ -129,7 +51,7 @@ typedef struct _t_pedido {
 	unsigned char new_status;
 }t_pedido;
 
-#define MAXDATASIZE 1024 // SylverStack
+#define MAXDATASIZE 1024
 #define SIZE_MSG sizeof(t_mensaje)
 #define MSG_CON_UMV 0x10
 #define MSG_CON_UMV_OK 0x11
@@ -138,13 +60,6 @@ typedef struct _t_pedido {
 #define STACK_SEGMENT 0x21
 
 #define backlog 10
-#define HANDSHAKE 100 // SylverStack
-#define HANDSHAKE_OK 101 // SylverStack
-#define CPU 200 // SylverStack
-#define PROGRAMA 203 // Syl1verStack
-#define SENDFILE 104 // SylverStack
-#define KERNEL 202 // SylverStack
-#define QUANTUMFINISH 301 // SylverStack
 #define CPU_AVAILABLE 0x30 // CPU Node Status // Ready
 #define CPU_IDLE 0x31 // CPU Node Status // Not working because multiprogramacion
 #define CPU_WORKING 0x32 // CPU Node Status
@@ -186,6 +101,7 @@ pthread_mutex_t mutex_execute_queue;
 pthread_mutex_t mutex_block_queue;
 pthread_mutex_t mutex_exit_queue;
 pthread_mutex_t mutex_semaphores_list;
+pthread_mutex_t mutex_process_list;
 
 sem_t sem_consola;
 sem_t sem_consola_ready;
@@ -193,8 +109,6 @@ sem_t sem_plp;
 sem_t sem_pcp;
 sem_t mutex_cpu_list;
 sem_t sem_cpu_list;
-//TODO: Hacer mutex_process_list como pthread_mutex_t
-sem_t mutex_process_list;
 
 int exit_status;
 

@@ -52,10 +52,7 @@ int main(int argc, char *argv[])
 	cantidad_cpu = 0;
 	cantidad_procesos_sistema = 0;
 
-	sem_init(&mutex_process_list, 0, 1);
-
 	sem_init(&free_io_queue, 0, 1);
-
 
 	sem_init(&sem_plp, 0, 0); // Empieza en cero porque tiene que bloquearse hasta que aparezca algo
 	sem_init(&sem_pcp, 0, 0); // Empieza en cero porque tiene que bloquearse hasta que aparezca algo
@@ -97,6 +94,18 @@ int main(int argc, char *argv[])
 	if (pthread_mutex_init(&mutex_exit_queue, NULL) != 0)
 	{
 		printf("ERROR - No se pudo inicializar mutex mutex_exit_queue\n");
+		return 1;
+	}
+
+	if (pthread_mutex_init(&mutex_semaphores_list, NULL) != 0)
+	{
+		printf("ERROR - No se pudo inicializar mutex mutex_semaphores_list\n");
+		return 1;
+	}
+
+	if (pthread_mutex_init(&mutex_process_list, NULL) != 0)
+	{
+		printf("ERROR - No se pudo inicializar mutex mutex_process_list\n");
 		return 1;
 	}
 
