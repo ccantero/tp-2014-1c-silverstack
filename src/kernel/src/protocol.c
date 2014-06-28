@@ -2020,6 +2020,8 @@ void process_update(int process_id, unsigned char previous_status, unsigned char
 	int flag_found = 0;
 	int i;
 	t_pcb* pcb;
+
+	sem_post(&sem_consola);
 	sem_wait(&sem_consola_ready);
 
 	switch(previous_status)
@@ -2041,7 +2043,6 @@ void process_update(int process_id, unsigned char previous_status, unsigned char
 	}
 
 	process_set_status(process_id,next_status);
-	sem_post(&sem_consola);
 
 	flag_found = 0;
 

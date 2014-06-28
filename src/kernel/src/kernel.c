@@ -62,7 +62,7 @@ int main(int argc, char *argv[])
 	sem_init(&mutex_cpu_list, 0, 1);
 
 	sem_init(&sem_consola,0,0); //arranca en 0 hasta que haya algun proceso para mostrar
-	sem_init(&sem_consola_ready,0,1); //arranca en 1 ya que tiene que entrar al process update
+	sem_init(&sem_consola_ready,0,0); //arranca en 0 para que muestre el new antes de hacer process update
 
 	if (pthread_mutex_init(&mutex_pedidos, NULL) != 0)
 	{
