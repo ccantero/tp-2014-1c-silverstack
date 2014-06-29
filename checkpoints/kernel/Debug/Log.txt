@@ -1,1 +1,0 @@
-[INFO] 18:36:10:269 Program/(31906:31906): Cantidad de Keys = 0
