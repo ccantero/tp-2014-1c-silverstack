@@ -170,6 +170,8 @@ void global_update_value(int sock_cpu, char* global_name, int value)
 	char* varCom;
 	t_process* process;
 
+	log_info(logger,"global_update_value(%s,%d)",global_name, value);
+
 	pthread_mutex_lock(&mutex_process_list);
 	for(i=0;i< list_size(list_process);i++)
 	{
@@ -249,6 +251,8 @@ void global_get_value(int sock_cpu, char* global_name)
 	char* varCom;
 	t_process* process;
 
+	log_info(logger,"global_get_value(%s)",global_name);
+
 	pthread_mutex_lock(&mutex_process_list);
 	for(i=0;i< list_size(list_process);i++)
 	{
@@ -276,6 +280,9 @@ void global_get_value(int sock_cpu, char* global_name)
 			variable = list_get(list_globales,i);
 			if(flag_mod == 0 && strcmp(varCom,variable->identifier) == 0)
 			{
+				log_info(logger,"variable->identifier = %s", variable->identifier);
+				log_info(logger,"variable->value = %d", variable->value);
+
 				valor = variable->value;
 				flag_mod = 1;
 				break;
@@ -1356,7 +1363,7 @@ void planificador_sjn(void)
 	for(;;)
 	{
 		flag = 0;
-		log_info(logger,"[PLP] sem_wait(&sem_plp)");
+		log_info(logger,"[PLP] - sem_wait(&sem_plp)");
 		sem_wait(&sem_plp);
 		//TODO: Verificar si es necesario o no
 
@@ -1419,14 +1426,26 @@ void planificador_sjn(void)
 		}
 
 		if(flag == 2)
+		{
 			// Se hicieron las 2 cosas, por new y por exit
 			sem_wait(&sem_plp);
+			sem_post(&sem_consola);
+			sem_wait(&sem_consola_ready);
+		}
 		else if(flag == 0)
 		{	// No se realizó ninguna accion
 			sem_post(&sem_plp);
 			log_info(logger, "[PLP] sleep(1)");
 			sleep(1); // TODO: Pensar una forma de mejorar esto
 		}
+		else // Se realizo una sola accion
+		{
+			sem_post(&sem_consola);
+			sem_wait(&sem_consola_ready);
+		}
+
+
+
 	} // for(;;)
 }
 
@@ -1444,6 +1463,8 @@ void mostrar_consola(void)
 	{
 		log_info(logger, "consola esperando para mostrar");
 		sem_wait(&sem_consola);
+
+
 		log_info(logger, "consola mostrando");
 		//system ( "clear" );//borro para que no se junte toda la info
 		mostrar_procesos();
@@ -1456,36 +1477,50 @@ void mostrar_procesos(void)
 	int tamanio = 0;
 	t_pcb *element;
 
+	pthread_mutex_lock(&mutex_new_queue);
 	for (k=0;k < list_size(list_pcb_new);k++)
-			{
-				element = list_get(list_pcb_new,k);
-				tamanio = element->peso;
-				printf("el proceso: %d se encuentra en el estado: NEW y tiene un peso de: %d \n",element->unique_id,tamanio);
-			}
+	{
+		element = list_get(list_pcb_new,k);
+		tamanio = element->peso;
+		printf("el proceso: %d se encuentra en el estado: NEW y tiene un peso de: %d \n",element->unique_id,tamanio);
+	}
+	pthread_mutex_unlock(&mutex_new_queue);
+
+	pthread_mutex_lock(&mutex_ready_queue);
 	for (k=0;k < list_size(list_pcb_ready);k++)
-				{
-					element = list_get(list_pcb_ready,k);
-					tamanio = element->peso;
-					printf("el proceso: %d se encuentra en el estado: READY y tiene un peso de: %d \n",element->unique_id,tamanio);
-				}
+	{
+		element = list_get(list_pcb_ready,k);
+		tamanio = element->peso;
+		printf("el proceso: %d se encuentra en el estado: READY y tiene un peso de: %d \n",element->unique_id,tamanio);
+	}
+	pthread_mutex_unlock(&mutex_ready_queue);
+
+	pthread_mutex_lock(&mutex_execute_queue);
 	for (k=0;k < list_size(list_pcb_execute);k++)
-				{
-					element = list_get(list_pcb_execute,k);
-					tamanio = element->peso;
-					printf("el proceso: %d se encuentra en el estado: EXECUTE y tiene un peso de: %d \n",element->unique_id,tamanio);
-				}
+	{
+		element = list_get(list_pcb_execute,k);
+		tamanio = element->peso;
+		printf("el proceso: %d se encuentra en el estado: EXECUTE y tiene un peso de: %d \n",element->unique_id,tamanio);
+	}
+	pthread_mutex_unlock(&mutex_execute_queue);
+
+	pthread_mutex_lock(&mutex_block_queue);
 	for (k=0;k < list_size(list_pcb_blocked);k++)
-				{
-					element = list_get(list_pcb_blocked,k);
-					tamanio = element->peso;
-					printf("el proceso: %d se encuentra en el estado: BLOCKED y tiene un peso de: %d \n",element->unique_id,tamanio);
-				}
+	{
+		element = list_get(list_pcb_blocked,k);
+		tamanio = element->peso;
+		printf("el proceso: %d se encuentra en el estado: BLOCKED y tiene un peso de: %d \n",element->unique_id,tamanio);
+	}
+	pthread_mutex_unlock(&mutex_block_queue);
+
+	pthread_mutex_lock(&mutex_exit_queue);
 	for (k=0;k < list_size(list_pcb_exit);k++)
-				{
-					element = list_get(list_pcb_exit,k);
-					tamanio = element->peso;
-					printf("el proceso: %d se encuentra en el estado: EXIT y tiene un peso de: %d \n",element->unique_id,tamanio);
-				}
+	{
+		element = list_get(list_pcb_exit,k);
+		tamanio = element->peso;
+		printf("el proceso: %d se encuentra en el estado: EXIT y tiene un peso de: %d \n",element->unique_id,tamanio);
+	}
+	pthread_mutex_unlock(&mutex_exit_queue);
 }
 /*
  * Function: is_Connected_CPU
@@ -1718,6 +1753,8 @@ void finalizo_Quantum(int sock_cpu)
 {
 	int numbytes;
 	t_pcb *pcb;
+
+	log_info(logger,"finalizo Quantum");
 
 	if((pcb = (t_pcb*) malloc (sizeof(t_pcb))) == NULL)
 	{
@@ -2080,8 +2117,9 @@ void process_update(int process_id, unsigned char previous_status, unsigned char
 	int i;
 	t_pcb* pcb;
 
-	sem_post(&sem_consola);
-	sem_wait(&sem_consola_ready);
+	//TODO: Descomentar en caso de ser necesario
+	//sem_post(&sem_consola);
+	//sem_wait(&sem_consola_ready);
 
 	switch(previous_status)
 	{
@@ -2568,6 +2606,8 @@ void planificador_rr(void)
 				break;
 			}
 		} // switch(new_pedido->previous_status)
+		sem_post(&sem_consola);
+		sem_wait(&sem_consola_ready);
 	} //for(;;)
 
 	return;
