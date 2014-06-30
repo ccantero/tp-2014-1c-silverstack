@@ -14,6 +14,7 @@
 #include <parser/metadata_program.h>
 #include <commons/collections/queue.h>
 
+#define SENDFILE 104
 #define HANDSHAKE 100
 #define HANDSHAKEOK 101
 #define SALIR 110 // Programa

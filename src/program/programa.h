@@ -23,7 +23,6 @@
 #include <src/silverstack.h>
 #include <signal.h>
 
-#define SENDFILE 104
 #define SALIR 110
 
 t_config *config;
