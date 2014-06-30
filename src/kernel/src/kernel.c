@@ -213,6 +213,7 @@ int main(int argc, char *argv[])
 				if(is_Connected_Program(i) == 0)
 				{
 					// El programa se cerró.
+					program_error(i);
 					FD_CLR(i, &master);
 					close(i);
 					log_info(logger,"Se cerro el programa.");
