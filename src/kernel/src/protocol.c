@@ -1391,6 +1391,9 @@ void planificador_sjn(void)
 			{
 				sort_plp();
 
+				sem_post(&sem_consola);
+				sem_wait(&sem_consola_ready);
+
 				pthread_mutex_lock(&mutex_new_queue);
 				element = list_get(list_pcb_new, 0);
 				pthread_mutex_unlock(&mutex_new_queue);
@@ -1413,6 +1416,9 @@ void planificador_sjn(void)
 
 		if(cantidad_procesos_exit > 0)
 		{
+			sem_post(&sem_consola);
+			sem_wait(&sem_consola_ready);
+
 			pthread_mutex_lock(&mutex_exit_queue);
 			element = list_remove(list_pcb_exit, 0);
 			pthread_mutex_unlock(&mutex_exit_queue);
@@ -1429,8 +1435,8 @@ void planificador_sjn(void)
 		{
 			// Se hicieron las 2 cosas, por new y por exit
 			sem_wait(&sem_plp);
-			sem_post(&sem_consola);
-			sem_wait(&sem_consola_ready);
+			//sem_post(&sem_consola);
+			//sem_wait(&sem_consola_ready);
 		}
 		else if(flag == 0)
 		{	// No se realizó ninguna accion
@@ -1440,8 +1446,8 @@ void planificador_sjn(void)
 		}
 		else // Se realizo una sola accion
 		{
-			sem_post(&sem_consola);
-			sem_wait(&sem_consola_ready);
+			//sem_post(&sem_consola);
+			//sem_wait(&sem_consola_ready);
 		}
 
 
@@ -1476,13 +1482,18 @@ void mostrar_procesos(void)
 	int k;
 	int tamanio = 0;
 	t_pcb *element;
+	t_semaphore *sem;
 
 	pthread_mutex_lock(&mutex_new_queue);
 	for (k=0;k < list_size(list_pcb_new);k++)
 	{
 		element = list_get(list_pcb_new,k);
 		tamanio = element->peso;
-		printf("el proceso: %d se encuentra en el estado: NEW y tiene un peso de: %d \n",element->unique_id,tamanio);
+		printf("NEW: [%d,%d]  ",element->unique_id,tamanio);
+	}
+	if (k!=0)
+	{
+		printf("\n");
 	}
 	pthread_mutex_unlock(&mutex_new_queue);
 
@@ -1491,7 +1502,11 @@ void mostrar_procesos(void)
 	{
 		element = list_get(list_pcb_ready,k);
 		tamanio = element->peso;
-		printf("el proceso: %d se encuentra en el estado: READY y tiene un peso de: %d \n",element->unique_id,tamanio);
+		printf("READY: [%d,%d]  ",element->unique_id,tamanio);
+	}
+	if (k!=0)
+	{
+		printf("\n");
 	}
 	pthread_mutex_unlock(&mutex_ready_queue);
 
@@ -1500,7 +1515,11 @@ void mostrar_procesos(void)
 	{
 		element = list_get(list_pcb_execute,k);
 		tamanio = element->peso;
-		printf("el proceso: %d se encuentra en el estado: EXECUTE y tiene un peso de: %d \n",element->unique_id,tamanio);
+		printf("EXECUTE: [%d,%d]  ",element->unique_id,tamanio);
+	}
+	if (k!=0)
+	{
+		printf("\n");
 	}
 	pthread_mutex_unlock(&mutex_execute_queue);
 
@@ -1509,7 +1528,11 @@ void mostrar_procesos(void)
 	{
 		element = list_get(list_pcb_blocked,k);
 		tamanio = element->peso;
-		printf("el proceso: %d se encuentra en el estado: BLOCKED y tiene un peso de: %d \n",element->unique_id,tamanio);
+		printf("BLOCKED: [%d,%d]  ",element->unique_id,tamanio);
+	}
+	if (k!=0)
+	{
+		printf("\n");
 	}
 	pthread_mutex_unlock(&mutex_block_queue);
 
@@ -1518,9 +1541,24 @@ void mostrar_procesos(void)
 	{
 		element = list_get(list_pcb_exit,k);
 		tamanio = element->peso;
-		printf("el proceso: %d se encuentra en el estado: EXIT y tiene un peso de: %d \n",element->unique_id,tamanio);
+		printf("EXIT: [%d,%d]  ",element->unique_id,tamanio);
+	}
+	if (k!=0)
+	{
+		printf("\n");
 	}
 	pthread_mutex_unlock(&mutex_exit_queue);
+
+	pthread_mutex_lock(&mutex_semaphores_list);
+
+	for (k=0;k < list_size(list_semaphores);k++)
+		{
+			sem = list_get(list_semaphores,k);
+			printf("SEMAPHORE:[%s,%d]  ",sem->identifier,sem->value);
+		}
+	printf("\n");
+	pthread_mutex_unlock(&mutex_semaphores_list);
+
 }
 /*
  * Function: is_Connected_CPU
