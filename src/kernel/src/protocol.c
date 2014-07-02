@@ -162,6 +162,7 @@ t_global* global_create(char *global_name)
 void global_update_value(int sock_cpu, char* global_name, int value)
 {
 	int flag_mod = 0;
+	int flag_error = 0;
 	int numbytes, i;
 	int flag_process_found = 0;
 	t_mensaje mensaje;
@@ -172,45 +173,52 @@ void global_update_value(int sock_cpu, char* global_name, int value)
 
 	log_info(logger,"global_update_value(%s,%d)",global_name, value);
 
-	pthread_mutex_lock(&mutex_process_list);
-	for(i=0;i< list_size(list_process);i++)
+	if((varCom = (char*) malloc (sizeof(char) * ( strlen(global_name) + 1 + 1))) == NULL)
 	{
-		process = list_get(list_process,i);
-		if(process->current_cpu_socket == sock_cpu && process->status == PROCESS_EXECUTE)
-		{
-			flag_process_found = 1;
-			break;
-		}
+		log_error(logger,"Error al reservar memoria para identificador en global_update_value");
+		flag_error = 1;
 	}
-
-	if(flag_process_found == 1)
+	else
 	{
-		if((varCom = (char*) malloc (sizeof(char) * ( strlen(global_name) + 1 ))) == NULL)
+		pthread_mutex_lock(&mutex_process_list);
+		for(i=0;i< list_size(list_process);i++)
 		{
-			log_error(logger,"Error al reservar memoria para identificador en global_update_value");
-			return;
-		}
-
-		strcpy(varCom, "!");
-		strcat(varCom, global_name);
-
-		for(i=0;i < list_size(list_globales);i++)
-		{
-			variable = list_get(list_globales,i);
-			if(flag_mod == 0 && strcmp(varCom,variable->identifier) == 0)
+			process = list_get(list_process,i);
+			if(process->current_cpu_socket == sock_cpu && process->status == PROCESS_EXECUTE)
 			{
-				variable->value = value;
-				flag_mod = 1;
+				flag_process_found = 1;
 				break;
 			}
 		}
 
-		if(flag_mod == 0)
+		if(flag_process_found == 1)
 		{
-			log_error(logger, "Variable compartida -%s- no encontrada", global_name);
-			process->status = PROCESS_ERROR;
-			process->error_status = ERROR_WRONG_VARCOM;
+			strcpy(varCom, "!");
+			strcat(varCom, global_name);
+
+			for(i=0;i < list_size(list_globales);i++)
+			{
+				variable = list_get(list_globales,i);
+				if(flag_mod == 0 && strcmp(varCom,variable->identifier) == 0)
+				{
+					variable->value = value;
+					flag_mod = 1;
+					break;
+				}
+			}
+
+			if(flag_mod == 0)
+			{
+				log_error(logger, "Variable compartida -%s- no encontrada", global_name);
+				process->status = PROCESS_ERROR;
+				process->error_status = ERROR_WRONG_VARCOM;
+			}
 		}
+		else
+		{
+			log_error(logger,"No se encontro el proceso asociado al sock_cpu = %d", sock_cpu);
+		}
+		pthread_mutex_unlock(&mutex_process_list);
 	}
 
 	mensaje.id_proceso = KERNEL;
@@ -220,15 +228,18 @@ void global_update_value(int sock_cpu, char* global_name, int value)
 	if((numbytes=write(sock_cpu,&mensaje,size_msg))<=0)
 	{
 		log_error(logger, "Fallo el envio de respuesta de global_update_value al cpu");
-		pthread_mutex_lock(&mutex_pedidos);
-		queue_push(queue_rr,pedido_create(process->pid,PROCESS_EXECUTE,PROCESS_READY));
-		pthread_mutex_unlock(&mutex_pedidos);
-		sem_post(&sem_pcp);
-		pthread_mutex_unlock(&mutex_process_list);
-		return;
+		if(flag_process_found == 1)
+		{
+			pthread_mutex_lock(&mutex_pedidos);
+			queue_push(queue_rr,pedido_create(process->pid,PROCESS_EXECUTE,PROCESS_READY));
+			pthread_mutex_unlock(&mutex_pedidos);
+			sem_post(&sem_pcp);
+		}
 	}
 
-	pthread_mutex_unlock(&mutex_process_list);
+	if(flag_error == 1)
+		free(varCom);
+
 	return;
 }
 
@@ -242,53 +253,67 @@ void global_update_value(int sock_cpu, char* global_name, int value)
 void global_get_value(int sock_cpu, char* global_name)
 {
 	int flag_mod = 0;
+	int flag_error = 0;
 	int numbytes, i;
 	int flag_process_found = 0;
 	t_mensaje mensaje;
 	int size_msg = sizeof(t_mensaje);
 	t_global* variable;
-	int valor = -1000;
+	int valor;
 	char* varCom;
 	t_process* process;
 
-	log_info(logger,"global_get_value(%s)",global_name);
-
-	pthread_mutex_lock(&mutex_process_list);
-	for(i=0;i< list_size(list_process);i++)
+	if((varCom = (char*) malloc (sizeof(char) * ( strlen(global_name) + 1 + 1))) == NULL)
 	{
-		process = list_get(list_process,i);
-		if(process->current_cpu_socket == sock_cpu && process->status == PROCESS_EXECUTE)
-		{
-			flag_process_found = 1;
-			break;
-		}
+		log_error(logger,"Error al reservar memoria para identificador en global_get_value");
+		flag_error = 1;
 	}
-
-
-	if(flag_process_found == 1)
+	else
 	{
-		if((varCom = (char*) malloc (sizeof(char) * ( strlen(global_name) + 1 ))) == NULL)
-		{
-			log_error(logger,"Error al reservar memoria para identificador en global_get_value");
-		}
+		log_info(logger,"global_get_value(%s)",global_name);
 
-		strcpy(varCom, "!");
-		strcat(varCom, global_name);
-
-		for(i=0;i < list_size(list_globales);i++)
+		pthread_mutex_lock(&mutex_process_list);
+		for(i=0;i< list_size(list_process);i++)
 		{
-			variable = list_get(list_globales,i);
-			if(flag_mod == 0 && strcmp(varCom,variable->identifier) == 0)
+			process = list_get(list_process,i);
+			if(process->current_cpu_socket == sock_cpu && process->status == PROCESS_EXECUTE)
 			{
-				log_info(logger,"variable->identifier = %s", variable->identifier);
-				log_info(logger,"variable->value = %d", variable->value);
-
-				valor = variable->value;
-				flag_mod = 1;
+				flag_process_found = 1;
 				break;
 			}
 		}
+
+		if(flag_process_found == 1)
+		{
+			strcpy(varCom, "!");
+			strcat(varCom, global_name);
+
+			for(i=0;i < list_size(list_globales);i++)
+			{
+				variable = list_get(list_globales,i);
+				if(flag_mod == 0 && strcmp(varCom,variable->identifier) == 0)
+				{
+					valor = variable->value;
+					flag_mod = 1;
+					break;
+				}
+			}
+
+			if(flag_mod == 0)
+			{
+				log_error(logger, "Variable compartida %s no encontrado", varCom);
+				process->status = PROCESS_ERROR;
+				process->error_status = ERROR_WRONG_VARCOM;
+			}
+
+			pthread_mutex_unlock(&mutex_process_list);
+		}
+		else
+		{
+			log_error(logger,"No se encontro el proceso asociado al sock_cpu = %d", sock_cpu);
+		}
 	}
+
 	mensaje.id_proceso = KERNEL;
 	mensaje.datosNumericos = valor;
 	mensaje.tipo = VARCOMREQUEST;
@@ -296,27 +321,24 @@ void global_get_value(int sock_cpu, char* global_name)
 	if((numbytes=write(sock_cpu,&mensaje,size_msg))<=0)
 	{
 		log_error(logger, "Fallo el envio de respuesta de global_update_value al cpu");
-		pthread_mutex_lock(&mutex_pedidos);
-		queue_push(queue_rr,pedido_create(process->pid,PROCESS_EXECUTE,PROCESS_READY));
-		pthread_mutex_unlock(&mutex_pedidos);
-		sem_post(&sem_pcp);
-		// Esto lo hace el select
-		//close(sock_cpu);
-		//cpu_remove(sock_cpu);
-		pthread_mutex_unlock(&mutex_process_list);
-		return;
+
+		if(flag_process_found == 1)
+		{
+			pthread_mutex_lock(&mutex_pedidos);
+			queue_push(queue_rr,pedido_create(process->pid,PROCESS_EXECUTE,PROCESS_READY));
+			pthread_mutex_unlock(&mutex_pedidos);
+			sem_post(&sem_pcp);
+			// Esto lo hace el select
+			//close(sock_cpu);
+			//cpu_remove(sock_cpu);
+		}
 	}
 
-	if(flag_mod == 0)
+	if(flag_error == 0)
 	{
-		log_error(logger, "Variable compartida %s no encontrado", varCom);
-		process->status = PROCESS_ERROR;
-		process->error_status = ERROR_WRONG_VARCOM;
-		pthread_mutex_unlock(&mutex_process_list);
-		return;
+		free(varCom);
 	}
 
-	pthread_mutex_unlock(&mutex_process_list);
 	return;
 }
 
