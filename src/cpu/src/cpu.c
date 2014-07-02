@@ -96,6 +96,7 @@ int main(int argc, char *argv[])
 
 	t_mensaje msg_aux;
 	int i;
+	int j;
 	int quantum, retardo;
 	int salir_bucle = 0;
 	int inicio_instruccion = 0;
@@ -122,6 +123,7 @@ int main(int argc, char *argv[])
 		depuracion(SIGINT);
 	}
 	stack = mensaje.datosNumericos;
+	char cadena_aux[15];
 	// Bucle principal del proceso
 	while(seguirEjecutando)
 	{
@@ -227,11 +229,22 @@ int main(int argc, char *argv[])
 				break;
 			}
 		}
-		// Libero el diccionario de variables
-		list_clean(variables);
 		// Aviso al kernel que termino el quantum del proceso y devuelvo pcb actualizado
 		if (proceso_finalizo == 1)
 		{
+			// Envio a consola de programa el valor final de las variables
+			silverstack_imprimirTexto("Valor final de variables:\n");
+			for (j = 0; j < list_size(variables); j++)
+			{
+				nueva_var = list_get(variables, j);
+				cadena_aux[0] = nueva_var->id;
+				cadena_aux[1] = ' ';
+				cadena_aux[2] = '=';
+				cadena_aux[3] = ' ';
+				cadena_aux[4] = '\0';
+				silverstack_imprimirTexto(cadena_aux);
+				silverstack_imprimir(nueva_var->valor);
+			}
 			mensaje.id_proceso = CPU;
 			mensaje.tipo = PROGRAMFINISH;
 			send(sockKernel, &mensaje, sizeof(t_mensaje), 0);
@@ -372,8 +385,6 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 		send(sockKernel, &msg_aux, sizeof(t_mensaje), 0);
 		proceso_finalizo = 1;
 	}
-	log_info(logger, "variable %c", var);
-	log_info(logger, "direccion %d", ptr);
 	return ptr;
 }
 
