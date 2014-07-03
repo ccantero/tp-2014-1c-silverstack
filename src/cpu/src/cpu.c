@@ -136,10 +136,6 @@ int main(int argc, char *argv[])
 		log_info(logger,"Recibi PCB de Kernel");
 		// Regenero diccionario de variables
 		regenerarDiccionario();
-		if(pcb.program_counter == 0)
-		{
-			pcb.program_counter++;
-		}
 		for (i = 0; i < quantum; i++)
 		{
 			if (proceso_bloqueado == 0 && proceso_finalizo == 0)
@@ -149,7 +145,7 @@ int main(int argc, char *argv[])
 				cantidad_letras_instruccion = 0;
 				// Preparo mensaje para la UMV
 				msg_solicitud_bytes.base = pcb.instruction_index;
-				msg_solicitud_bytes.offset = 0 + ((pcb.program_counter - 1) * 8);
+				msg_solicitud_bytes.offset = pcb.program_counter * 8;
 				msg_solicitud_bytes.tamanio = 8;
 				msg_cambio_proceso_activo.id_programa = pcb.unique_id;
 				mensaje.tipo = SOLICITUDBYTES;
@@ -671,7 +667,7 @@ void silverstack_irAlLabel(t_nombre_etiqueta etiqueta)
 		depuracion(SIGINT);
 	}
 	dir_instruccion = metadata_buscar_etiqueta(etiqueta, buffer, pcb.size_etiquetas_index);
-	pcb.program_counter = dir_instruccion;
+	pcb.program_counter = dir_instruccion - 1;
 }
 
 void silverstack_llamarSinRetorno(t_nombre_etiqueta etiqueta)
