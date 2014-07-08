@@ -31,6 +31,7 @@ typedef struct _t_process {
 	int program_socket;
 	int current_cpu_socket;
 	unsigned char status;
+	unsigned char blocked_status;
 	int error_status;
 	time_t t_inicial;
 	time_t t_final;
@@ -51,6 +52,10 @@ typedef struct _t_pedido {
 	unsigned char new_status;
 }t_pedido;
 
+typedef struct _t_nodo_blocked_io {
+	sem_t* semaforo;
+} t_nodo_blocked_io;
+
 #define MAXDATASIZE 1024
 #define SIZE_MSG sizeof(t_mensaje)
 #define MSG_CON_UMV 0x10
@@ -70,6 +75,10 @@ typedef struct _t_pedido {
 #define PROCESS_EXIT 0x44 // Process Node Status
 #define PROCESS_ERROR 0x45 // Process Node Status
 
+#define NOT_BLOCKED 0x50 // Process Node Status
+#define BLOCKED_IO 0x51 // Process Node Status
+#define BLOCKED_SEM 0x52 // Process Node Status
+
 #define ERROR_WRONG_VARCOM 2001
 #define ERROR_WRONG_IO 2002
 #define ERROR_PROGRAM_ABORT 2003
@@ -88,6 +97,7 @@ t_list *list_cpu;
 t_list *list_process;
 
 t_queue* queue_rr;
+t_queue* queue_blocked;
 
 int port_cpu,port_program,port_umv,sockPrin,multiprogramacion,quantum,retardo,stack_tamanio;
 int sock_umv, process_Id, cantidad_cpu, cantidad_procesos_sistema, stack_size;
@@ -102,6 +112,7 @@ pthread_mutex_t mutex_block_queue;
 pthread_mutex_t mutex_exit_queue;
 pthread_mutex_t mutex_semaphores_list;
 pthread_mutex_t mutex_process_list;
+pthread_mutex_t mutex_blocked_queue;
 
 sem_t sem_consola;
 sem_t sem_consola_ready;
@@ -169,6 +180,7 @@ t_process* process_get(int pid, int sock_program, int sock_cpu);
 t_nodo_cpu* cpu_get_next_available(int pid);
 void process_segmentation_fault(int sock_cpu);
 void program_error(int sock_program);
+t_nodo_blocked_io* nodo_blocked_io_create(sem_t* semaforo);
 
 int get_Segment_Start(int offset);					// A revisar si va o no va
 void io_destroy(t_io*); 							// A revisar si va o no va

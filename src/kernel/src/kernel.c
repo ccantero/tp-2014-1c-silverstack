@@ -32,7 +32,8 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	logger = log_create("Log.txt", "Kernel",false, LOG_LEVEL_INFO);
+	//logger = log_create("Log.txt", "Kernel",false, LOG_LEVEL_INFO);
+	logger = log_create("Log.txt", "Kernel",false, LOG_LEVEL_DEBUG);
 
 	list_io = list_create();
 	list_segment = list_create();
@@ -47,6 +48,7 @@ int main(int argc, char *argv[])
 	list_process = list_create();
 
 	queue_rr = queue_create();
+	queue_blocked = queue_create();
 
 	process_Id = 10000;
 	cantidad_cpu = 0;
@@ -109,6 +111,12 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
+	if (pthread_mutex_init(&mutex_blocked_queue, NULL) != 0)
+	{
+		printf("ERROR - No se pudo inicializar mutex mutex_blocked_queue\n");
+		return 1;
+	}
+
 	GetInfoConfFile(argv[1]);
 
 	signal(SIGINT,depurar);
@@ -144,7 +152,6 @@ int main(int argc, char *argv[])
 	while(exit_status == 1)
 	{
 		read_fds = master;
-
 
 		if (select(fdmax + 1, &read_fds, NULL, NULL, NULL) == -1)
 		{
