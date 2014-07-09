@@ -171,7 +171,7 @@ void global_update_value(int sock_cpu, char* global_name, int value)
 	char* varCom;
 	t_process* process;
 
-	log_info(logger,"global_update_value(%s,%d)",global_name, value);
+	log_debug(logger,"global_update_value(%s,%d)",global_name, value);
 
 	if((varCom = (char*) malloc (sizeof(char) * ( strlen(global_name) + 1 + 1))) == NULL)
 	{
@@ -270,7 +270,7 @@ void global_get_value(int sock_cpu, char* global_name)
 	}
 	else
 	{
-		log_info(logger,"global_get_value(%s)",global_name);
+		log_debug(logger,"global_get_value(%s)",global_name);
 
 		pthread_mutex_lock(&mutex_process_list);
 		for(i=0;i< list_size(list_process);i++)
@@ -483,7 +483,7 @@ void semaphore_wait(int sock_cpu, char* sem_name)
 
 	if(flag_process_found == 1)
 	{
-		log_info(logger,"semaphore_wait(%s)",sem_name);
+		log_debug(logger,"semaphore_wait(%s)",sem_name);
 
 		pid = process->pid;
 
@@ -573,7 +573,7 @@ void semaphore_signal(int sock_cpu, char* sem_name)
 	int size_msg = sizeof(t_mensaje);
 	int numbytes;
 
-	log_info(logger,"semaphore_signal(%s)",sem_name);
+	log_debug(logger,"semaphore_signal(%s)",sem_name);
 
 	if((semaphore_id = (char*) malloc (sizeof(char) * (strlen(sem_name) + 1))) == NULL)
 	{
@@ -854,7 +854,7 @@ void pcb_create(char* buffer, int tamanio_buffer, int sock_program)
 					3 * metadata->cantidad_de_funciones +
 					metadata->instrucciones_size;
 
-	log_info(logger,"PCB Creado satisfactoriamente");
+	log_debug(logger,"PCB Creado satisfactoriamente");
 
 	if(process_get_status(process_Id) == PROCESS_NEW)
 	{
@@ -888,6 +888,8 @@ int umv_create_segment(int process_id, int tamanio)
 	int numbytes;
 	t_msg_crear_segmento msg_crear_segmento;
 	int size_msg_crear_segmento = sizeof(t_msg_crear_segmento);
+
+	log_debug(logger,"umv_create_segment(%d,%d)",process_id,tamanio);
 
 	msg_crear_segmento.id_programa = process_id;
 	msg_crear_segmento.tamanio = tamanio;
@@ -927,6 +929,7 @@ int umv_change_process(int process_id)
 	t_msg_cambio_proceso_activo msg_cambio_proceso_activo;
 	int size_msg_cambio_proceso_activo = sizeof(t_msg_cambio_proceso_activo);
 
+	log_debug(logger,"umv_change_process(%d)", process_id);
 	msg_cambio_proceso_activo.id_programa = process_id;
 
 	if((buffer_msg = (char*) malloc (sizeof(char) * MAXDATASIZE )) == NULL)
@@ -964,6 +967,8 @@ int umv_send_bytes(int base, int offset, int tamanio)
 	t_msg_envio_bytes msg_envio_bytes;
 	int size_msg_envio_bytes = sizeof(t_msg_envio_bytes);
 
+	log_debug(logger,"umv_send_bytes(%d,%d,%d)",base,offset,tamanio);
+
 	if((buffer_msg = (char*) malloc (sizeof(char) * MAXDATASIZE )) == NULL)
 	{
 		log_error(logger,"Error al reservar memoria send_bytes");
@@ -1000,10 +1005,11 @@ void umv_destroy_segment(int process_id)
 {
 	char* buffer_msg;
 	t_mensaje mensaje;
-	int size_mensaje = sizeof(t_mensaje);
 	int numbytes;
 	t_msg_destruir_segmentos msg_destruir_segmentos;
 	int size_msg_destruir_segmentos = sizeof(t_msg_destruir_segmentos);
+
+	log_debug(logger,"umv_destroy_segment(%d)",process_id);
 
 	if((buffer_msg = (char*) malloc (sizeof(char) * MAXDATASIZE )) == NULL)
 	{
@@ -1015,9 +1021,9 @@ void umv_destroy_segment(int process_id)
 	mensaje.tipo = DESTRUIRSEGMENTOS;
 
 	memset(buffer_msg,'\0',MAXDATASIZE);
-	memcpy(buffer_msg,&mensaje,size_mensaje);
+	memcpy(buffer_msg,&mensaje,SIZE_MSG);
 
-	if((numbytes=write(sock_umv,buffer_msg,size_mensaje))<=0)
+	if((numbytes=write(sock_umv,buffer_msg,SIZE_MSG))<=0)
 	{
 		log_error(logger, "Error en el write destroy_segment");
 		close(sock_umv);
@@ -1038,7 +1044,7 @@ void umv_destroy_segment(int process_id)
 		return;
 	}
 
-	if((numbytes=read(sock_umv,buffer_msg,size_mensaje))<=0)
+	if((numbytes=read(sock_umv,buffer_msg,SIZE_MSG))<=0)
 	{
 		log_error(logger, "Error en el read destroy_segment");
 		close(sock_umv);
@@ -1065,6 +1071,7 @@ int umv_send_segment(int pid, char* buffer, int tamanio)
 	int tamanio_code_segment = tamanio;
 	int direccion_logica;
 
+	log_debug(logger,"umv_send_segment(%d,%d)",pid,tamanio);
 	if((buffer_msg = (char*) malloc (sizeof(char) * MAXDATASIZE )) == NULL)
 	{
 		log_error(logger,"Error al reservar memoria para el pcb de nodo en send_umv_code_segment");
@@ -1200,6 +1207,7 @@ int send_umv_stack(int process_id)
 	char* buffer_msg;
 	int tamanio_stack = 100;
 
+	log_debug(logger,"send_umv_stack(%d)",process_id);
 	if((buffer_msg = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
 	{
 		log_error(logger,"Error al reservar memoria para el pcb de nodo en send_umv_code_segment");
@@ -1268,6 +1276,7 @@ int send_umv_stack(int process_id)
 
 void pcb_destroy(t_pcb* self)
 {
+	log_debug(logger,"pcb_destroy(%d)",self->unique_id);
 	free(self);
 }
 
@@ -1484,7 +1493,6 @@ void planificador_sjn(void)
  * Author: SilverStack
 */
 
-
 void mostrar_consola(void)
 {
 	for(;;)
@@ -1499,6 +1507,7 @@ void mostrar_consola(void)
 		sem_post(&sem_consola_ready);
 	}
 }
+
 void mostrar_procesos(void)
 {
 	int k;
@@ -1506,69 +1515,111 @@ void mostrar_procesos(void)
 	t_pcb *element;
 	t_semaphore *sem;
 
+	char buffer[MAXDATASIZE];
+	char buffer_proceso[100];
+
+	sleep(1);
+	system("clear");
+	strcpy(buffer,"");
 	pthread_mutex_lock(&mutex_new_queue);
 	for (k=0;k < list_size(list_pcb_new);k++)
 	{
 		element = list_get(list_pcb_new,k);
 		tamanio = element->peso;
-		printf("NEW: [%d,%d]  ",element->unique_id,tamanio);
+		sprintf(buffer_proceso,"[%d,%d]",element->unique_id,tamanio);
+		if((strcmp(buffer,"") != 0))
+		{
+			strcat(buffer,", ");
+			strcat(buffer,buffer_proceso);
+		}
+		else
+		{
+			strcat(buffer,buffer_proceso);
+		}
+		//printf("NEW: [%d,%d]  ",element->unique_id,tamanio);
 	}
-	if (k!=0)
-	{
-		printf("\n");
-	}
+	printf("NEW: %s\n",buffer);
 	pthread_mutex_unlock(&mutex_new_queue);
 
+	strcpy(buffer,"");
 	pthread_mutex_lock(&mutex_ready_queue);
 	for (k=0;k < list_size(list_pcb_ready);k++)
 	{
 		element = list_get(list_pcb_ready,k);
 		tamanio = element->peso;
-		printf("READY: [%d,%d]  ",element->unique_id,tamanio);
+		sprintf(buffer_proceso,"[%d,%d]",element->unique_id,tamanio);
+		if((strcmp(buffer,"") != 0))
+		{
+			strcat(buffer,", ");
+			strcat(buffer,buffer_proceso);
+		}
+		else
+		{
+			strcat(buffer,buffer_proceso);
+		}
 	}
-	if (k!=0)
-	{
-		printf("\n");
-	}
+	printf("READY: %s\n",buffer);
 	pthread_mutex_unlock(&mutex_ready_queue);
 
+	strcpy(buffer,"");
 	pthread_mutex_lock(&mutex_execute_queue);
 	for (k=0;k < list_size(list_pcb_execute);k++)
 	{
 		element = list_get(list_pcb_execute,k);
 		tamanio = element->peso;
-		printf("EXECUTE: [%d,%d]  ",element->unique_id,tamanio);
+		sprintf(buffer_proceso,"[%d,%d]",element->unique_id,tamanio);
+		if((strcmp(buffer,"") != 0))
+		{
+			strcat(buffer,", ");
+			strcat(buffer,buffer_proceso);
+		}
+		else
+		{
+			strcat(buffer,buffer_proceso);
+		}
 	}
-	if (k!=0)
-	{
-		printf("\n");
-	}
+	printf("EXECUTE: %s\n",buffer);
 	pthread_mutex_unlock(&mutex_execute_queue);
 
+	strcpy(buffer,"");
 	pthread_mutex_lock(&mutex_block_queue);
 	for (k=0;k < list_size(list_pcb_blocked);k++)
 	{
 		element = list_get(list_pcb_blocked,k);
 		tamanio = element->peso;
-		printf("BLOCKED: [%d,%d]  ",element->unique_id,tamanio);
+		sprintf(buffer_proceso,"[%d,%d]",element->unique_id,tamanio);
+		if((strcmp(buffer,"") != 0))
+		{
+			strcat(buffer,", ");
+			strcat(buffer,buffer_proceso);
+		}
+		else
+		{
+			strcat(buffer,buffer_proceso);
+		}
 	}
-	if (k!=0)
-	{
-		printf("\n");
-	}
+	printf("BLOCKED: %s\n",buffer);
 	pthread_mutex_unlock(&mutex_block_queue);
 
+	strcpy(buffer,"");
 	pthread_mutex_lock(&mutex_exit_queue);
 	for (k=0;k < list_size(list_pcb_exit);k++)
 	{
 		element = list_get(list_pcb_exit,k);
 		tamanio = element->peso;
-		printf("EXIT: [%d,%d]  ",element->unique_id,tamanio);
+		sprintf(buffer_proceso,"[%d,%d]",element->unique_id,tamanio);
+		if((strcmp(buffer,"") != 0))
+		{
+			strcat(buffer,", ");
+			strcat(buffer,buffer_proceso);
+		}
+		else
+		{
+			strcat(buffer,buffer_proceso);
+		}
 	}
-	if (k!=0)
-	{
-		printf("\n");
-	}
+	printf("EXIT: %s\n",buffer);
+
 	pthread_mutex_unlock(&mutex_exit_queue);
 
 	pthread_mutex_lock(&mutex_semaphores_list);
@@ -1582,6 +1633,7 @@ void mostrar_procesos(void)
 	pthread_mutex_unlock(&mutex_semaphores_list);
 
 }
+
 /*
  * Function: is_Connected_CPU
  * Purpose: Finds if the CPU is already connected
@@ -1734,6 +1786,8 @@ int escuchar_cpu(int sock_cpu)
 	int size_mensaje = sizeof(t_mensaje);
 	char* buffer;
 
+	log_debug(logger,"escuchar_cpu(%d)",sock_cpu);
+
 	if((buffer = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
 	{
 		log_error(logger,"Error al reservar memoria para el buffer en escuchar_cpu");
@@ -1781,6 +1835,8 @@ void process_segmentation_fault(int sock_cpu)
 	int flag_process_found = 0;
 	t_process* process;
 
+	log_debug(logger,"process_segmentation_fault(%d)",sock_cpu);
+
 	for(i=0;i< list_size(list_process);i++)
 	{
 		process = list_get(list_process,i);
@@ -1814,7 +1870,7 @@ void finalizo_Quantum(int sock_cpu)
 	int numbytes;
 	t_pcb *pcb;
 
-	log_info(logger,"finalizo Quantum");
+	log_debug(logger,"finalizo Quantum(%d)",sock_cpu);
 
 	if((pcb = (t_pcb*) malloc (sizeof(t_pcb))) == NULL)
 	{
@@ -1861,6 +1917,8 @@ void process_finish(int sock_cpu)
 	int numbytes;
 	t_pcb* pcb;
 
+	log_debug(logger,"process_finish(%d)",sock_cpu);
+
 	if((pcb = (t_pcb*) malloc (sizeof(t_pcb))) == NULL)
 	{
 		log_error(logger,"Error al reservar memoria para el pcb en process_finish");
@@ -1892,6 +1950,8 @@ void imprimir(int sock_cpu,int valor)
 	int size_msg = sizeof(t_mensaje);
 	int i;
 	int flag_process_found = 0;
+
+	log_debug(logger,"imprimir(%d,%d)",sock_cpu, valor);
 
 	mensaje.tipo = IMPRIMIR;
 	mensaje.datosNumericos = valor;
@@ -1955,6 +2015,8 @@ void imprimirTexto(int sock_cpu,int valor)
 	int size_msg = sizeof(t_mensaje);
 	int i;
 	int flag_process_found = 0;
+
+	log_debug(logger,"imprimirTexto(%d,%d)",sock_cpu, valor);
 
 	if((buffer = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
 	{
@@ -2106,6 +2168,7 @@ void cpu_set_status(int socket_cpu, unsigned char status)
 	unsigned char nuevo_status = status;
 	t_nodo_cpu* cpu;
 
+	log_debug(logger,"cpu_set_status(%d,%x)",socket_cpu,status);
 
 	for(i=0; i < list_size(list_cpu);i++)
 	{
@@ -2149,6 +2212,7 @@ t_process* process_create(unsigned int pid, int sock_program)
 	new_process->pid = pid;
 	new_process->program_socket = sock_program;
 	new_process->current_cpu_socket = -1;
+	new_process->blocked_status = NOT_BLOCKED;
 
 	time_t tiempo;
 	struct tm *tmPtr;
@@ -2176,6 +2240,8 @@ void process_update(int process_id, unsigned char previous_status, unsigned char
 	int flag_found = 0;
 	int i;
 	t_pcb* pcb;
+
+	log_debug(logger,"process_update(%d,%x,%x)",process_id,previous_status,next_status);
 
 	//TODO: Descomentar en caso de ser necesario
 	//sem_post(&sem_consola);
@@ -2247,6 +2313,7 @@ void pcb_move(unsigned int pid,t_list* from, t_list* to)
 	int index = 0;
 	int indice_buscado = 0;
 
+	log_debug(logger,"pcb_move(%d)",process_id);
 	void _get_node(t_pcb *s)
 	{
 		if(s->unique_id == process_id)
@@ -2311,7 +2378,9 @@ void io_wait(int sock_cpu, char* io_name, int amount)
 	int i;
 	t_process* process;
 	t_mensaje mensaje;
-	int size_msg = sizeof(t_mensaje);
+
+	//TODO: Arreglar problema que no se manda el pcb a blocked.
+	log_debug(logger,"io_wait(%d,%s,%d)",sock_cpu,io_name,amount);
 
 	pthread_mutex_lock(&mutex_process_list);
 	for(i=0;i< list_size(list_process);i++)
@@ -2334,16 +2403,11 @@ void io_wait(int sock_cpu, char* io_name, int amount)
 			if(strcmp(io_node->name, io_name) == 0)
 			{
 				queue_push((io_node->io_queue), io_queue_create(process->pid,io_node->retardo * amount));
-
 				log_info(logger,"Se Agrega a la io_queue %s el proceso %d con io->retardo = %d y retardo = %d", io_node->name, process->pid, io_node->retardo, amount);
-				sem_post(&(io_node->io_sem)); // Libero el semaforo de la queue IO que corresponde
 				flag_io_found = 1;
 				break;
 			}
 		}
-
-		sem_post(&free_io_queue); // Libero el mutex de lista IO
-		process->status = PROCESS_BLOCKED;
 
 		if(flag_io_found == 0)
 		{
@@ -2356,6 +2420,17 @@ void io_wait(int sock_cpu, char* io_name, int amount)
 			pthread_mutex_unlock(&mutex_process_list);
 			sem_post(&sem_pcp);
 		}
+		else
+		{
+			process->status = PROCESS_BLOCKED;
+			process->blocked_status = BLOCKED_IO;
+			pthread_mutex_lock(&mutex_blocked_queue);
+			queue_push(queue_blocked,nodo_blocked_io_create(&(io_node->io_sem)));
+			pthread_mutex_unlock(&mutex_blocked_queue);
+
+			//sem_post(&(io_node->io_sem)); // Libero el semaforo de la queue IO que corresponde
+		}
+		sem_post(&free_io_queue); // Libero el mutex de lista IO
 	}
 	else
 	{
@@ -2366,7 +2441,7 @@ void io_wait(int sock_cpu, char* io_name, int amount)
 	mensaje.tipo = ENTRADASALIDA;
 	mensaje.datosNumericos = 0;
 
-	if((numbytes=write(sock_cpu,&mensaje,size_msg))<=0)
+	if((numbytes=write(sock_cpu,&mensaje,SIZE_MSG))<=0)
 	{
 		log_error(logger, "CPU no conectada");
 		pthread_mutex_lock(&mutex_pedidos);
@@ -2383,7 +2458,7 @@ void io_wait(int sock_cpu, char* io_name, int amount)
 /*
  * Function: io_queue_create
  * Purpose: Add a Process to IO_Queue
- * Created on: 06/05/2014
+ * Created on: 07/07/2014
  * Author: SilverStack
 */
 
@@ -2392,6 +2467,20 @@ t_io_queue_nodo* io_queue_create(unsigned int process_id, int retardo)
 	t_io_queue_nodo *new = malloc( sizeof(t_io_queue_nodo) );
 	new->pcb = process_id;
 	new->retardo = retardo;
+	return new;
+}
+
+/*
+ * Function: nodo_blocked_io
+ * Purpose: Add a nodo_blocked_io to queue_blocked
+ * Created on: 06/05/2014
+ * Author: SilverStack
+*/
+
+t_nodo_blocked_io* nodo_blocked_io_create(sem_t* semaforo)
+{
+	t_nodo_blocked_io *new = malloc( sizeof(t_nodo_blocked_io) );
+	new->semaforo = semaforo;
 	return new;
 }
 
@@ -2408,7 +2497,6 @@ void retardo_io(void *ptr)
 	name_io = (char *) ptr;
 	t_io* io_node;
 	t_io_queue_nodo* io_queue_nodo;
-	struct timeval tv;
 
 	time_t tiempo, inicial, final;
 	struct tm *tmPtrIni;
@@ -2438,19 +2526,11 @@ void retardo_io(void *ptr)
 			io_queue_nodo = queue_pop(io_node->io_queue);
 			/* END CRITICAL REGION */
 		sem_post(&free_io_queue); // Up Semaphore
-		tv.tv_sec = 0;
-		tv.tv_usec = io_queue_nodo->retardo * 1000;
-
 		tiempo=time(NULL);
 		tmPtrIni = localtime(&tiempo);
 		inicial = mktime(tmPtrIni);
 
-		// TODO: Preguntar si usar usleep o no
-		if (select(0, NULL, NULL, NULL, &tv) == -1)
-		{
-			log_error(logger, "Error en funcion select en retardo_io");;
-			return;
-		}
+		usleep(io_queue_nodo->retardo);
 
 		tiempo=time(NULL);
 		tmPtrFin = localtime(&tiempo);
@@ -2486,6 +2566,7 @@ void planificador_rr(void)
 	t_pedido* new_pedido;
 	int cpu_socket;
 	t_process* process;
+	t_nodo_blocked_io* nodo_blocked_io;
 
 	for(;;)
 	{
@@ -2559,6 +2640,15 @@ void planificador_rr(void)
 							sem_wait(&mutex_cpu_list);
 							cpu_set_status(cpu_socket, CPU_AVAILABLE);
 							sem_post(&mutex_cpu_list);
+							if(process->blocked_status == BLOCKED_IO)
+							{
+								log_debug(logger,"process->blocked_status == BLOCKED_IO");
+								pthread_mutex_lock(&mutex_blocked_queue);
+								nodo_blocked_io = queue_pop(queue_blocked);
+								pthread_mutex_unlock(&mutex_blocked_queue);
+
+								sem_post(nodo_blocked_io->semaforo); // Libero el semaforo de la queue IO que corresponde
+							}
 						}
 						else
 						{
@@ -2813,6 +2903,8 @@ void process_execute(int unique_id, int socket)
 	int indice_buscado = 0;
 	t_pcb* pcb;
 
+	log_debug(logger,"process_execute(%d,%d)",unique_id,socket);
+
 	void _get_process_element(t_process *p)
 	{
 		if(flag_process_found == 0 && p->pid == process_id )
@@ -2875,6 +2967,7 @@ void process_execute(int unique_id, int socket)
 
 void process_destroy(t_process *p)
 {
+	log_debug(logger,"process_destroy(%d)",p->pid);
 	free(p);
 	return;
 }
@@ -2895,6 +2988,8 @@ void pcb_update(t_pcb* new_pcb, unsigned char previous_status)
 	pthread_mutex_t* mutex_list;
 	int i;
 	t_pcb* pcb;
+
+	log_debug(logger,"pcb_update(%d,%x)",new_pcb->unique_id,previous_status);
 
 	switch(previous_status)
 	{
@@ -2939,6 +3034,8 @@ int get_process_id_by_sock_cpu(int sock_cpu)
 	int process_id;
 	int cpu_socket = sock_cpu;
 
+	log_debug(logger,"get_process_id_by_sock_cpu(%d)",sock_cpu);
+
 	void _get_process_element(t_process *p)
 	{
 		if(flag_process_found == 0 && p->current_cpu_socket == cpu_socket )
@@ -2965,6 +3062,8 @@ int get_sock_prog_by_sock_cpu(int sock_cpu)
 	int flag_process_found = 0;
 	int sock_prog;
 	int cpu_socket = sock_cpu;
+
+	log_debug(logger,"get_sock_prog_by_sock_cpu(%d)",sock_cpu);
 
 	void _get_socket_program(t_process *p)
 	{
@@ -3008,6 +3107,8 @@ void program_exit(int pid)
 	time_t tiempo;
 	struct tm *tmPtr;
 	struct tm *timeElapsed;
+
+	log_debug(logger,"program_exit(%d)",pid);
 
 	if((buffer = (char*) malloc (sizeof(char) * MAXDATASIZE)) == NULL)
 	{
@@ -3119,6 +3220,8 @@ t_pedido* pedido_create(int pid, unsigned char previous_status, unsigned char ne
 {
 	t_pedido* new_pedido;
 
+	log_debug(logger,"pedido_create(%d,%x,%x)",pid,previous_status,next_status);
+
 	if ((new_pedido = (t_pedido*) malloc(sizeof(t_pedido)))== NULL)
 	{
 		log_error(logger, "No se pudo pedir memoria para el nuevo pedido");
@@ -3130,44 +3233,6 @@ t_pedido* pedido_create(int pid, unsigned char previous_status, unsigned char ne
 	new_pedido->process_id = pid;
 
 	return new_pedido;
-}
-
-/*
- * Function: fd_set_program_sockets
- * Purpose: FD_SET all program sockets
- * Created on: 06/06/2014
- * Author: SilverStack
-*/
-
-void fd_set_program_sockets(fd_set* descriptores)
-{
-	void _fd_set(t_process *p)
-	{
-		FD_SET(p->program_socket,descriptores);
-	}
-
-	pthread_mutex_lock(&mutex_process_list);
-	list_iterate(list_process, (void*) _fd_set);
-	pthread_mutex_unlock(&mutex_process_list);
-}
-
-/*
- * Function: fd_set_cpu_sockets
- * Purpose: FD_SET all cpu sockets
- * Created on: 06/06/2014
- * Author: SilverStack
-*/
-
-void fd_set_cpu_sockets(fd_set* descriptores)
-{
-	void _fd_set(t_nodo_cpu *cpu)
-	{
-		FD_SET(cpu->socket,descriptores);
-	}
-
-	sem_wait(&mutex_cpu_list);
-	list_iterate(list_cpu, (void*) _fd_set);
-	sem_post(&mutex_cpu_list);
 }
 
 void test_pcb(int process_id, unsigned char previous_status)
@@ -3234,6 +3299,8 @@ void process_set_status(int process_id, unsigned char status)
 	int i;
 	t_process* process;
 
+	log_debug(logger,"process_set_status(%d,%x)",process_id,status);
+
 	pthread_mutex_lock(&mutex_process_list);
 
 	for(i=0; i < list_size(list_process);i++)
@@ -3243,6 +3310,10 @@ void process_set_status(int process_id, unsigned char status)
 		{
 			if(process->status != PROCESS_ERROR)
 				process->status = status;
+
+			if(process->status != PROCESS_BLOCKED)
+				process->blocked_status = NOT_BLOCKED;
+
 			break;
 		}
 	}
@@ -3262,6 +3333,8 @@ unsigned char process_get_status(int process_id)
 {
 	int i;
 	t_process* process;
+
+	log_debug(logger,"process_get_status(%d)",process_id);
 
 	pthread_mutex_lock(&mutex_process_list);
 	for(i=0; i < list_size(list_process);i++)
@@ -3291,6 +3364,7 @@ t_process* process_get(int pid, int sock_program, int sock_cpu)
 	int i;
 	t_process* process;
 
+	log_debug(logger,"process_get(%d,%d,%d)",pid,sock_program,sock_cpu);
 	pthread_mutex_lock(&mutex_process_list);
 	for(i=0;i < list_size(list_process);i++)
 	{
@@ -3361,7 +3435,6 @@ t_nodo_cpu* cpu_get_next_available(int pid)
  * Author: SilverStack
 */
 
-
 struct tm* timeConvert(double seconds)
 {
 	struct tm *tmPtr;
@@ -3403,6 +3476,7 @@ void program_error(int sock_program)
 	int i;
 	int flag_process_found = 0;
 
+	log_debug(logger,"program_error(%d)",sock_program);
 	pthread_mutex_lock(&mutex_process_list);
 	for(i=0;i< list_size(list_process);i++)
 	{
