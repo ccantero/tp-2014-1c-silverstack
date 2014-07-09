@@ -19,7 +19,7 @@ int main (int argc, char *argv[])
 	// recibo nombre del archivo a procesar
 	log_info(logger, "Se abrio el archivo %s", nombreArchivo);
 	// leo archivo configuracion
-	config = config_create("program.config");
+	config = config_create(getenv("ANSISOP_CONFIG"));
 	//defino algunas variables
 	int puerto;
 	char *direccionIp = (char *)malloc(16);
