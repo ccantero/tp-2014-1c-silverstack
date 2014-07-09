@@ -346,8 +346,9 @@ t_puntero silverstack_definirVariable(t_nombre_variable var)
 {
 	// 1) Reservar espacio en memoria para la variable
 	// 2) Registrar variable en el Stack
-	// 3) Guardar contexto actual en el pcb
-	// 4) Retornar la posicion de la variable
+	// 3) Registrar variable en el diccionario de variables
+	// 4) Guardar contexto actual en el pcb
+	// 5) Retornar la posicion de la variable
 	t_puntero ptr;
 	t_mensaje msg_aux;
 	char buffaux[5];
