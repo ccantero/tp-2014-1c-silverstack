@@ -169,8 +169,8 @@ int main(int argc, char *argv[])
 				{
 					log_error(logger,"Se cayo la UMV");
 					close(sock_umv);
-					exit_status = 0;
-					break;
+					//exit_status = 0;
+					//break;
 				}
 
 				if (i == sock_program)

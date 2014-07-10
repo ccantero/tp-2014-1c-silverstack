@@ -176,7 +176,7 @@ int get_sock_prog_by_sock_cpu(int sock_cpu);
 void cpu_set_status(int socket, unsigned char status);
 unsigned char process_get_status(int process_id);
 void process_set_status(int process_id, unsigned char status);
-t_process* process_get(int pid, int sock_program, int sock_cpu);
+t_process* process_get(int pid);
 t_nodo_cpu* cpu_get_next_available(int pid);
 void process_segmentation_fault(int sock_cpu);
 void program_error(int sock_program);
