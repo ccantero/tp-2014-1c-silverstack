@@ -145,6 +145,7 @@ typedef struct _t_global {
 typedef struct _t_nodo_cpu {
 	int	socket;
 	unsigned char status;
+	int contador;
 }t_nodo_cpu;
 
 typedef struct _pcb {
